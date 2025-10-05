@@ -50,6 +50,7 @@ public class application {
                     os.close();
                 }
 
+                // 替换原有的 parseRequestBody 方法
                 private Map<String, Object> parseRequestBody(HttpExchange exchange) {
                     try {
                         if ("GET".equals(exchange.getRequestMethod()) ||
@@ -67,6 +68,8 @@ public class application {
                         }
                         reader.close();
 
+                        System.out.println("Received request body: " + requestBody.toString()); // 添加日志便于调试
+
                         if (requestBody.length() == 0) {
                             return new java.util.HashMap<>();
                         }
@@ -74,18 +77,22 @@ public class application {
                         return parseJsonString(requestBody.toString());
                     } catch (Exception e) {
                         System.err.println("解析请求体失败: " + e.getMessage());
+                        e.printStackTrace(); // 打印完整的堆栈跟踪
                         return new java.util.HashMap<>();
                     }
                 }
 
+                // 改进 parseJsonString 方法
                 private Map<String, Object> parseJsonString(String jsonString) {
                     Map<String, Object> result = new java.util.HashMap<>();
                     try {
                         // 去除首尾空格
                         String cleanJson = jsonString.trim();
+                        System.out.println("Parsing JSON: " + cleanJson); // 添加调试日志
 
                         // 检查是否为有效的JSON对象
                         if (!cleanJson.startsWith("{") || !cleanJson.endsWith("}")) {
+                            System.err.println("Invalid JSON format: not an object");
                             return result;
                         }
 
@@ -110,6 +117,7 @@ public class application {
                             // 解析键
                             if (cleanJson.charAt(i) != '"') {
                                 // 键必须用双引号包围
+                                System.err.println("Key must be quoted at position " + i);
                                 return result;
                             }
 
@@ -130,6 +138,7 @@ public class application {
 
                             if (i >= cleanJson.length()) {
                                 // 未找到结束引号
+                                System.err.println("Missing end quote for key");
                                 return result;
                             }
 
@@ -202,12 +211,15 @@ public class application {
                                 }
                             } else {
                                 // 无法识别的值类型
+                                System.err.println("Unrecognized value type at position " + i);
                                 i++;
                                 continue;
                             }
 
                             // 添加到结果中
-                            result.put(keyBuilder.toString(), value);
+                            String key = keyBuilder.toString();
+                            result.put(key, value);
+                            System.out.println("Parsed key-value: " + key + " = " + value); // 调试日志
 
                             // 跳过空白字符和逗号
                             while (i < cleanJson.length() && (Character.isWhitespace(cleanJson.charAt(i)) || cleanJson.charAt(i) == ',')) {
@@ -220,6 +232,7 @@ public class application {
                     }
                     return result;
                 }
+
 
                 private String toJson(Map<String, Object> map) {
                     StringBuilder json = new StringBuilder("{");
