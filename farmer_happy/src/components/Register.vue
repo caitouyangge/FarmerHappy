@@ -28,7 +28,7 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">昵称（选填）</label>
+          <label class="form-label">昵称</label>
           <input
             v-model="form.nickname"
             type="text"
@@ -115,8 +115,11 @@ export default {
         isValid = false;
       }
 
-      // Nickname validation (optional)
-      if (form.nickname && (form.nickname.length < 1 || form.nickname.length > 30)) {
+      // Nickname validation
+      if (!form.nickname) {
+        errors.nickname = '请输入昵称';
+        isValid = false;
+      } else if (form.nickname.length < 1 || form.nickname.length > 30) {
         errors.nickname = '昵称长度应在1-30个字符之间';
         isValid = false;
       }
