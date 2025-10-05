@@ -21,6 +21,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponseDTO register(RegisterRequestDTO registerRequest) throws SQLException, IllegalArgumentException {
+        System.out.println("s进入注册服务，请求参数: " + registerRequest.getPhone() + ", " + registerRequest.getPassword());
         List<String> errors = new ArrayList<>();
         if (!validateRegisterRequest(registerRequest, errors)) {
             throw new IllegalArgumentException(String.join("; ", errors));
@@ -90,6 +91,14 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public boolean validateRegisterRequest(RegisterRequestDTO registerRequest, List<String> errors) {
+
+        System.out.println("开始验证注册请求参数");
+        System.out.println("密码: " + registerRequest.getPassword());
+        System.out.println("手机号: " + registerRequest.getPhone());
+        System.out.println("用户类型: " + registerRequest.getUserType());
+        System.out.println("昵称: " + registerRequest.getNickname());
+
+
         boolean isValid = true;
 
         // 验证密码
@@ -145,11 +154,14 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public User findUserByPhone(String phone) throws SQLException {
+        System.out.println("开始查询用户: " + phone);
         try {
             Connection conn = databaseManager.getConnection();
+            System.out.println("数据库连接成功");
             PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users WHERE phone = ?");
             stmt.setString(1, phone);
             ResultSet rs = stmt.executeQuery();
+            System.out.println("执行查询完成");
 
             User user = null;
             if (rs.next()) {
@@ -162,22 +174,31 @@ public class AuthServiceImpl implements AuthService {
                 user.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
                 user.setUpdatedAt(rs.getTimestamp("updated_at") != null ?
                         rs.getTimestamp("updated_at").toLocalDateTime() : null);
+                System.out.println("找到用户: " + user.getPhone());
+            } else {
+                System.out.println("未找到用户: " + phone);
             }
 
             rs.close();
             stmt.close();
             conn.close();
+            System.out.println("数据库资源已关闭");
 
             return user;
         } catch (SQLException e) {
+            System.err.println("查询用户失败: " + e.getMessage());
+            e.printStackTrace();
             throw new SQLException("查询用户失败: " + e.getMessage());
         }
     }
 
+
     @Override
     public void saveUser(User user) throws SQLException {
+        System.out.println("开始保存用户: " + user.getPhone());
         try {
             Connection conn = databaseManager.getConnection();
+            System.out.println("数据库连接成功");
             PreparedStatement stmt = conn.prepareStatement(
                     "INSERT INTO users (uid, password, nickname, phone, user_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
             );
@@ -189,11 +210,17 @@ public class AuthServiceImpl implements AuthService {
             stmt.setTimestamp(6, Timestamp.valueOf(user.getCreatedAt()));
             stmt.setTimestamp(7, Timestamp.valueOf(user.getUpdatedAt()));
 
-            stmt.executeUpdate();
+            System.out.println("执行插入操作");
+            int result = stmt.executeUpdate();
+            System.out.println("插入结果: " + result);
             stmt.close();
             conn.close();
+            System.out.println("数据库资源已关闭");
         } catch (SQLException e) {
+            System.err.println("保存用户失败: " + e.getMessage());
+            e.printStackTrace();
             throw new SQLException("保存用户失败: " + e.getMessage());
         }
     }
+
 }

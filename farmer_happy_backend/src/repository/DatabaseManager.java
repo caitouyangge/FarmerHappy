@@ -50,6 +50,7 @@ public class DatabaseManager {
                             "    locked_until TIMESTAMP NULL COMMENT '账号锁定截止时间'," +
                             "    is_active BOOLEAN DEFAULT TRUE COMMENT '账号是否激活'," +
                             "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
                             "    INDEX idx_phone (phone)," +
                             "    INDEX idx_user_type (user_type)," +
                             "    INDEX idx_created_at (created_at)" +

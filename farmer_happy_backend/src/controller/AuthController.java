@@ -20,6 +20,8 @@ public class AuthController {
     }
 
     public Map<String, Object> register(RegisterRequestDTO request) {
+        System.out.println("进入注册控制器，请求参数: " + request.getPhone() + ", " + request.getPassword());
+
         Map<String, Object> response = new HashMap<>();
 
         try {
