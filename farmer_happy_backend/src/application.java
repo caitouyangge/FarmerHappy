@@ -42,11 +42,12 @@ public class application {
 
                     // 发送响应
                     String jsonResponse = toJson(response);
-                    exchange.getResponseHeaders().set("Content-Type", "application/json");
-                    exchange.sendResponseHeaders(200, jsonResponse.getBytes().length);
+                    // 设置正确的Content-Type和字符编码
+                    exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+                    exchange.sendResponseHeaders(200, jsonResponse.getBytes("UTF-8").length);
 
                     OutputStream os = exchange.getResponseBody();
-                    os.write(jsonResponse.getBytes());
+                    os.write(jsonResponse.getBytes("UTF-8"));
                     os.close();
                 }
 
@@ -233,13 +234,19 @@ public class application {
                     return result;
                 }
 
-
                 private String toJson(Map<String, Object> map) {
                     StringBuilder json = new StringBuilder("{");
                     for (Map.Entry<String, Object> entry : map.entrySet()) {
                         json.append("\"").append(entry.getKey()).append("\":");
                         if (entry.getValue() instanceof String) {
-                            json.append("\"").append(entry.getValue()).append("\"");
+                            json.append("\"").append(escapeJsonString(entry.getValue().toString())).append("\"");
+                        } else if (entry.getValue() instanceof Object) {
+                            // 特殊处理 AuthResponseDTO 对象
+                            if (entry.getValue() instanceof dto.AuthResponseDTO) {
+                                json.append(serializeAuthResponseDTO((dto.AuthResponseDTO) entry.getValue()));
+                            } else {
+                                json.append("\"").append(escapeJsonString(entry.getValue().toString())).append("\"");
+                            }
                         } else {
                             json.append(entry.getValue());
                         }
@@ -248,6 +255,46 @@ public class application {
                     if (json.length() > 1) json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
                     json.append("}");
                     return json.toString();
+                }
+
+                // 添加序列化 AuthResponseDTO 对象的方法
+                private String serializeAuthResponseDTO(dto.AuthResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getUid() != null) {
+                        json.append("\"uid\":\"").append(escapeJsonString(dto.getUid())).append("\",");
+                    }
+                    if (dto.getNickname() != null) {
+                        json.append("\"nickname\":\"").append(escapeJsonString(dto.getNickname())).append("\",");
+                    }
+                    if (dto.getPhone() != null) {
+                        json.append("\"phone\":\"").append(escapeJsonString(dto.getPhone())).append("\",");
+                    }
+                    if (dto.getUserType() != null) {
+                        json.append("\"userType\":\"").append(escapeJsonString(dto.getUserType())).append("\",");
+                    }
+                    if (dto.getToken() != null) {
+                        json.append("\"token\":\"").append(escapeJsonString(dto.getToken())).append("\",");
+                    }
+                    if (dto.getExpiresAt() != null) {
+                        json.append("\"expiresAt\":\"").append(dto.getExpiresAt().toString()).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 添加JSON字符串转义方法
+                private String escapeJsonString(String str) {
+                    if (str == null) return "";
+                    return str.replace("\\", "\\\\")
+                            .replace("\"", "\\\"")
+                            .replace("\b", "\\b")
+                            .replace("\f", "\\f")
+                            .replace("\n", "\\n")
+                            .replace("\r", "\\r")
+                            .replace("\t", "\\t");
                 }
             });
 
