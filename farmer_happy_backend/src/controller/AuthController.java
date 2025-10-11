@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class AuthController {
     private AuthService authService;
@@ -37,7 +39,7 @@ public class AuthController {
             String[] errorMessages = e.getMessage().split("; ");
             for (String errorMsg : errorMessages) {
                 Map<String, String> error = new HashMap<>();
-                error.put("field", "unknown"); // 简化处理
+                error.put("field", extractFieldName(errorMsg)); // 提取字段名
                 error.put("message", errorMsg);
                 errors.add(error);
             }
@@ -72,7 +74,7 @@ public class AuthController {
 
             List<Map<String, String>> errors = new ArrayList<>();
             Map<String, String> error = new HashMap<>();
-            error.put("field", "unknown"); // 简化处理
+            error.put("field", extractFieldName(e.getMessage())); // 提取字段名
             error.put("message", e.getMessage());
             errors.add(error);
             response.put("errors", errors);
@@ -88,5 +90,27 @@ public class AuthController {
         }
 
         return response;
+    }
+
+    // 提取字段名的辅助方法
+    private String extractFieldName(String errorMsg) {
+        // 匹配密码相关错误
+        if (errorMsg.contains("密码")) {
+            return "password";
+        }
+        // 匹配手机号相关错误
+        else if (errorMsg.contains("手机号")) {
+            return "phone";
+        }
+        // 匹配用户类型相关错误
+        else if (errorMsg.contains("用户类型")) {
+            return "user_type";
+        }
+        // 匹配昵称相关错误
+        else if (errorMsg.contains("昵称")) {
+            return "nickname";
+        }
+        // 默认返回unknown
+        return "unknown";
     }
 }
