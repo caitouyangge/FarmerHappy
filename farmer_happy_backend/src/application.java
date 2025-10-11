@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.List;
 import java.util.Map;
 
 public class application {
@@ -238,22 +239,45 @@ public class application {
                     StringBuilder json = new StringBuilder("{");
                     for (Map.Entry<String, Object> entry : map.entrySet()) {
                         json.append("\"").append(entry.getKey()).append("\":");
-                        if (entry.getValue() instanceof String) {
-                            json.append("\"").append(escapeJsonString(entry.getValue().toString())).append("\"");
-                        } else if (entry.getValue() instanceof Object) {
-                            // 特殊处理 AuthResponseDTO 对象
-                            if (entry.getValue() instanceof dto.AuthResponseDTO) {
-                                json.append(serializeAuthResponseDTO((dto.AuthResponseDTO) entry.getValue()));
-                            } else {
-                                json.append("\"").append(escapeJsonString(entry.getValue().toString())).append("\"");
-                            }
-                        } else {
-                            json.append(entry.getValue());
-                        }
+                        json.append(serializeValue(entry.getValue()));
                         json.append(",");
                     }
                     if (json.length() > 1) json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
                     json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化各种类型的值
+                private String serializeValue(Object value) {
+                    if (value == null) {
+                        return "null";
+                    } else if (value instanceof String) {
+                        return "\"" + escapeJsonString(value.toString()) + "\"";
+                    } else if (value instanceof Number) {
+                        return value.toString();
+                    } else if (value instanceof Boolean) {
+                        return value.toString();
+                    } else if (value instanceof List) {
+                        return serializeList((List<?>) value);
+                    } else if (value instanceof Map) {
+                        return toJson((Map<String, Object>) value);
+                    } else if (value instanceof dto.AuthResponseDTO) {
+                        return serializeAuthResponseDTO((dto.AuthResponseDTO) value);
+                    } else {
+                        return "\"" + escapeJsonString(value.toString()) + "\"";
+                    }
+                }
+
+                // 序列化List类型
+                private String serializeList(List<?> list) {
+                    StringBuilder json = new StringBuilder("[");
+                    for (int i = 0; i < list.size(); i++) {
+                        json.append(serializeValue(list.get(i)));
+                        if (i < list.size() - 1) {
+                            json.append(",");
+                        }
+                    }
+                    json.append("]");
                     return json.toString();
                 }
 
