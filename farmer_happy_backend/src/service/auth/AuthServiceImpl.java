@@ -21,7 +21,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponseDTO register(RegisterRequestDTO registerRequest) throws SQLException, IllegalArgumentException {
-        System.out.println("s进入注册服务，请求参数: " + registerRequest.getPhone() + ", " + registerRequest.getPassword());
+        System.out.println("进入注册服务，请求参数: " + registerRequest.getPhone() + ", " + registerRequest.getPassword());
         List<String> errors = new ArrayList<>();
         if (!validateRegisterRequest(registerRequest, errors)) {
             throw new IllegalArgumentException(String.join("; ", errors));
@@ -83,7 +83,7 @@ public class AuthServiceImpl implements AuthService {
         response.setNickname(user.getNickname());
         response.setPhone(user.getPhone());
         response.setUserType(user.getUserType());
-        response.setToken(UUID.randomUUID().toString()); // 简化处理，实际应使用JWT
+        response.setToken(UUID.randomUUID().toString());
         response.setExpiresAt(LocalDateTime.now().plusHours(1));
 
         return response;
@@ -91,48 +91,46 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public boolean validateRegisterRequest(RegisterRequestDTO registerRequest, List<String> errors) {
-
         System.out.println("开始验证注册请求参数");
         System.out.println("密码: " + registerRequest.getPassword());
         System.out.println("手机号: " + registerRequest.getPhone());
         System.out.println("用户类型: " + registerRequest.getUserType());
         System.out.println("昵称: " + registerRequest.getNickname());
 
-
         boolean isValid = true;
 
         // 验证密码
         if (registerRequest.getPassword() == null || registerRequest.getPassword().isEmpty()) {
-            errors.add("密码不能为空");
+            errors.add("password:密码不能为空");
             isValid = false;
         } else if (registerRequest.getPassword().length() < 8 || registerRequest.getPassword().length() > 32) {
-            errors.add("密码长度必须在8-32个字符之间");
+            errors.add("password: '" + registerRequest.getPassword() + "' 长度必须在8-32个字符之间");
             isValid = false;
         } else if (!registerRequest.getPassword().matches(".*[a-z].*") ||
                 !registerRequest.getPassword().matches(".*[A-Z].*") ||
                 !registerRequest.getPassword().matches(".*[0-9].*")) {
-            errors.add("密码必须包含大小写字母和数字");
+            errors.add("密码： '" + registerRequest.getPassword() + "' 必须包含大小写字母和数字");
             isValid = false;
         }
 
         // 验证昵称（可选）
         if (registerRequest.getNickname() != null && registerRequest.getNickname().length() > 30) {
-            errors.add("昵称长度不能超过30个字符");
+            errors.add("nickname:昵称长度不能超过30个字符");
             isValid = false;
         }
 
         // 验证手机号
         if (registerRequest.getPhone() == null || registerRequest.getPhone().isEmpty()) {
-            errors.add("手机号不能为空");
+            errors.add("phone:手机号不能为空");
             isValid = false;
         } else if (!registerRequest.getPhone().matches("1[3-9]\\d{9}")) {
-            errors.add("手机号格式不正确");
+            errors.add("phone:手机号格式不正确");
             isValid = false;
         }
 
         // 验证用户类型
         if (registerRequest.getUserType() == null || registerRequest.getUserType().isEmpty()) {
-            errors.add("用户类型不能为空");
+            errors.add("user_type:用户类型不能为空");
             isValid = false;
         } else {
             String[] validTypes = {"farmer", "buyer", "expert", "bank", "admin"};
@@ -144,13 +142,14 @@ public class AuthServiceImpl implements AuthService {
                 }
             }
             if (!validType) {
-                errors.add("用户类型不正确");
+                errors.add("user_type:用户类型不正确");
                 isValid = false;
             }
         }
 
         return isValid;
     }
+
 
     @Override
     public User findUserByPhone(String phone) throws SQLException {

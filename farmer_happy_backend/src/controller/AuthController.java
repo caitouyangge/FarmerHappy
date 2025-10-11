@@ -93,9 +93,14 @@ public class AuthController {
     }
 
     // 提取字段名的辅助方法
+    // 提取字段名的辅助方法
     private String extractFieldName(String errorMsg) {
+        // 如果错误信息包含冒号，说明前面是字段名
+        if (errorMsg.contains(":")) {
+            return errorMsg.substring(0, errorMsg.indexOf(":"));
+        }
         // 匹配密码相关错误
-        if (errorMsg.contains("密码")) {
+        else if (errorMsg.contains("密码")) {
             return "password";
         }
         // 匹配手机号相关错误
@@ -113,4 +118,5 @@ public class AuthController {
         // 默认返回unknown
         return "unknown";
     }
+
 }
