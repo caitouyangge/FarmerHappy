@@ -1,8 +1,6 @@
 package service.auth;
 
-import dto.AuthResponseDTO;
-import dto.LoginRequestDTO;
-import dto.RegisterRequestDTO;
+import dto.*;
 import entity.User;
 import repository.DatabaseManager;
 
@@ -21,7 +19,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponseDTO register(RegisterRequestDTO registerRequest) throws SQLException, IllegalArgumentException {
-        System.out.println("s进入注册服务，请求参数: " + registerRequest.getPhone() + ", " + registerRequest.getPassword());
+        System.out.println("进入注册服务，请求参数: " + registerRequest.getPhone() + ", " + registerRequest.getPassword());
         List<String> errors = new ArrayList<>();
         if (!validateRegisterRequest(registerRequest, errors)) {
             throw new IllegalArgumentException(String.join("; ", errors));
@@ -42,6 +40,17 @@ public class AuthServiceImpl implements AuthService {
 
         // 保存用户到数据库
         saveUser(user);
+
+        // 根据用户类型保存扩展信息
+        if (registerRequest instanceof FarmerRegisterRequestDTO) {
+            saveFarmerExtension(user.getUid(), (FarmerRegisterRequestDTO) registerRequest);
+        } else if (registerRequest instanceof BuyerRegisterRequestDTO) {
+            saveBuyerExtension(user.getUid(), (BuyerRegisterRequestDTO) registerRequest);
+        } else if (registerRequest instanceof ExpertRegisterRequestDTO) {
+            saveExpertExtension(user.getUid(), (ExpertRegisterRequestDTO) registerRequest);
+        } else if (registerRequest instanceof BankRegisterRequestDTO) {
+            saveBankExtension(user.getUid(), (BankRegisterRequestDTO) registerRequest);
+        }
 
         // 生成认证响应
         AuthResponseDTO response = new AuthResponseDTO();
@@ -83,7 +92,7 @@ public class AuthServiceImpl implements AuthService {
         response.setNickname(user.getNickname());
         response.setPhone(user.getPhone());
         response.setUserType(user.getUserType());
-        response.setToken(UUID.randomUUID().toString()); // 简化处理，实际应使用JWT
+        response.setToken(UUID.randomUUID().toString());
         response.setExpiresAt(LocalDateTime.now().plusHours(1));
 
         return response;
@@ -91,51 +100,49 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public boolean validateRegisterRequest(RegisterRequestDTO registerRequest, List<String> errors) {
-
         System.out.println("开始验证注册请求参数");
         System.out.println("密码: " + registerRequest.getPassword());
         System.out.println("手机号: " + registerRequest.getPhone());
         System.out.println("用户类型: " + registerRequest.getUserType());
         System.out.println("昵称: " + registerRequest.getNickname());
 
-
         boolean isValid = true;
 
         // 验证密码
         if (registerRequest.getPassword() == null || registerRequest.getPassword().isEmpty()) {
-            errors.add("密码不能为空");
+            errors.add("password:密码不能为空");
             isValid = false;
         } else if (registerRequest.getPassword().length() < 8 || registerRequest.getPassword().length() > 32) {
-            errors.add("密码长度必须在8-32个字符之间");
+            errors.add("password: '" + registerRequest.getPassword() + "' 长度必须在8-32个字符之间");
             isValid = false;
         } else if (!registerRequest.getPassword().matches(".*[a-z].*") ||
                 !registerRequest.getPassword().matches(".*[A-Z].*") ||
                 !registerRequest.getPassword().matches(".*[0-9].*")) {
-            errors.add("密码必须包含大小写字母和数字");
+            errors.add("密码： '" + registerRequest.getPassword() + "' 必须包含大小写字母和数字");
             isValid = false;
         }
 
         // 验证昵称（可选）
         if (registerRequest.getNickname() != null && registerRequest.getNickname().length() > 30) {
-            errors.add("昵称长度不能超过30个字符");
+            errors.add("nickname:昵称长度不能超过30个字符");
             isValid = false;
         }
 
         // 验证手机号
         if (registerRequest.getPhone() == null || registerRequest.getPhone().isEmpty()) {
-            errors.add("手机号不能为空");
+            errors.add("phone:手机号不能为空");
             isValid = false;
         } else if (!registerRequest.getPhone().matches("1[3-9]\\d{9}")) {
-            errors.add("手机号格式不正确");
+            errors.add("phone:手机号格式不正确");
             isValid = false;
         }
 
         // 验证用户类型
         if (registerRequest.getUserType() == null || registerRequest.getUserType().isEmpty()) {
-            errors.add("用户类型不能为空");
+            errors.add("user_type:用户类型不能为空");
             isValid = false;
         } else {
-            String[] validTypes = {"farmer", "buyer", "expert", "bank", "admin"};
+            String[] validTypes = {"farmer", "buyer", "expert", "bank"};
             boolean validType = false;
             for (String type : validTypes) {
                 if (type.equals(registerRequest.getUserType())) {
@@ -144,7 +151,53 @@ public class AuthServiceImpl implements AuthService {
                 }
             }
             if (!validType) {
-                errors.add("用户类型不正确");
+                errors.add("user_type:用户类型不正确");
+                isValid = false;
+            }
+        }
+
+        // 验证特定用户类型的额外字段
+        if (registerRequest instanceof FarmerRegisterRequestDTO) {
+            FarmerRegisterRequestDTO farmerRequest = (FarmerRegisterRequestDTO) registerRequest;
+            if (farmerRequest.getFarmName() == null || farmerRequest.getFarmName().isEmpty()) {
+                errors.add("farm_name:农场名称不能为空");
+                isValid = false;
+            } else if (farmerRequest.getFarmName().length() > 100) {
+                errors.add("farm_name:农场名称长度不能超过100个字符");
+                isValid = false;
+            }
+
+            if (farmerRequest.getFarmAddress() != null && farmerRequest.getFarmAddress().length() > 200) {
+                errors.add("farm_address:农场地址长度不能超过200个字符");
+                isValid = false;
+            }
+        } else if (registerRequest instanceof BuyerRegisterRequestDTO) {
+            BuyerRegisterRequestDTO buyerRequest = (BuyerRegisterRequestDTO) registerRequest;
+            if (buyerRequest.getShippingAddress() != null && buyerRequest.getShippingAddress().length() > 500) {
+                errors.add("shipping_address:收货地址长度不能超过500个字符");
+                isValid = false;
+            }
+        } else if (registerRequest instanceof ExpertRegisterRequestDTO) {
+            ExpertRegisterRequestDTO expertRequest = (ExpertRegisterRequestDTO) registerRequest;
+            if (expertRequest.getExpertiseField() == null || expertRequest.getExpertiseField().isEmpty()) {
+                errors.add("expertise_field:专业领域不能为空");
+                isValid = false;
+            } else if (expertRequest.getExpertiseField().length() > 100) {
+                errors.add("expertise_field:专业领域长度不能超过100个字符");
+                isValid = false;
+            }
+        } else if (registerRequest instanceof BankRegisterRequestDTO) {
+            BankRegisterRequestDTO bankRequest = (BankRegisterRequestDTO) registerRequest;
+            if (bankRequest.getBankName() == null || bankRequest.getBankName().isEmpty()) {
+                errors.add("bank_name:银行名称不能为空");
+                isValid = false;
+            } else if (bankRequest.getBankName().length() > 100) {
+                errors.add("bank_name:银行名称长度不能超过100个字符");
+                isValid = false;
+            }
+
+            if (bankRequest.getBranchName() != null && bankRequest.getBranchName().length() > 100) {
+                errors.add("branch_name:分行名称长度不能超过100个字符");
                 isValid = false;
             }
         }
@@ -192,7 +245,6 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-
     @Override
     public void saveUser(User user) throws SQLException {
         System.out.println("开始保存用户: " + user.getPhone());
@@ -223,4 +275,95 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    @Override
+    public void saveFarmerExtension(String uid, FarmerRegisterRequestDTO farmerRequest) throws SQLException {
+        try {
+            Connection conn = databaseManager.getConnection();
+            PreparedStatement stmt = conn.prepareStatement(
+                    "INSERT INTO user_farmers (uid, farm_name, farm_address, farm_size) VALUES (?, ?, ?, ?)"
+            );
+            stmt.setString(1, uid);
+            stmt.setString(2, farmerRequest.getFarmName());
+            stmt.setString(3, farmerRequest.getFarmAddress());
+            if (farmerRequest.getFarmSize() != null) {
+                stmt.setDouble(4, farmerRequest.getFarmSize());
+            } else {
+                stmt.setNull(4, Types.DOUBLE);
+            }
+
+            stmt.executeUpdate();
+            stmt.close();
+            conn.close();
+        } catch (SQLException e) {
+            System.err.println("保存农户扩展信息失败: " + e.getMessage());
+            e.printStackTrace();
+            throw new SQLException("保存农户扩展信息失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void saveBuyerExtension(String uid, BuyerRegisterRequestDTO buyerRequest) throws SQLException {
+        try {
+            Connection conn = databaseManager.getConnection();
+            PreparedStatement stmt = conn.prepareStatement(
+                    "INSERT INTO user_buyers (uid, shipping_address) VALUES (?, ?)"
+            );
+            stmt.setString(1, uid);
+            stmt.setString(2, buyerRequest.getShippingAddress());
+
+            stmt.executeUpdate();
+            stmt.close();
+            conn.close();
+        } catch (SQLException e) {
+            System.err.println("保存买家扩展信息失败: " + e.getMessage());
+            e.printStackTrace();
+            throw new SQLException("保存买家扩展信息失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void saveExpertExtension(String uid, ExpertRegisterRequestDTO expertRequest) throws SQLException {
+        try {
+            Connection conn = databaseManager.getConnection();
+            PreparedStatement stmt = conn.prepareStatement(
+                    "INSERT INTO user_experts (uid, expertise_field, work_experience) VALUES (?, ?, ?)"
+            );
+            stmt.setString(1, uid);
+            stmt.setString(2, expertRequest.getExpertiseField());
+            if (expertRequest.getWorkExperience() != null) {
+                stmt.setInt(3, expertRequest.getWorkExperience());
+            } else {
+                stmt.setNull(3, Types.INTEGER);
+            }
+
+            stmt.executeUpdate();
+            stmt.close();
+            conn.close();
+        } catch (SQLException e) {
+            System.err.println("保存专家扩展信息失败: " + e.getMessage());
+            e.printStackTrace();
+            throw new SQLException("保存专家扩展信息失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void saveBankExtension(String uid, BankRegisterRequestDTO bankRequest) throws SQLException {
+        try {
+            Connection conn = databaseManager.getConnection();
+            PreparedStatement stmt = conn.prepareStatement(
+                    "INSERT INTO user_banks (uid, bank_name, branch_name) VALUES (?, ?, ?)"
+            );
+            stmt.setString(1, uid);
+            stmt.setString(2, bankRequest.getBankName());
+            stmt.setString(3, bankRequest.getBranchName());
+
+            stmt.executeUpdate();
+            stmt.close();
+            conn.close();
+        } catch (SQLException e) {
+            System.err.println("保存银行扩展信息失败: " + e.getMessage());
+            e.printStackTrace();
+            throw new SQLException("保存银行扩展信息失败: " + e.getMessage());
+        }
+    }
 }
