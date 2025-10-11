@@ -1,8 +1,7 @@
 package config;
 
 import controller.AuthController;
-import dto.LoginRequestDTO;
-import dto.RegisterRequestDTO;
+import dto.*;
 
 import java.util.Map;
 
@@ -35,13 +34,65 @@ public class RouterConfig {
     }
 
     private Map<String, Object> handleRegister(Map<String, Object> requestBody) {
-        RegisterRequestDTO request = new RegisterRequestDTO();
-        request.setPassword((String) requestBody.get("password"));
-        request.setNickname((String) requestBody.get("nickname"));
-        request.setPhone((String) requestBody.get("phone"));
-        request.setUserType((String) requestBody.get("user_type"));
+        String userType = (String) requestBody.get("user_type");
 
-        return authController.register(request);
+        if (userType == null) {
+            userType = (String) requestBody.get("userType");
+        }
+
+        switch (userType) {
+            case "farmer":
+                FarmerRegisterRequestDTO farmerRequest = new FarmerRegisterRequestDTO();
+                farmerRequest.setPassword((String) requestBody.get("password"));
+                farmerRequest.setNickname((String) requestBody.get("nickname"));
+                farmerRequest.setPhone((String) requestBody.get("phone"));
+                farmerRequest.setUserType(userType);
+                farmerRequest.setFarmName((String) requestBody.get("farm_name"));
+                farmerRequest.setFarmAddress((String) requestBody.get("farm_address"));
+                if (requestBody.get("farm_size") instanceof Number) {
+                    farmerRequest.setFarmSize(((Number) requestBody.get("farm_size")).doubleValue());
+                }
+                return authController.register(farmerRequest);
+
+            case "buyer":
+                BuyerRegisterRequestDTO buyerRequest = new BuyerRegisterRequestDTO();
+                buyerRequest.setPassword((String) requestBody.get("password"));
+                buyerRequest.setNickname((String) requestBody.get("nickname"));
+                buyerRequest.setPhone((String) requestBody.get("phone"));
+                buyerRequest.setUserType(userType);
+                buyerRequest.setShippingAddress((String) requestBody.get("shipping_address"));
+                return authController.register(buyerRequest);
+
+            case "expert":
+                ExpertRegisterRequestDTO expertRequest = new ExpertRegisterRequestDTO();
+                expertRequest.setPassword((String) requestBody.get("password"));
+                expertRequest.setNickname((String) requestBody.get("nickname"));
+                expertRequest.setPhone((String) requestBody.get("phone"));
+                expertRequest.setUserType(userType);
+                expertRequest.setExpertiseField((String) requestBody.get("expertise_field"));
+                if (requestBody.get("work_experience") instanceof Number) {
+                    expertRequest.setWorkExperience(((Number) requestBody.get("work_experience")).intValue());
+                }
+                return authController.register(expertRequest);
+
+            case "bank":
+                BankRegisterRequestDTO bankRequest = new BankRegisterRequestDTO();
+                bankRequest.setPassword((String) requestBody.get("password"));
+                bankRequest.setNickname((String) requestBody.get("nickname"));
+                bankRequest.setPhone((String) requestBody.get("phone"));
+                bankRequest.setUserType(userType);
+                bankRequest.setBankName((String) requestBody.get("bank_name"));
+                bankRequest.setBranchName((String) requestBody.get("branch_name"));
+                return authController.register(bankRequest);
+
+            default:
+                RegisterRequestDTO defaultRequest = new RegisterRequestDTO();
+                defaultRequest.setPassword((String) requestBody.get("password"));
+                defaultRequest.setNickname((String) requestBody.get("nickname"));
+                defaultRequest.setPhone((String) requestBody.get("phone"));
+                defaultRequest.setUserType(userType);
+                return authController.register(defaultRequest);
+        }
     }
 
     private Map<String, Object> handleLogin(Map<String, Object> requestBody) {
