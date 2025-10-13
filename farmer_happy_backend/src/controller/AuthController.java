@@ -26,7 +26,7 @@ public class AuthController {
 
         try {
             AuthResponseDTO authResponse = authService.register(request);
-            response.put("code", 200);
+            response.put("code", 201);
             response.put("message", "成功");
             response.put("data", authResponse);
         } catch (IllegalArgumentException e) {
