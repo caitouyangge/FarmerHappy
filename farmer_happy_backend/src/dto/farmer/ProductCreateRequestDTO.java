@@ -1,5 +1,5 @@
 // src/dto/ProductCreateRequestDTO.java
-package dto;
+package dto.farmer;
 
 import java.util.List;
 
@@ -12,6 +12,7 @@ public class ProductCreateRequestDTO {
     private List<String> images;
     private String origin;
     private String phone; // 新增手机号字段
+    private String category; // 新增分类字段
 
     // Getters and Setters
     public String getTitle() {
@@ -76,5 +77,13 @@ public class ProductCreateRequestDTO {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 }

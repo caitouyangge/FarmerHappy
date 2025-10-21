@@ -3,7 +3,10 @@ package config;
 
 import controller.AuthController;
 import controller.ProductController;
-import dto.*;
+import dto.auth.*;
+import dto.farmer.FarmerRegisterRequestDTO;
+import dto.farmer.ProductCreateRequestDTO;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -140,6 +143,7 @@ public class RouterConfig {
         request.setDescription((String) requestBody.get("description"));
         request.setOrigin((String) requestBody.get("origin"));
         request.setPhone((String) requestBody.get("phone")); // 添加手机号字段
+        request.setCategory((String) requestBody.get("category")); // 添加分类字段
 
         // 处理图片数组
         if (requestBody.get("images") instanceof List) {

@@ -1,4 +1,4 @@
-package dto;
+package dto.auth;
 
 public class RegisterRequestDTO {
     private String password;

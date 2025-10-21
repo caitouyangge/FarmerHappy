@@ -1,6 +1,7 @@
 package service.auth;
 
-import dto.*;
+import dto.auth.*;
+import dto.farmer.FarmerRegisterRequestDTO;
 import entity.User;
 import repository.DatabaseManager;
 

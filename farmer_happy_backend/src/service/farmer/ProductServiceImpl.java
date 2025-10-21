@@ -1,8 +1,8 @@
 // src/service/farmer/ProductServiceImpl.java
 package service.farmer;
 
-import dto.ProductCreateRequestDTO;
-import dto.ProductResponseDTO;
+import dto.farmer.ProductCreateRequestDTO;
+import dto.farmer.ProductResponseDTO;
 import entity.Product;
 import repository.DatabaseManager;
 
@@ -30,6 +30,7 @@ public class ProductServiceImpl implements ProductService {
             // 插入产品信息
             Product product = new Product();
             product.setFarmerId(farmerIdLong);
+            product.setCategory(request.getCategory()); // 设置分类
             product.setTitle(request.getTitle());
             product.setSpecification(request.getSpecification());
             product.setPrice(request.getPrice());
@@ -106,18 +107,19 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private Long insertProduct(Connection conn, Product product) throws SQLException {
-        String sql = "INSERT INTO products (farmer_id, title, specification, price, stock, description, origin, status, created_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO products (farmer_id, category, title, specification, price, stock, description, origin, status, created_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
         stmt.setLong(1, product.getFarmerId());
-        stmt.setString(2, product.getTitle());
-        stmt.setString(3, product.getSpecification());
-        stmt.setDouble(4, product.getPrice());
-        stmt.setInt(5, product.getStock());
-        stmt.setString(6, product.getDescription());
-        stmt.setString(7, product.getOrigin());
-        stmt.setString(8, product.getStatus());
-        stmt.setTimestamp(9, Timestamp.valueOf(product.getCreatedAt()));
+        stmt.setString(2, product.getCategory()); // 插入分类
+        stmt.setString(3, product.getTitle());
+        stmt.setString(4, product.getSpecification());
+        stmt.setDouble(5, product.getPrice());
+        stmt.setInt(6, product.getStock());
+        stmt.setString(7, product.getDescription());
+        stmt.setString(8, product.getOrigin());
+        stmt.setString(9, product.getStatus());
+        stmt.setTimestamp(10, Timestamp.valueOf(product.getCreatedAt()));
 
         stmt.executeUpdate();
 
