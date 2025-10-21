@@ -1,18 +1,24 @@
+// src/config/RouterConfig.java
 package config;
 
 import controller.AuthController;
+import controller.ProductController;
 import dto.*;
-
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 public class RouterConfig {
     private AuthController authController;
+    private ProductController productController;
 
     public RouterConfig() {
         this.authController = new AuthController();
+        this.productController = new ProductController();
     }
 
-    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody) {
+    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, String sessionId) {
         switch (path) {
             case "/api/v1/auth/register":
                 if ("POST".equals(method)) {
@@ -24,13 +30,29 @@ public class RouterConfig {
                     return handleLogin(requestBody);
                 }
                 break;
+            case "/api/v1/farmer/products":
+                if ("POST".equals(method)) {
+                    // 不再使用会话，直接处理请求
+                    return productController.createProduct(parseProductRequest(requestBody));
+                }
+                break;
         }
 
         // 默认返回404
-        Map<String, Object> response = new java.util.HashMap<>();
+        Map<String, Object> response = new HashMap<>();
         response.put("code", 404);
         response.put("message", "接口不存在");
         return response;
+    }
+
+    // 重载方法以保持向后兼容
+    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody) {
+        return handleRequest(path, method, requestBody, new HashMap<>(), null);
+    }
+
+    // 重载方法以保持向后兼容
+    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers) {
+        return handleRequest(path, method, requestBody, headers, null);
     }
 
     private Map<String, Object> handleRegister(Map<String, Object> requestBody) {
@@ -100,6 +122,37 @@ public class RouterConfig {
         request.setPhone((String) requestBody.get("phone"));
         request.setPassword((String) requestBody.get("password"));
 
-        return authController.login(request);
+        Map<String, Object> loginResult = authController.login(request);
+
+        return loginResult;
+    }
+
+    private ProductCreateRequestDTO parseProductRequest(Map<String, Object> requestBody) {
+        ProductCreateRequestDTO request = new ProductCreateRequestDTO();
+        request.setTitle((String) requestBody.get("title"));
+        request.setSpecification((String) requestBody.get("specification"));
+        if (requestBody.get("price") instanceof Number) {
+            request.setPrice(((Number) requestBody.get("price")).doubleValue());
+        }
+        if (requestBody.get("stock") instanceof Number) {
+            request.setStock(((Number) requestBody.get("stock")).intValue());
+        }
+        request.setDescription((String) requestBody.get("description"));
+        request.setOrigin((String) requestBody.get("origin"));
+        request.setPhone((String) requestBody.get("phone")); // 添加手机号字段
+
+        // 处理图片数组
+        if (requestBody.get("images") instanceof List) {
+            List<?> imagesObj = (List<?>) requestBody.get("images");
+            List<String> images = new ArrayList<>();
+            for (Object img : imagesObj) {
+                if (img instanceof String) {
+                    images.add((String) img);
+                }
+            }
+            request.setImages(images);
+        }
+
+        return request;
     }
 }
