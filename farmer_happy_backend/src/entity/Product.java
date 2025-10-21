@@ -1,3 +1,4 @@
+// src/entity/Product.java
 package entity;
 
 import java.time.LocalDateTime;

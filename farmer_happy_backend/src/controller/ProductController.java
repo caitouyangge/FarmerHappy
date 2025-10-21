@@ -1,8 +1,8 @@
 // src/controller/ProductController.java
 package controller;
 
-import dto.ProductCreateRequestDTO;
-import dto.ProductResponseDTO;
+import dto.farmer.ProductCreateRequestDTO;
+import dto.farmer.ProductResponseDTO;
 import service.farmer.ProductService;
 import service.farmer.ProductServiceImpl;
 import service.auth.AuthService;
@@ -117,6 +117,16 @@ public class ProductController {
 
         if (request.getImages() != null && request.getImages().size() > 9) {
             errors.add("最多支持9张图片");
+        }
+
+        // 验证分类
+        if (request.getCategory() == null || request.getCategory().isEmpty()) {
+            errors.add("商品分类不能为空");
+        } else {
+            Set<String> validCategories = new HashSet<>(Arrays.asList("vegetables", "fruits", "grains", "livestock", "aquatic"));
+            if (!validCategories.contains(request.getCategory())) {
+                errors.add("商品分类无效，必须是以下值之一: vegetables, fruits, grains, livestock, aquatic");
+            }
         }
 
         return errors;

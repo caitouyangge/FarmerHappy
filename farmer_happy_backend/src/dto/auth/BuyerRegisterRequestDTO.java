@@ -1,4 +1,4 @@
-package dto;
+package dto.auth;
 
 public class BuyerRegisterRequestDTO extends RegisterRequestDTO {
     private String shippingAddress;

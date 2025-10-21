@@ -3,6 +3,8 @@ import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 import config.RouterConfig;
+import dto.auth.AuthResponseDTO;
+import dto.farmer.ProductResponseDTO;
 import repository.DatabaseManager;
 
 import java.io.BufferedReader;
@@ -392,10 +394,10 @@ public class application {
                         return serializeList((List<?>) value);
                     } else if (value instanceof Map) {
                         return toJson((Map<String, Object>) value);
-                    } else if (value instanceof dto.AuthResponseDTO) {
-                        return serializeAuthResponseDTO((dto.AuthResponseDTO) value);
-                    } else if (value instanceof dto.ProductResponseDTO) {
-                        return serializeProductResponseDTO((dto.ProductResponseDTO) value);
+                    } else if (value instanceof AuthResponseDTO) {
+                        return serializeAuthResponseDTO((AuthResponseDTO) value);
+                    } else if (value instanceof ProductResponseDTO) {
+                        return serializeProductResponseDTO((ProductResponseDTO) value);
                     } else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
                     }
@@ -415,7 +417,7 @@ public class application {
                 }
 
                 // 添加序列化 AuthResponseDTO 对象的方法
-                private String serializeAuthResponseDTO(dto.AuthResponseDTO dto) {
+                private String serializeAuthResponseDTO(AuthResponseDTO dto) {
                     StringBuilder json = new StringBuilder("{");
                     if (dto.getUid() != null) {
                         json.append("\"uid\":\"").append(escapeJsonString(dto.getUid())).append("\",");
@@ -443,7 +445,7 @@ public class application {
                 }
 
                 // 添加序列化 ProductResponseDTO 对象的方法
-                private String serializeProductResponseDTO(dto.ProductResponseDTO dto) {
+                private String serializeProductResponseDTO(ProductResponseDTO dto) {
                     StringBuilder json = new StringBuilder("{");
                     if (dto.getProduct_id() != null) {
                         json.append("\"product_id\":\"").append(escapeJsonString(dto.getProduct_id())).append("\",");

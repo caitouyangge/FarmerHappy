@@ -1,6 +1,8 @@
 package controller;
 
-import dto.*;
+import dto.auth.AuthResponseDTO;
+import dto.auth.LoginRequestDTO;
+import dto.auth.RegisterRequestDTO;
 import service.auth.AuthService;
 import service.auth.AuthServiceImpl;
 
@@ -9,8 +11,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class AuthController {
     private AuthService authService;

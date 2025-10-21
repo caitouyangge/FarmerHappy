@@ -1,4 +1,4 @@
-package dto;
+package dto.farmer;
 
 import java.time.LocalDateTime;
 import java.util.List;
