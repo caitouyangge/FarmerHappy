@@ -5,7 +5,8 @@ import com.sun.net.httpserver.HttpExchange;
 import config.RouterConfig;
 import dto.auth.AuthResponseDTO;
 import dto.farmer.ProductResponseDTO;
-import dto.farmer.ProductStatusUpdateResponseDTO; // 添加导入
+import dto.farmer.ProductStatusUpdateResponseDTO;
+import dto.farmer.ProductDetailResponseDTO; // 添加导入
 import repository.DatabaseManager;
 
 import java.io.BufferedReader;
@@ -13,6 +14,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -74,7 +76,8 @@ public class application {
                     try {
                         if ("GET".equals(exchange.getRequestMethod()) ||
                                 "HEAD".equals(exchange.getRequestMethod())) {
-                            return new HashMap<>();
+                            // 对于GET请求，从查询参数中解析
+                            return parseQueryParams(exchange.getRequestURI().getQuery());
                         }
 
                         StringBuilder requestBody = new StringBuilder();
@@ -99,6 +102,27 @@ public class application {
                         e.printStackTrace(); // 打印完整的堆栈跟踪
                         return new HashMap<>();
                     }
+                }
+
+                // 解析查询参数
+                private Map<String, Object> parseQueryParams(String query) {
+                    Map<String, Object> params = new HashMap<>();
+                    if (query != null && !query.isEmpty()) {
+                        String[] pairs = query.split("&");
+                        for (String pair : pairs) {
+                            String[] keyValue = pair.split("=");
+                            if (keyValue.length == 2) {
+                                try {
+                                    String key = URLDecoder.decode(keyValue[0], "UTF-8");
+                                    String value = URLDecoder.decode(keyValue[1], "UTF-8");
+                                    params.put(key, value);
+                                } catch (Exception e) {
+                                    System.err.println("解码查询参数失败: " + e.getMessage());
+                                }
+                            }
+                        }
+                    }
+                    return params;
                 }
 
                 // 改进 parseJsonString 方法
@@ -401,6 +425,8 @@ public class application {
                         return serializeProductResponseDTO((ProductResponseDTO) value);
                     } else if (value instanceof ProductStatusUpdateResponseDTO) { // 添加对ProductStatusUpdateResponseDTO的支持
                         return serializeProductStatusUpdateResponseDTO((ProductStatusUpdateResponseDTO) value);
+                    } else if (value instanceof ProductDetailResponseDTO) { // 添加对ProductDetailResponseDTO的支持
+                        return serializeProductDetailResponseDTO((ProductDetailResponseDTO) value);
                     } else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
                     }
@@ -493,6 +519,48 @@ public class application {
                     }
                     if (dto.getStatus() != null) {
                         json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 添加序列化 ProductDetailResponseDTO 对象的方法
+                private String serializeProductDetailResponseDTO(ProductDetailResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getProduct_id() != null) {
+                        json.append("\"product_id\":\"").append(escapeJsonString(dto.getProduct_id())).append("\",");
+                    }
+                    if (dto.getTitle() != null) {
+                        json.append("\"title\":\"").append(escapeJsonString(dto.getTitle())).append("\",");
+                    }
+                    if (dto.getSpecification() != null) {
+                        json.append("\"specification\":\"").append(escapeJsonString(dto.getSpecification())).append("\",");
+                    }
+                    json.append("\"price\":").append(dto.getPrice()).append(",");
+                    json.append("\"stock\":").append(dto.getStock()).append(",");
+                    if (dto.getDescription() != null) {
+                        json.append("\"description\":\"").append(escapeJsonString(dto.getDescription())).append("\",");
+                    }
+                    if (dto.getImages() != null) {
+                        json.append("\"images\":").append(serializeList(dto.getImages())).append(",");
+                    }
+                    if (dto.getOrigin() != null) {
+                        json.append("\"origin\":\"").append(escapeJsonString(dto.getOrigin())).append("\",");
+                    }
+                    if (dto.getShipping_template_id() != null) {
+                        json.append("\"shipping_template_id\":\"").append(escapeJsonString(dto.getShipping_template_id())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getCreated_at() != null) {
+                        json.append("\"created_at\":\"").append(dto.getCreated_at().toString()).append("\",");
+                    }
+                    if (dto.getUpdated_at() != null) {
+                        json.append("\"updated_at\":\"").append(dto.getUpdated_at().toString()).append("\",");
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1); // 删除最后一个逗号

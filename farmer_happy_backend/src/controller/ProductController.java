@@ -5,6 +5,7 @@ import dto.farmer.ProductCreateRequestDTO;
 import dto.farmer.ProductResponseDTO;
 import dto.farmer.ProductStatusUpdateRequestDTO;
 import dto.farmer.ProductStatusUpdateResponseDTO;
+import dto.farmer.ProductDetailResponseDTO;
 import service.farmer.ProductService;
 import service.farmer.ProductServiceImpl;
 import service.auth.AuthService;
@@ -178,6 +179,98 @@ public class ProductController {
         } catch (IllegalStateException e) {
             response.put("code", 409);
             response.put("message", e.getMessage());
+            return response;
+        } catch (IllegalArgumentException e) {
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return response;
+        }
+    }
+
+    // 删除商品
+    public Map<String, Object> deleteProduct(String productId, ProductStatusUpdateRequestDTO request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 验证参数
+            if (request.getPhone() == null || request.getPhone().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                Map<String, String> errorDetail = new HashMap<>();
+                errorDetail.put("message", "手机号不能为空");
+                errorDetails.add(errorDetail);
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            // 删除商品
+            productService.deleteProduct(productId, request.getPhone());
+
+            // 返回204状态码
+            response.put("code", 204);
+            response.put("message", "商品删除成功");
+
+            return response;
+        } catch (SQLException e) {
+            if (e.getMessage().contains("商品不存在")) {
+                response.put("code", 404);
+                response.put("message", "商品不存在");
+            } else {
+                response.put("code", 500);
+                response.put("message", "服务器内部错误: " + e.getMessage());
+            }
+            return response;
+        } catch (IllegalArgumentException e) {
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return response;
+        }
+    }
+
+    // 获取单个商品详情
+    public Map<String, Object> getProductDetail(String productId, ProductStatusUpdateRequestDTO request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 验证参数
+            if (request.getPhone() == null || request.getPhone().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                Map<String, String> errorDetail = new HashMap<>();
+                errorDetail.put("message", "手机号不能为空");
+                errorDetails.add(errorDetail);
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            // 获取商品详情
+            ProductDetailResponseDTO productDetail = productService.getProductDetail(productId, request.getPhone());
+
+            response.put("code", 200);
+            response.put("message", "成功");
+            response.put("data", productDetail);
+
+            return response;
+        } catch (SQLException e) {
+            if (e.getMessage().contains("商品不存在")) {
+                response.put("code", 404);
+                response.put("message", "商品不存在");
+            } else {
+                response.put("code", 500);
+                response.put("message", "服务器内部错误: " + e.getMessage());
+            }
             return response;
         } catch (IllegalArgumentException e) {
             response.put("code", 400);

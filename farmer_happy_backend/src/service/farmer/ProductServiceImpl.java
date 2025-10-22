@@ -4,6 +4,7 @@ package service.farmer;
 import dto.farmer.ProductCreateRequestDTO;
 import dto.farmer.ProductResponseDTO;
 import dto.farmer.ProductStatusUpdateResponseDTO;
+import dto.farmer.ProductDetailResponseDTO;
 import entity.Product;
 import repository.DatabaseManager;
 import service.auth.AuthService;
@@ -111,7 +112,7 @@ public class ProductServiceImpl implements ProductService {
             String currentStatus = getProductStatus(conn, prodId, farmerId);
 
             // 检查状态是否允许上架
-            if (!"off_shelf".equals(currentStatus) && !"review_rejected".equals(currentStatus)) {
+            if (!"off_shelf".equals(currentStatus) && !"pending_review".equals(currentStatus)) {
                 throw new IllegalStateException("当前商品状态无法执行上架操作");
             }
 
@@ -189,6 +190,79 @@ public class ProductServiceImpl implements ProductService {
         } finally {
             if (conn != null) {
                 conn.setAutoCommit(true);
+                conn.close();
+            }
+        }
+    }
+
+    // 删除商品
+    @Override
+    public void deleteProduct(String productId, String phone) throws Exception {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+            conn.setAutoCommit(false);
+
+            // 验证用户
+            entity.User user = authService.findUserByPhone(phone);
+            if (user == null) {
+                throw new IllegalArgumentException("用户不存在");
+            }
+
+            // 验证用户类型
+            if (!"farmer".equals(user.getUserType())) {
+                throw new IllegalArgumentException("只有农户可以操作商品");
+            }
+
+            // 获取农户ID
+            Long farmerId = getFarmerIdByUserId(conn, user.getUid());
+
+            // 删除商品
+            long prodId = Long.parseLong(productId);
+            deleteProductById(conn, prodId, farmerId);
+
+            conn.commit();
+        } catch (Exception e) {
+            if (conn != null) {
+                conn.rollback();
+            }
+            throw e;
+        } finally {
+            if (conn != null) {
+                conn.setAutoCommit(true);
+                conn.close();
+            }
+        }
+    }
+
+    // 获取单个商品详情
+    @Override
+    public ProductDetailResponseDTO getProductDetail(String productId, String phone) throws Exception {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+
+            // 验证用户
+            entity.User user = authService.findUserByPhone(phone);
+            if (user == null) {
+                throw new IllegalArgumentException("用户不存在");
+            }
+
+            // 验证用户类型
+            if (!"farmer".equals(user.getUserType())) {
+                throw new IllegalArgumentException("只有农户可以操作商品");
+            }
+
+            // 获取农户ID
+            Long farmerId = getFarmerIdByUserId(conn, user.getUid());
+
+            // 获取商品详情
+            long prodId = Long.parseLong(productId);
+            ProductDetailResponseDTO productDetail = getProductDetailById(conn, prodId, farmerId);
+
+            return productDetail;
+        } finally {
+            if (conn != null) {
                 conn.close();
             }
         }
@@ -287,5 +361,66 @@ public class ProductServiceImpl implements ProductService {
         if (rowsAffected == 0) {
             throw new SQLException("商品不存在或不属于该农户");
         }
+    }
+
+    // 删除商品
+    private void deleteProductById(Connection conn, long productId, Long farmerId) throws SQLException {
+        String sql = "DELETE FROM products WHERE product_id = ? AND farmer_id = ?";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setLong(1, productId);
+        stmt.setLong(2, farmerId);
+        int rowsAffected = stmt.executeUpdate();
+
+        if (rowsAffected == 0) {
+            throw new SQLException("商品不存在或不属于该农户");
+        }
+    }
+
+    // 获取商品详情
+    private ProductDetailResponseDTO getProductDetailById(Connection conn, long productId, Long farmerId) throws SQLException {
+        String sql = "SELECT p.*, pi.image_url FROM products p " +
+                "LEFT JOIN product_images pi ON p.product_id = pi.product_id " +
+                "WHERE p.product_id = ? AND p.farmer_id = ? " +
+                "ORDER BY pi.sort_order";
+
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setLong(1, productId);
+        stmt.setLong(2, farmerId);
+        ResultSet rs = stmt.executeQuery();
+
+        ProductDetailResponseDTO productDetail = null;
+        List<String> images = new ArrayList<>();
+
+        while (rs.next()) {
+            if (productDetail == null) {
+                productDetail = new ProductDetailResponseDTO();
+                productDetail.setProduct_id("prod-" + rs.getLong("product_id"));
+                productDetail.setTitle(rs.getString("title"));
+                productDetail.setSpecification(rs.getString("specification"));
+                productDetail.setPrice(rs.getDouble("price"));
+                productDetail.setStock(rs.getInt("stock"));
+                productDetail.setDescription(rs.getString("description"));
+                productDetail.setOrigin(rs.getString("origin"));
+                productDetail.setStatus(rs.getString("status"));
+                productDetail.setCreated_at(rs.getTimestamp("created_at").toLocalDateTime());
+
+                // 不再访问 updated_at 字段，移除相关代码
+
+                // shipping_template_id 暂时设置为空，因为数据库表中没有该字段
+                productDetail.setShipping_template_id(null);
+            }
+
+            String imageUrl = rs.getString("image_url");
+            if (imageUrl != null) {
+                images.add(imageUrl);
+            }
+        }
+
+        if (productDetail == null) {
+            throw new SQLException("商品不存在或不属于该农户");
+        }
+
+        productDetail.setImages(images);
+        return productDetail;
     }
 }

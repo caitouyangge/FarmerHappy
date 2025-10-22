@@ -51,6 +51,32 @@ public class RouterConfig {
             return productController.offShelfProduct(productId, parseProductStatusUpdateRequest(requestBody));
         }
 
+        // 处理商品删除请求
+        Pattern deleteProductPattern = Pattern.compile("/api/v1/farmer/products/([^/]+)");
+        Matcher deleteProductMatcher = deleteProductPattern.matcher(path);
+
+        if (deleteProductMatcher.matches() && "DELETE".equals(method)) {
+            String productId = deleteProductMatcher.group(1);
+            // 移除可能存在的花括号
+            if (productId.startsWith("{") && productId.endsWith("}")) {
+                productId = productId.substring(1, productId.length() - 1);
+            }
+            return productController.deleteProduct(productId, parseProductStatusUpdateRequest(requestBody));
+        }
+
+        // 处理获取单个商品详情请求 (修改路径为 /api/v1/farmer/products/query/{productId})
+        Pattern getProductDetailPattern = Pattern.compile("/api/v1/farmer/products/query/([^/]+)");
+        Matcher getProductDetailMatcher = getProductDetailPattern.matcher(path);
+
+        if (getProductDetailMatcher.matches() && "POST".equals(method)) {
+            String productId = getProductDetailMatcher.group(1);
+            // 移除可能存在的花括号
+            if (productId.startsWith("{") && productId.endsWith("}")) {
+                productId = productId.substring(1, productId.length() - 1);
+            }
+            return productController.getProductDetail(productId, parseProductStatusUpdateRequest(requestBody));
+        }
+
         switch (path) {
             case "/api/v1/auth/register":
                 if ("POST".equals(method)) {
