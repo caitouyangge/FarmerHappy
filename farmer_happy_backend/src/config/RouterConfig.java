@@ -6,11 +6,14 @@ import controller.ProductController;
 import dto.auth.*;
 import dto.farmer.FarmerRegisterRequestDTO;
 import dto.farmer.ProductCreateRequestDTO;
+import dto.farmer.ProductStatusUpdateRequestDTO;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class RouterConfig {
     private AuthController authController;
@@ -22,6 +25,32 @@ public class RouterConfig {
     }
 
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, String sessionId) {
+        // 处理商品上架请求
+        Pattern onShelfPattern = Pattern.compile("/api/v1/farmer/products/([^/]+)/on-shelf");
+        Matcher onShelfMatcher = onShelfPattern.matcher(path);
+
+        if (onShelfMatcher.matches() && "POST".equals(method)) {
+            String productId = onShelfMatcher.group(1);
+            // 移除可能存在的花括号
+            if (productId.startsWith("{") && productId.endsWith("}")) {
+                productId = productId.substring(1, productId.length() - 1);
+            }
+            return productController.onShelfProduct(productId, parseProductStatusUpdateRequest(requestBody));
+        }
+
+        // 处理商品下架请求
+        Pattern offShelfPattern = Pattern.compile("/api/v1/farmer/products/([^/]+)/off-shelf");
+        Matcher offShelfMatcher = offShelfPattern.matcher(path);
+
+        if (offShelfMatcher.matches() && "POST".equals(method)) {
+            String productId = offShelfMatcher.group(1);
+            // 移除可能存在的花括号
+            if (productId.startsWith("{") && productId.endsWith("}")) {
+                productId = productId.substring(1, productId.length() - 1);
+            }
+            return productController.offShelfProduct(productId, parseProductStatusUpdateRequest(requestBody));
+        }
+
         switch (path) {
             case "/api/v1/auth/register":
                 if ("POST".equals(method)) {
@@ -157,6 +186,12 @@ public class RouterConfig {
             request.setImages(images);
         }
 
+        return request;
+    }
+
+    private ProductStatusUpdateRequestDTO parseProductStatusUpdateRequest(Map<String, Object> requestBody) {
+        ProductStatusUpdateRequestDTO request = new ProductStatusUpdateRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
         return request;
     }
 }

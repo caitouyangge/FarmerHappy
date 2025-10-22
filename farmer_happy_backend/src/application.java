@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import config.RouterConfig;
 import dto.auth.AuthResponseDTO;
 import dto.farmer.ProductResponseDTO;
+import dto.farmer.ProductStatusUpdateResponseDTO; // 添加导入
 import repository.DatabaseManager;
 
 import java.io.BufferedReader;
@@ -398,6 +399,8 @@ public class application {
                         return serializeAuthResponseDTO((AuthResponseDTO) value);
                     } else if (value instanceof ProductResponseDTO) {
                         return serializeProductResponseDTO((ProductResponseDTO) value);
+                    } else if (value instanceof ProductStatusUpdateResponseDTO) { // 添加对ProductStatusUpdateResponseDTO的支持
+                        return serializeProductStatusUpdateResponseDTO((ProductStatusUpdateResponseDTO) value);
                     } else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
                     }
@@ -474,6 +477,22 @@ public class application {
                             linksObject.put(entry.getKey(), entry.getValue());
                         }
                         json.append("\"_links\":").append(toJson(linksObject)).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 添加序列化 ProductStatusUpdateResponseDTO 对象的方法
+                private String serializeProductStatusUpdateResponseDTO(ProductStatusUpdateResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getProduct_id() != null) {
+                        json.append("\"product_id\":\"").append(escapeJsonString(dto.getProduct_id())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1); // 删除最后一个逗号

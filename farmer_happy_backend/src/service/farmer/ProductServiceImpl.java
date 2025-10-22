@@ -3,8 +3,11 @@ package service.farmer;
 
 import dto.farmer.ProductCreateRequestDTO;
 import dto.farmer.ProductResponseDTO;
+import dto.farmer.ProductStatusUpdateResponseDTO;
 import entity.Product;
 import repository.DatabaseManager;
+import service.auth.AuthService;
+import service.auth.AuthServiceImpl;
 
 import java.sql.*;
 import java.time.LocalDateTime;
@@ -12,9 +15,11 @@ import java.util.*;
 
 public class ProductServiceImpl implements ProductService {
     private DatabaseManager databaseManager;
+    private AuthService authService;
 
     public ProductServiceImpl() {
         this.databaseManager = new DatabaseManager();
+        this.authService = new AuthServiceImpl();
     }
 
     @Override
@@ -64,6 +69,116 @@ public class ProductServiceImpl implements ProductService {
             Map<String, String> links = new HashMap<>();
             links.put("self", "/api/v1/farmer/products/prod-" + productId);
             response.set_links(links);
+
+            return response;
+        } catch (Exception e) {
+            if (conn != null) {
+                conn.rollback();
+            }
+            throw e;
+        } finally {
+            if (conn != null) {
+                conn.setAutoCommit(true);
+                conn.close();
+            }
+        }
+    }
+
+    // 商品上架
+    @Override
+    public ProductStatusUpdateResponseDTO onShelfProduct(String productId, String phone) throws Exception {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+            conn.setAutoCommit(false);
+
+            // 验证用户
+            entity.User user = authService.findUserByPhone(phone);
+            if (user == null) {
+                throw new IllegalArgumentException("用户不存在");
+            }
+
+            // 验证用户类型
+            if (!"farmer".equals(user.getUserType())) {
+                throw new IllegalArgumentException("只有农户可以操作商品");
+            }
+
+            // 获取农户ID
+            Long farmerId = getFarmerIdByUserId(conn, user.getUid());
+
+            // 获取商品当前状态
+            long prodId = Long.parseLong(productId);
+            String currentStatus = getProductStatus(conn, prodId, farmerId);
+
+            // 检查状态是否允许上架
+            if (!"off_shelf".equals(currentStatus) && !"review_rejected".equals(currentStatus)) {
+                throw new IllegalStateException("当前商品状态无法执行上架操作");
+            }
+
+            // 更新商品状态为已上架
+            updateProductStatus(conn, prodId, farmerId, "on_shelf");
+
+            conn.commit();
+
+            // 构建响应对象
+            ProductStatusUpdateResponseDTO response = new ProductStatusUpdateResponseDTO();
+            response.setProduct_id(String.valueOf(prodId));
+            response.setStatus("on_shelf");
+
+            return response;
+        } catch (Exception e) {
+            if (conn != null) {
+                conn.rollback();
+            }
+            throw e;
+        } finally {
+            if (conn != null) {
+                conn.setAutoCommit(true);
+                conn.close();
+            }
+        }
+    }
+
+    // 商品下架
+    @Override
+    public ProductStatusUpdateResponseDTO offShelfProduct(String productId, String phone) throws Exception {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+            conn.setAutoCommit(false);
+
+            // 验证用户
+            entity.User user = authService.findUserByPhone(phone);
+            if (user == null) {
+                throw new IllegalArgumentException("用户不存在");
+            }
+
+            // 验证用户类型
+            if (!"farmer".equals(user.getUserType())) {
+                throw new IllegalArgumentException("只有农户可以操作商品");
+            }
+
+            // 获取农户ID
+            Long farmerId = getFarmerIdByUserId(conn, user.getUid());
+
+            // 获取商品当前状态
+            long prodId = Long.parseLong(productId);
+            String currentStatus = getProductStatus(conn, prodId, farmerId);
+
+            // 检查状态是否允许下架
+            if (!"on_shelf".equals(currentStatus)) {
+                throw new IllegalStateException("当前商品状态无法执行下架操作");
+            }
+
+            // 更新商品状态为已下架
+            updateProductStatus(conn, prodId, farmerId, "off_shelf");
+
+            conn.commit();
+
+            // 构建响应对象
+            ProductStatusUpdateResponseDTO response = new ProductStatusUpdateResponseDTO();
+            response.setProduct_id(String.valueOf(prodId));
+            response.setStatus("off_shelf");
 
             return response;
         } catch (Exception e) {
@@ -143,5 +258,34 @@ public class ProductServiceImpl implements ProductService {
         }
 
         stmt.executeBatch();
+    }
+
+    // 获取商品状态
+    private String getProductStatus(Connection conn, long productId, Long farmerId) throws SQLException {
+        String sql = "SELECT status FROM products WHERE product_id = ? AND farmer_id = ?";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setLong(1, productId);
+        stmt.setLong(2, farmerId);
+        ResultSet rs = stmt.executeQuery();
+
+        if (rs.next()) {
+            return rs.getString("status");
+        }
+
+        throw new SQLException("商品不存在");
+    }
+
+    // 更新商品状态
+    private void updateProductStatus(Connection conn, long productId, Long farmerId, String status) throws SQLException {
+        String sql = "UPDATE products SET status = ? WHERE product_id = ? AND farmer_id = ?";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setString(1, status);
+        stmt.setLong(2, productId);
+        stmt.setLong(3, farmerId);
+        int rowsAffected = stmt.executeUpdate();
+
+        if (rowsAffected == 0) {
+            throw new SQLException("商品不存在或不属于该农户");
+        }
     }
 }
