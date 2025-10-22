@@ -3,11 +3,14 @@ package controller;
 
 import dto.farmer.ProductCreateRequestDTO;
 import dto.farmer.ProductResponseDTO;
+import dto.farmer.ProductStatusUpdateRequestDTO;
+import dto.farmer.ProductStatusUpdateResponseDTO;
 import service.farmer.ProductService;
 import service.farmer.ProductServiceImpl;
 import service.auth.AuthService;
 import service.auth.AuthServiceImpl;
 
+import java.sql.SQLException;
 import java.util.*;
 
 public class ProductController {
@@ -81,6 +84,104 @@ public class ProductController {
             response.put("message", "商品发布成功，等待审核");
             response.put("data", product);
 
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return response;
+        }
+    }
+
+    // 商品上架
+    public Map<String, Object> onShelfProduct(String productId, ProductStatusUpdateRequestDTO request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 验证参数
+            if (request.getPhone() == null || request.getPhone().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                Map<String, String> errorDetail = new HashMap<>();
+                errorDetail.put("message", "手机号不能为空");
+                errorDetails.add(errorDetail);
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            ProductStatusUpdateResponseDTO result = productService.onShelfProduct(productId, request.getPhone());
+
+            response.put("code", 200);
+            response.put("message", "商品上架成功");
+            response.put("data", result);
+
+            return response;
+        } catch (SQLException e) {
+            if (e.getMessage().contains("商品不存在")) {
+                response.put("code", 404);
+                response.put("message", "商品不存在");
+            } else {
+                response.put("code", 500);
+                response.put("message", "服务器内部错误: " + e.getMessage());
+            }
+            return response;
+        } catch (IllegalStateException e) {
+            response.put("code", 409);
+            response.put("message", e.getMessage());
+            return response;
+        } catch (IllegalArgumentException e) {
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return response;
+        }
+    }
+
+    // 商品下架
+    public Map<String, Object> offShelfProduct(String productId, ProductStatusUpdateRequestDTO request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 验证参数
+            if (request.getPhone() == null || request.getPhone().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                Map<String, String> errorDetail = new HashMap<>();
+                errorDetail.put("message", "手机号不能为空");
+                errorDetails.add(errorDetail);
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            ProductStatusUpdateResponseDTO result = productService.offShelfProduct(productId, request.getPhone());
+
+            response.put("code", 200);
+            response.put("message", "商品下架成功");
+            response.put("data", result);
+
+            return response;
+        } catch (SQLException e) {
+            if (e.getMessage().contains("商品不存在")) {
+                response.put("code", 404);
+                response.put("message", "商品不存在");
+            } else {
+                response.put("code", 500);
+                response.put("message", "服务器内部错误: " + e.getMessage());
+            }
+            return response;
+        } catch (IllegalStateException e) {
+            response.put("code", 409);
+            response.put("message", e.getMessage());
+            return response;
+        } catch (IllegalArgumentException e) {
+            response.put("code", 400);
+            response.put("message", e.getMessage());
             return response;
         } catch (Exception e) {
             e.printStackTrace();
