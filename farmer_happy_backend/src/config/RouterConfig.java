@@ -7,6 +7,7 @@ import dto.auth.*;
 import dto.farmer.FarmerRegisterRequestDTO;
 import dto.farmer.ProductCreateRequestDTO;
 import dto.farmer.ProductStatusUpdateRequestDTO;
+import dto.farmer.ProductUpdateRequestDTO; // 添加导入
 
 import java.util.ArrayList;
 import java.util.List;
@@ -75,6 +76,19 @@ public class RouterConfig {
                 productId = productId.substring(1, productId.length() - 1);
             }
             return productController.getProductDetail(productId, parseProductStatusUpdateRequest(requestBody));
+        }
+
+        // 处理更新商品请求
+        Pattern updateProductPattern = Pattern.compile("/api/v1/farmer/products/([^/]+)");
+        Matcher updateProductMatcher = updateProductPattern.matcher(path);
+
+        if (updateProductMatcher.matches() && "PUT".equals(method)) {
+            String productId = updateProductMatcher.group(1);
+            // 移除可能存在的花括号
+            if (productId.startsWith("{") && productId.endsWith("}")) {
+                productId = productId.substring(1, productId.length() - 1);
+            }
+            return productController.updateProduct(productId, parseProductUpdateRequest(requestBody));
         }
 
         switch (path) {
@@ -189,16 +203,35 @@ public class RouterConfig {
         ProductCreateRequestDTO request = new ProductCreateRequestDTO();
         request.setTitle((String) requestBody.get("title"));
         request.setSpecification((String) requestBody.get("specification"));
-        if (requestBody.get("price") instanceof Number) {
-            request.setPrice(((Number) requestBody.get("price")).doubleValue());
+
+        // 处理 price 字段
+        Object priceObj = requestBody.get("price");
+        if (priceObj instanceof Number) {
+            request.setPrice(((Number) priceObj).doubleValue());
+        } else if (priceObj instanceof String) {
+            try {
+                request.setPrice(Double.parseDouble((String) priceObj));
+            } catch (NumberFormatException e) {
+                // 保持为 null
+            }
         }
-        if (requestBody.get("stock") instanceof Number) {
-            request.setStock(((Number) requestBody.get("stock")).intValue());
+
+        // 处理 stock 字段
+        Object stockObj = requestBody.get("stock");
+        if (stockObj instanceof Number) {
+            request.setStock(((Number) stockObj).intValue());
+        } else if (stockObj instanceof String) {
+            try {
+                request.setStock(Integer.parseInt((String) stockObj));
+            } catch (NumberFormatException e) {
+                // 保持为 null
+            }
         }
+
         request.setDescription((String) requestBody.get("description"));
         request.setOrigin((String) requestBody.get("origin"));
-        request.setPhone((String) requestBody.get("phone")); // 添加手机号字段
-        request.setCategory((String) requestBody.get("category")); // 添加分类字段
+        request.setPhone((String) requestBody.get("phone"));
+        request.setCategory((String) requestBody.get("category"));
 
         // 处理图片数组
         if (requestBody.get("images") instanceof List) {
@@ -220,4 +253,54 @@ public class RouterConfig {
         request.setPhone((String) requestBody.get("phone"));
         return request;
     }
+
+    private ProductUpdateRequestDTO parseProductUpdateRequest(Map<String, Object> requestBody) {
+        ProductUpdateRequestDTO request = new ProductUpdateRequestDTO();
+        request.setTitle((String) requestBody.get("title"));
+        request.setSpecification((String) requestBody.get("specification"));
+
+        // 处理 price 字段
+        Object priceObj = requestBody.get("price");
+        if (priceObj instanceof Number) {
+            request.setPrice(((Number) priceObj).doubleValue());
+        } else if (priceObj instanceof String) {
+            try {
+                request.setPrice(Double.parseDouble((String) priceObj));
+            } catch (NumberFormatException e) {
+                // 保持为 null
+            }
+        }
+
+        // 处理 stock 字段
+        Object stockObj = requestBody.get("stock");
+        if (stockObj instanceof Number) {
+            request.setStock(((Number) stockObj).intValue());
+        } else if (stockObj instanceof String) {
+            try {
+                request.setStock(Integer.parseInt((String) stockObj));
+            } catch (NumberFormatException e) {
+                // 保持为 null
+            }
+        }
+
+        request.setDescription((String) requestBody.get("description"));
+        request.setOrigin((String) requestBody.get("origin"));
+        request.setPhone((String) requestBody.get("phone"));
+        request.setCategory((String) requestBody.get("category"));
+
+        // 处理图片数组
+        if (requestBody.get("images") instanceof List) {
+            List<?> imagesObj = (List<?>) requestBody.get("images");
+            List<String> images = new ArrayList<>();
+            for (Object img : imagesObj) {
+                if (img instanceof String) {
+                    images.add((String) img);
+                }
+            }
+            request.setImages(images);
+        }
+
+        return request;
+    }
+
 }

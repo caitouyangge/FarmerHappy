@@ -6,6 +6,7 @@ import dto.farmer.ProductResponseDTO;
 import dto.farmer.ProductStatusUpdateRequestDTO;
 import dto.farmer.ProductStatusUpdateResponseDTO;
 import dto.farmer.ProductDetailResponseDTO;
+import dto.farmer.ProductUpdateRequestDTO;
 import service.farmer.ProductService;
 import service.farmer.ProductServiceImpl;
 import service.auth.AuthService;
@@ -284,6 +285,87 @@ public class ProductController {
         }
     }
 
+    // 更新商品
+    public Map<String, Object> updateProduct(String productId, ProductUpdateRequestDTO request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 验证参数
+            List<String> errors = validateProductRequestForUpdate(request);
+            if (!errors.isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                for (String error : errors) {
+                    Map<String, String> errorDetail = new HashMap<>();
+                    errorDetail.put("message", error);
+                    errorDetails.add(errorDetail);
+                }
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            // 验证手机号
+            String phone = request.getPhone();
+            if (phone == null || phone.isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                Map<String, String> errorDetail = new HashMap<>();
+                errorDetail.put("message", "手机号不能为空");
+                errorDetails.add(errorDetail);
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            // 查找用户
+            entity.User user = authService.findUserByPhone(phone);
+            if (user == null) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                Map<String, String> errorDetail = new HashMap<>();
+                errorDetail.put("message", "用户不存在");
+                errorDetails.add(errorDetail);
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            // 验证用户类型是否为农户
+            if (!"farmer".equals(user.getUserType())) {
+                response.put("code", 403);
+                response.put("message", "只有农户可以修改商品");
+                return response;
+            }
+
+            // 更新产品 - 使用部分更新方法
+            ProductResponseDTO product = productService.partialUpdateProduct(productId, request);
+
+            response.put("code", 200);
+            response.put("message", "商品更新成功");
+            response.put("data", product);
+
+            return response;
+        } catch (SQLException e) {
+            if (e.getMessage().contains("商品不存在")) {
+                response.put("code", 404);
+                response.put("message", "商品不存在");
+            } else {
+                response.put("code", 500);
+                response.put("message", "服务器内部错误: " + e.getMessage());
+            }
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return response;
+        }
+    }
+
     private List<String> validateProductRequest(ProductCreateRequestDTO request) {
         List<String> errors = new ArrayList<>();
 
@@ -297,11 +379,11 @@ public class ProductController {
             errors.add("商品规格描述不能为空");
         }
 
-        if (request.getPrice() <= 0) {
+        if (request.getPrice() == null || request.getPrice() <= 0) {
             errors.add("价格必须是大于0的数字");
         }
 
-        if (request.getStock() < 0) {
+        if (request.getStock() == null || request.getStock() < 0) {
             errors.add("库存数量必须大于等于0");
         }
 
@@ -317,6 +399,48 @@ public class ProductController {
         if (request.getCategory() == null || request.getCategory().isEmpty()) {
             errors.add("商品分类不能为空");
         } else {
+            Set<String> validCategories = new HashSet<>(Arrays.asList("vegetables", "fruits", "grains", "livestock", "aquatic"));
+            if (!validCategories.contains(request.getCategory())) {
+                errors.add("商品分类无效，必须是以下值之一: vegetables, fruits, grains, livestock, aquatic");
+            }
+        }
+
+        return errors;
+    }
+
+    private List<String> validateProductRequestForUpdate(ProductUpdateRequestDTO request) {
+        List<String> errors = new ArrayList<>();
+
+        if (request.getTitle() != null && request.getTitle().isEmpty()) {
+            errors.add("商品标题不能为空");
+        } else if (request.getTitle() != null && request.getTitle().length() > 100) {
+            errors.add("商品标题长度不能超过100个字符");
+        }
+
+        if (request.getSpecification() != null && request.getSpecification().isEmpty()) {
+            errors.add("商品规格描述不能为空");
+        }
+
+        if (request.getPrice() != null && request.getPrice() <= 0) {
+            errors.add("价格必须是大于0的数字");
+        }
+
+        if (request.getStock() != null && request.getStock() < 0) {
+            errors.add("库存数量必须大于等于0");
+        }
+
+        if (request.getDescription() != null && request.getDescription().length() > 5000) {
+            errors.add("商品描述长度不能超过5000个字符");
+        }
+
+        if (request.getImages() != null && request.getImages().size() > 9) {
+            errors.add("最多支持9张图片");
+        }
+
+        // 验证分类
+        if (request.getCategory() != null && request.getCategory().isEmpty()) {
+            errors.add("商品分类不能为空");
+        } else if (request.getCategory() != null) {
             Set<String> validCategories = new HashSet<>(Arrays.asList("vegetables", "fruits", "grains", "livestock", "aquatic"));
             if (!validCategories.contains(request.getCategory())) {
                 errors.add("商品分类无效，必须是以下值之一: vegetables, fruits, grains, livestock, aquatic");
