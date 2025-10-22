@@ -1,9 +1,9 @@
-// src/dto/farmer/ProductCreateRequestDTO.java
+// src/dto/farmer/ProductUpdateRequestDTO.java
 package dto.farmer;
 
 import java.util.List;
 
-public class ProductCreateRequestDTO {
+public class ProductUpdateRequestDTO {
     private String title;
     private String specification;
     private Double price;  // 改为 Double 包装类型

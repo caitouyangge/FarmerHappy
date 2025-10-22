@@ -5,6 +5,7 @@ import dto.farmer.ProductCreateRequestDTO;
 import dto.farmer.ProductResponseDTO;
 import dto.farmer.ProductStatusUpdateResponseDTO;
 import dto.farmer.ProductDetailResponseDTO;
+import dto.farmer.ProductUpdateRequestDTO;
 import entity.Product;
 import repository.DatabaseManager;
 import service.auth.AuthService;
@@ -36,18 +37,18 @@ public class ProductServiceImpl implements ProductService {
             // 插入产品信息
             Product product = new Product();
             product.setFarmerId(farmerIdLong);
-            product.setCategory(request.getCategory()); // 设置分类
+            product.setCategory(request.getCategory());
             product.setTitle(request.getTitle());
             product.setSpecification(request.getSpecification());
             product.setPrice(request.getPrice());
             product.setStock(request.getStock());
             product.setDescription(request.getDescription());
-            product.setOrigin(request.getOrigin() != null ? request.getOrigin() : getDefaultOrigin(conn, farmerIdLong));
-            product.setStatus("pending_review");
+            product.setOrigin(request.getOrigin());
+            product.setStatus("pending_review"); // 初始状态为待审核
+            product.setEnable(true);
             product.setCreatedAt(LocalDateTime.now());
 
-            Long productId = insertProduct(conn, product);
-            product.setProductId(productId);
+            long productId = insertProduct(conn, product);
 
             // 插入图片信息
             if (request.getImages() != null && !request.getImages().isEmpty()) {
@@ -67,8 +68,9 @@ public class ProductServiceImpl implements ProductService {
             response.setStatus(product.getStatus());
             response.setCreated_at(product.getCreatedAt());
 
+            // 设置链接
             Map<String, String> links = new HashMap<>();
-            links.put("self", "/api/v1/farmer/products/prod-" + productId);
+            links.put("self", "/api/v1/farmer/products/" + productId);
             response.set_links(links);
 
             return response;
@@ -248,11 +250,6 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
-            // 验证用户类型
-            if (!"farmer".equals(user.getUserType())) {
-                throw new IllegalArgumentException("只有农户可以操作商品");
-            }
-
             // 获取农户ID
             Long farmerId = getFarmerIdByUserId(conn, user.getUid());
 
@@ -263,6 +260,178 @@ public class ProductServiceImpl implements ProductService {
             return productDetail;
         } finally {
             if (conn != null) {
+                conn.close();
+            }
+        }
+    }
+
+    // 完整更新商品
+    @Override
+    public ProductResponseDTO updateProduct(String productId, ProductUpdateRequestDTO request) throws Exception {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+            conn.setAutoCommit(false);
+
+            // 验证用户
+            entity.User user = authService.findUserByPhone(request.getPhone());
+            if (user == null) {
+                throw new IllegalArgumentException("用户不存在");
+            }
+
+            // 验证用户类型
+            if (!"farmer".equals(user.getUserType())) {
+                throw new IllegalArgumentException("只有农户可以操作商品");
+            }
+
+            // 获取农户ID
+            Long farmerId = getFarmerIdByUserId(conn, user.getUid());
+
+            // 获取商品当前信息
+            long prodId = Long.parseLong(productId);
+            Product existingProduct = getProductById(conn, prodId, farmerId);
+
+            // 更新商品信息
+            Product product = new Product();
+            product.setProductId(prodId);
+            product.setFarmerId(farmerId);
+            product.setCategory(request.getCategory() != null ? request.getCategory() : existingProduct.getCategory());
+            product.setTitle(request.getTitle() != null ? request.getTitle() : existingProduct.getTitle());
+            product.setSpecification(request.getSpecification() != null ? request.getSpecification() : existingProduct.getSpecification());
+            product.setPrice(request.getPrice() != null ? request.getPrice() : existingProduct.getPrice());
+            product.setStock(request.getStock() != null ? request.getStock() : existingProduct.getStock());
+            product.setDescription(request.getDescription() != null ? request.getDescription() : existingProduct.getDescription());
+            product.setOrigin(request.getOrigin() != null ? request.getOrigin() : existingProduct.getOrigin());
+            product.setStatus(existingProduct.getStatus()); // 状态不通过此接口修改
+            product.setEnable(existingProduct.isEnable());
+            product.setCreatedAt(existingProduct.getCreatedAt());
+
+            // 更新商品
+            updateProduct(conn, product);
+
+            // 更新图片信息
+            deleteProductImages(conn, prodId);
+            if (request.getImages() != null && !request.getImages().isEmpty()) {
+                insertProductImages(conn, prodId, request.getImages());
+            }
+
+            conn.commit();
+
+            // 构建响应对象
+            ProductResponseDTO response = new ProductResponseDTO();
+            response.setProduct_id("prod-" + prodId);
+            response.setTitle(product.getTitle());
+            response.setSpecification(product.getSpecification());
+            response.setPrice(product.getPrice());
+            response.setStock(product.getStock());
+            response.setImages(request.getImages());
+            response.setStatus(product.getStatus());
+            response.setCreated_at(product.getCreatedAt());
+
+            // 设置链接
+            Map<String, String> links = new HashMap<>();
+            links.put("self", "/api/v1/farmer/products/" + prodId);
+            response.set_links(links);
+
+            return response;
+        } catch (Exception e) {
+            if (conn != null) {
+                conn.rollback();
+            }
+            throw e;
+        } finally {
+            if (conn != null) {
+                conn.setAutoCommit(true);
+                conn.close();
+            }
+        }
+    }
+
+    // 部分更新商品
+    @Override
+    public ProductResponseDTO partialUpdateProduct(String productId, ProductUpdateRequestDTO request) throws Exception {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+            conn.setAutoCommit(false);
+
+            // 验证用户
+            entity.User user = authService.findUserByPhone(request.getPhone());
+            if (user == null) {
+                throw new IllegalArgumentException("用户不存在");
+            }
+
+            // 验证用户类型
+            if (!"farmer".equals(user.getUserType())) {
+                throw new IllegalArgumentException("只有农户可以操作商品");
+            }
+
+            // 获取农户ID
+            Long farmerId = getFarmerIdByUserId(conn, user.getUid());
+
+            // 获取商品当前信息
+            long prodId = Long.parseLong(productId);
+            Product existingProduct = getProductById(conn, prodId, farmerId);
+
+            // 创建要更新的商品对象，只更新请求中包含的字段
+            Product product = new Product();
+            product.setProductId(prodId);
+            product.setFarmerId(farmerId);
+
+            // 只有当请求中的字段不为null时才更新
+            product.setCategory(request.getCategory() != null ? request.getCategory() : existingProduct.getCategory());
+            product.setTitle(request.getTitle() != null ? request.getTitle() : existingProduct.getTitle());
+            product.setSpecification(request.getSpecification() != null ? request.getSpecification() : existingProduct.getSpecification());
+            product.setPrice(request.getPrice() != null ? request.getPrice() : existingProduct.getPrice());
+            product.setStock(request.getStock() != null ? request.getStock() : existingProduct.getStock());
+            product.setDescription(request.getDescription() != null ? request.getDescription() : existingProduct.getDescription());
+            product.setOrigin(request.getOrigin() != null ? request.getOrigin() : existingProduct.getOrigin());
+            product.setStatus(existingProduct.getStatus()); // 状态不通过此接口修改
+            product.setEnable(existingProduct.isEnable());
+            product.setCreatedAt(existingProduct.getCreatedAt());
+
+            // 更新商品
+            updateProduct(conn, product);
+
+            // 如果请求中包含图片，则更新图片信息
+            if (request.getImages() != null) {
+                deleteProductImages(conn, prodId);
+                if (!request.getImages().isEmpty()) {
+                    insertProductImages(conn, prodId, request.getImages());
+                }
+            }
+
+            conn.commit();
+
+            // 构建响应对象
+            ProductResponseDTO response = new ProductResponseDTO();
+            response.setProduct_id("prod-" + prodId);
+            response.setTitle(product.getTitle());
+            response.setSpecification(product.getSpecification());
+            response.setPrice(product.getPrice());
+            response.setStock(product.getStock());
+
+            // 获取最新的图片列表
+            List<String> images = request.getImages() != null ? request.getImages() : getProductImages(conn, prodId);
+            response.setImages(images);
+
+            response.setStatus(product.getStatus());
+            response.setCreated_at(product.getCreatedAt());
+
+            // 设置链接
+            Map<String, String> links = new HashMap<>();
+            links.put("self", "/api/v1/farmer/products/" + prodId);
+            response.set_links(links);
+
+            return response;
+        } catch (Exception e) {
+            if (conn != null) {
+                conn.rollback();
+            }
+            throw e;
+        } finally {
+            if (conn != null) {
+                conn.setAutoCommit(true);
                 conn.close();
             }
         }
@@ -282,25 +451,13 @@ public class ProductServiceImpl implements ProductService {
         throw new SQLException("农户信息不存在");
     }
 
-    private String getDefaultOrigin(Connection conn, Long farmerId) throws SQLException {
-        String sql = "SELECT farm_address FROM user_farmers WHERE farmer_id = ?";
-        PreparedStatement stmt = conn.prepareStatement(sql);
-        stmt.setLong(1, farmerId);
-        ResultSet rs = stmt.executeQuery();
-
-        if (rs.next()) {
-            return rs.getString("farm_address");
-        }
-
-        return "";
-    }
-
-    private Long insertProduct(Connection conn, Product product) throws SQLException {
-        String sql = "INSERT INTO products (farmer_id, category, title, specification, price, stock, description, origin, status, created_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    // 插入产品信息
+    private long insertProduct(Connection conn, Product product) throws SQLException {
+        String sql = "INSERT INTO products (farmer_id, category, title, specification, price, stock, description, origin, status, enable, created_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
         stmt.setLong(1, product.getFarmerId());
-        stmt.setString(2, product.getCategory()); // 插入分类
+        stmt.setString(2, product.getCategory());
         stmt.setString(3, product.getTitle());
         stmt.setString(4, product.getSpecification());
         stmt.setDouble(5, product.getPrice());
@@ -308,19 +465,22 @@ public class ProductServiceImpl implements ProductService {
         stmt.setString(7, product.getDescription());
         stmt.setString(8, product.getOrigin());
         stmt.setString(9, product.getStatus());
-        stmt.setTimestamp(10, Timestamp.valueOf(product.getCreatedAt()));
+        stmt.setBoolean(10, product.isEnable());
+        stmt.setTimestamp(11, Timestamp.valueOf(product.getCreatedAt()));
 
         stmt.executeUpdate();
 
-        ResultSet rs = stmt.getGeneratedKeys();
-        if (rs.next()) {
-            return rs.getLong(1);
+        // 获取生成的产品ID
+        ResultSet generatedKeys = stmt.getGeneratedKeys();
+        if (generatedKeys.next()) {
+            return generatedKeys.getLong(1);
+        } else {
+            throw new SQLException("创建产品失败，无法获取产品ID");
         }
-
-        throw new SQLException("创建产品失败");
     }
 
-    private void insertProductImages(Connection conn, Long productId, List<String> images) throws SQLException {
+    // 插入产品图片信息
+    private void insertProductImages(Connection conn, long productId, List<String> images) throws SQLException {
         String sql = "INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, ?)";
         PreparedStatement stmt = conn.prepareStatement(sql);
 
@@ -404,8 +564,6 @@ public class ProductServiceImpl implements ProductService {
                 productDetail.setStatus(rs.getString("status"));
                 productDetail.setCreated_at(rs.getTimestamp("created_at").toLocalDateTime());
 
-                // 不再访问 updated_at 字段，移除相关代码
-
                 // shipping_template_id 暂时设置为空，因为数据库表中没有该字段
                 productDetail.setShipping_template_id(null);
             }
@@ -422,5 +580,91 @@ public class ProductServiceImpl implements ProductService {
 
         productDetail.setImages(images);
         return productDetail;
+    }
+
+    // 更新商品信息
+    private void updateProduct(Connection conn, Product product) throws SQLException {
+        String sql = "UPDATE products SET category = ?, title = ?, specification = ?, price = ?, stock = ?, " +
+                "description = ?, origin = ? WHERE product_id = ? AND farmer_id = ?";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setString(1, product.getCategory());
+        stmt.setString(2, product.getTitle());
+        stmt.setString(3, product.getSpecification());
+        stmt.setDouble(4, product.getPrice());
+        stmt.setInt(5, product.getStock());
+        stmt.setString(6, product.getDescription());
+        stmt.setString(7, product.getOrigin());
+        stmt.setLong(8, product.getProductId());
+        stmt.setLong(9, product.getFarmerId());
+
+        int rowsAffected = stmt.executeUpdate();
+        if (rowsAffected == 0) {
+            throw new SQLException("商品不存在或不属于该农户");
+        }
+    }
+
+    // 删除商品图片
+    private void deleteProductImages(Connection conn, long productId) throws SQLException {
+        String sql = "DELETE FROM product_images WHERE product_id = ?";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setLong(1, productId);
+        stmt.executeUpdate();
+    }
+
+    // 获取商品创建时间
+    private LocalDateTime getProductCreatedAt(Connection conn, long productId, Long farmerId) throws SQLException {
+        String sql = "SELECT created_at FROM products WHERE product_id = ? AND farmer_id = ?";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setLong(1, productId);
+        stmt.setLong(2, farmerId);
+        ResultSet rs = stmt.executeQuery();
+
+        if (rs.next()) {
+            return rs.getTimestamp("created_at").toLocalDateTime();
+        }
+
+        throw new SQLException("商品不存在");
+    }
+
+    // 获取商品信息
+    private Product getProductById(Connection conn, long productId, Long farmerId) throws SQLException {
+        String sql = "SELECT * FROM products WHERE product_id = ? AND farmer_id = ?";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setLong(1, productId);
+        stmt.setLong(2, farmerId);
+        ResultSet rs = stmt.executeQuery();
+
+        if (rs.next()) {
+            Product product = new Product();
+            product.setProductId(rs.getLong("product_id"));
+            product.setFarmerId(rs.getLong("farmer_id"));
+            product.setCategory(rs.getString("category"));
+            product.setTitle(rs.getString("title"));
+            product.setSpecification(rs.getString("specification"));
+            product.setPrice(rs.getDouble("price"));
+            product.setStock(rs.getInt("stock"));
+            product.setDescription(rs.getString("description"));
+            product.setOrigin(rs.getString("origin"));
+            product.setStatus(rs.getString("status"));
+            product.setEnable(rs.getBoolean("enable"));
+            product.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+            return product;
+        }
+
+        throw new SQLException("商品不存在或不属于该农户");
+    }
+
+    // 获取商品图片列表
+    private List<String> getProductImages(Connection conn, long productId) throws SQLException {
+        String sql = "SELECT image_url FROM product_images WHERE product_id = ? ORDER BY sort_order";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setLong(1, productId);
+        ResultSet rs = stmt.executeQuery();
+
+        List<String> images = new ArrayList<>();
+        while (rs.next()) {
+            images.add(rs.getString("image_url"));
+        }
+        return images;
     }
 }
