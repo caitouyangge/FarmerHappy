@@ -10,6 +10,9 @@ import entity.Product;
 import repository.DatabaseManager;
 import service.auth.AuthService;
 import service.auth.AuthServiceImpl;
+import dto.farmer.ProductListResponseDTO;
+import java.util.ArrayList;
+import java.util.List;
 
 import java.sql.*;
 import java.time.LocalDateTime;
@@ -264,6 +267,82 @@ public class ProductServiceImpl implements ProductService {
             }
         }
     }
+
+    // 获取商品列表
+    @Override
+    public List<ProductListResponseDTO> getProductList(String phone, String status, String title) throws Exception {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+
+            // 验证用户 - 直接使用手机号查询
+            entity.User user = authService.findUserByPhone(phone);
+            if (user == null) {
+                throw new IllegalArgumentException("用户不存在");
+            }
+
+            // 验证用户类型是否为农户
+            if (!"farmer".equals(user.getUserType())) {
+                throw new IllegalArgumentException("只有农户可以操作商品");
+            }
+
+            // 获取农户ID
+            Long farmerId = getFarmerIdByUserId(conn, user.getUid());
+
+            // 构建查询语句
+            StringBuilder sqlBuilder = new StringBuilder();
+            sqlBuilder.append("SELECT p.product_id, p.title, p.price, p.stock, p.status, pi.image_url as main_image_url ")
+                    .append("FROM products p ")
+                    .append("LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.sort_order = 0 ")
+                    .append("WHERE p.farmer_id = ? ");
+
+            List<Object> params = new ArrayList<>();
+            params.add(farmerId);
+
+            // 添加状态筛选条件
+            if (status != null && !status.isEmpty()) {
+                sqlBuilder.append("AND p.status = ? ");
+                params.add(status);
+            }
+
+            // 添加标题搜索条件
+            if (title != null && !title.isEmpty()) {
+                sqlBuilder.append("AND p.title LIKE ? ");
+                params.add("%" + title + "%");
+            }
+
+            sqlBuilder.append("ORDER BY p.created_at DESC");
+
+            PreparedStatement stmt = conn.prepareStatement(sqlBuilder.toString());
+
+            // 设置参数
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setObject(i + 1, params.get(i));
+            }
+
+            ResultSet rs = stmt.executeQuery();
+
+            List<ProductListResponseDTO> productList = new ArrayList<>();
+            while (rs.next()) {
+                ProductListResponseDTO product = new ProductListResponseDTO();
+                product.setProduct_id("prod-" + rs.getLong("product_id"));
+                product.setTitle(rs.getString("title"));
+                product.setPrice(rs.getDouble("price"));
+                product.setStock(rs.getInt("stock"));
+                product.setStatus(rs.getString("status"));
+                product.setMain_image_url(rs.getString("main_image_url"));
+                productList.add(product);
+            }
+
+            return productList;
+        } finally {
+            if (conn != null) {
+                conn.close();
+            }
+        }
+    }
+
+
 
     // 完整更新商品
     @Override

@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 import config.RouterConfig;
 import dto.auth.AuthResponseDTO;
+import dto.farmer.ProductListResponseDTO;
 import dto.farmer.ProductResponseDTO;
 import dto.farmer.ProductStatusUpdateResponseDTO;
 import dto.farmer.ProductDetailResponseDTO; // 添加导入
@@ -427,10 +428,13 @@ public class application {
                         return serializeProductStatusUpdateResponseDTO((ProductStatusUpdateResponseDTO) value);
                     } else if (value instanceof ProductDetailResponseDTO) { // 添加对ProductDetailResponseDTO的支持
                         return serializeProductDetailResponseDTO((ProductDetailResponseDTO) value);
+                    } else if (value instanceof ProductListResponseDTO) { // 添加对ProductListResponseDTO的支持
+                        return serializeProductListResponseDTO((ProductListResponseDTO) value);
                     } else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
                     }
                 }
+
 
                 // 序列化List类型
                 private String serializeList(List<?> list) {
@@ -472,6 +476,31 @@ public class application {
                     json.append("}");
                     return json.toString();
                 }
+
+                // 添加序列化 ProductListResponseDTO 对象的方法
+                private String serializeProductListResponseDTO(ProductListResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getProduct_id() != null) {
+                        json.append("\"product_id\":\"").append(escapeJsonString(dto.getProduct_id())).append("\",");
+                    }
+                    if (dto.getTitle() != null) {
+                        json.append("\"title\":\"").append(escapeJsonString(dto.getTitle())).append("\",");
+                    }
+                    json.append("\"price\":").append(dto.getPrice()).append(",");
+                    json.append("\"stock\":").append(dto.getStock()).append(",");
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getMain_image_url() != null) {
+                        json.append("\"main_image_url\":\"").append(escapeJsonString(dto.getMain_image_url())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
 
                 // 添加序列化 ProductResponseDTO 对象的方法
                 private String serializeProductResponseDTO(ProductResponseDTO dto) {
