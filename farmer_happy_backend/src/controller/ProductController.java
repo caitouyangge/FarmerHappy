@@ -11,6 +11,7 @@ import service.farmer.ProductService;
 import service.farmer.ProductServiceImpl;
 import service.auth.AuthService;
 import service.auth.AuthServiceImpl;
+import dto.farmer.ProductListResponseDTO;
 
 import java.sql.SQLException;
 import java.util.*;
@@ -284,6 +285,70 @@ public class ProductController {
             return response;
         }
     }
+
+    // 获取商品列表
+    public Map<String, Object> getProductList(Map<String, Object> requestBody) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 验证参数
+            String phone = (String) requestBody.get("phone");
+            if (phone == null || phone.isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                Map<String, String> errorDetail = new HashMap<>();
+                errorDetail.put("field", "phone");
+                errorDetail.put("message", "手机号错误");
+                errorDetails.add(errorDetail);
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            // 验证用户
+            entity.User user = authService.findUserByPhone(phone);
+            if (user == null) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                Map<String, String> errorDetail = new HashMap<>();
+                errorDetail.put("field", "phone");
+                errorDetail.put("message", "手机号错误");
+                errorDetails.add(errorDetail);
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            // 验证用户类型是否为农户
+            if (!"farmer".equals(user.getUserType())) {
+                response.put("code", 403);
+                response.put("message", "只有农户可以查看商品列表");
+                return response;
+            }
+
+            // 获取商品列表，注意这里传入的是手机号而不是user.getUid()
+            String status = (String) requestBody.get("status");
+            String title = (String) requestBody.get("title");
+
+            List<ProductListResponseDTO> productList = productService.getProductList(phone, status, title);
+
+            response.put("code", 200);
+            response.put("message", "成功");
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("list", productList);
+            response.put("data", data);
+
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return response;
+        }
+    }
+
+
 
     // 更新商品
     public Map<String, Object> updateProduct(String productId, ProductUpdateRequestDTO request) {

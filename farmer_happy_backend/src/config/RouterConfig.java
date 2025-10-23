@@ -91,6 +91,11 @@ public class RouterConfig {
             return productController.updateProduct(productId, parseProductUpdateRequest(requestBody));
         }
 
+        // 处理获取商品列表请求
+        if ("/api/v1/farmer/products/list_query".equals(path) && "POST".equals(method)) {
+            return productController.getProductList(requestBody);
+        }
+
         switch (path) {
             case "/api/v1/auth/register":
                 if ("POST".equals(method)) {

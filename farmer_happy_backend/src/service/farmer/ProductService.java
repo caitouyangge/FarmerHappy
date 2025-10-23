@@ -6,6 +6,8 @@ import dto.farmer.ProductResponseDTO;
 import dto.farmer.ProductStatusUpdateResponseDTO;
 import dto.farmer.ProductDetailResponseDTO;
 import dto.farmer.ProductUpdateRequestDTO;
+import dto.farmer.ProductListResponseDTO;
+import java.util.List;
 
 public interface ProductService {
     ProductResponseDTO createProduct(ProductCreateRequestDTO request, String userId) throws Exception;
@@ -25,4 +27,8 @@ public interface ProductService {
 
     // 添加部分更新商品方法
     ProductResponseDTO partialUpdateProduct(String productId, ProductUpdateRequestDTO request) throws Exception;
+
+    // 获取商品列表
+    List<ProductListResponseDTO> getProductList(String phone, String status, String title) throws Exception;
+
 }
