@@ -1,12 +1,7 @@
 // src/service/farmer/ProductService.java
 package service.farmer;
 
-import dto.farmer.ProductCreateRequestDTO;
-import dto.farmer.ProductResponseDTO;
-import dto.farmer.ProductStatusUpdateResponseDTO;
-import dto.farmer.ProductDetailResponseDTO;
-import dto.farmer.ProductUpdateRequestDTO;
-import dto.farmer.ProductListResponseDTO;
+import dto.farmer.*;
 import java.util.List;
 
 public interface ProductService {
@@ -30,5 +25,9 @@ public interface ProductService {
 
     // 获取商品列表
     List<ProductListResponseDTO> getProductList(String phone, String status, String title) throws Exception;
+
+    // 批量操作方法
+    ProductBatchActionResultDTO batchActionProducts(ProductBatchActionRequestDTO request) throws Exception;
+
 
 }

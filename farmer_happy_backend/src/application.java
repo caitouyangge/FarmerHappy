@@ -7,7 +7,8 @@ import dto.auth.AuthResponseDTO;
 import dto.farmer.ProductListResponseDTO;
 import dto.farmer.ProductResponseDTO;
 import dto.farmer.ProductStatusUpdateResponseDTO;
-import dto.farmer.ProductDetailResponseDTO; // 添加导入
+import dto.farmer.ProductDetailResponseDTO;
+import dto.farmer.ProductBatchActionResultDTO; // 添加导入
 import repository.DatabaseManager;
 
 import java.io.BufferedReader;
@@ -424,23 +425,30 @@ public class application {
                         return serializeAuthResponseDTO((AuthResponseDTO) value);
                     } else if (value instanceof ProductResponseDTO) {
                         return serializeProductResponseDTO((ProductResponseDTO) value);
-                    } else if (value instanceof ProductStatusUpdateResponseDTO) { // 添加对ProductStatusUpdateResponseDTO的支持
+                    } else if (value instanceof ProductStatusUpdateResponseDTO) {
                         return serializeProductStatusUpdateResponseDTO((ProductStatusUpdateResponseDTO) value);
-                    } else if (value instanceof ProductDetailResponseDTO) { // 添加对ProductDetailResponseDTO的支持
+                    } else if (value instanceof ProductDetailResponseDTO) {
                         return serializeProductDetailResponseDTO((ProductDetailResponseDTO) value);
-                    } else if (value instanceof ProductListResponseDTO) { // 添加对ProductListResponseDTO的支持
+                    } else if (value instanceof ProductListResponseDTO) {
                         return serializeProductListResponseDTO((ProductListResponseDTO) value);
+                    } else if (value instanceof ProductBatchActionResultDTO) { // 添加对ProductBatchActionResultDTO的支持
+                        return serializeProductBatchActionResultDTO((ProductBatchActionResultDTO) value);
                     } else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
                     }
                 }
 
-
                 // 序列化List类型
                 private String serializeList(List<?> list) {
                     StringBuilder json = new StringBuilder("[");
                     for (int i = 0; i < list.size(); i++) {
-                        json.append(serializeValue(list.get(i)));
+                        Object item = list.get(i);
+                        // 特殊处理 BatchActionResultItem
+                        if (item instanceof ProductBatchActionResultDTO.BatchActionResultItem) {
+                            json.append(serializeBatchActionResultItem((ProductBatchActionResultDTO.BatchActionResultItem) item));
+                        } else {
+                            json.append(serializeValue(item));
+                        }
                         if (i < list.size() - 1) {
                             json.append(",");
                         }
@@ -500,7 +508,6 @@ public class application {
                     json.append("}");
                     return json.toString();
                 }
-
 
                 // 添加序列化 ProductResponseDTO 对象的方法
                 private String serializeProductResponseDTO(ProductResponseDTO dto) {
@@ -590,6 +597,45 @@ public class application {
                     }
                     if (dto.getUpdated_at() != null) {
                         json.append("\"updated_at\":\"").append(dto.getUpdated_at().toString()).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 添加序列化 ProductBatchActionResultDTO 对象的方法
+                private String serializeProductBatchActionResultDTO(ProductBatchActionResultDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    json.append("\"success_count\":").append(dto.getSuccess_count()).append(",");
+                    json.append("\"failure_count\":").append(dto.getFailure_count()).append(",");
+                    if (dto.getResults() != null) {
+                        json.append("\"results\":").append(serializeList(dto.getResults()));
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 添加序列化 BatchActionResultItem 对象的方法
+                private String serializeBatchActionResultItem(ProductBatchActionResultDTO.BatchActionResultItem dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getProduct_id() != null) {
+                        json.append("\"product_id\":\"").append(escapeJsonString(dto.getProduct_id())).append("\",");
+                    }
+                    json.append("\"success\":").append(dto.isSuccess()).append(",");
+                    if (dto.getMessage() != null) {
+                        json.append("\"message\":\"").append(escapeJsonString(dto.getMessage())).append("\",");
+                    }
+                    if (dto.get_links() != null) {
+                        Map<String, Object> linksObject = new HashMap<>();
+                        for (Map.Entry<String, String> entry : dto.get_links().entrySet()) {
+                            linksObject.put(entry.getKey(), entry.getValue());
+                        }
+                        json.append("\"_links\":").append(toJson(linksObject)).append(",");
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1); // 删除最后一个逗号

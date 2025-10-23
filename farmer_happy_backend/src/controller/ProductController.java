@@ -1,17 +1,11 @@
 // src/controller/ProductController.java
 package controller;
 
-import dto.farmer.ProductCreateRequestDTO;
-import dto.farmer.ProductResponseDTO;
-import dto.farmer.ProductStatusUpdateRequestDTO;
-import dto.farmer.ProductStatusUpdateResponseDTO;
-import dto.farmer.ProductDetailResponseDTO;
-import dto.farmer.ProductUpdateRequestDTO;
+import dto.farmer.*;
 import service.farmer.ProductService;
 import service.farmer.ProductServiceImpl;
 import service.auth.AuthService;
 import service.auth.AuthServiceImpl;
-import dto.farmer.ProductListResponseDTO;
 
 import java.sql.SQLException;
 import java.util.*;
@@ -514,4 +508,104 @@ public class ProductController {
 
         return errors;
     }
+
+    // 批量操作商品
+    public Map<String, Object> batchActionProducts(ProductBatchActionRequestDTO request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 验证参数
+            List<String> errors = validateBatchActionRequest(request);
+            if (!errors.isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                for (String error : errors) {
+                    Map<String, String> errorDetail = new HashMap<>();
+                    errorDetail.put("message", error);
+                    errorDetails.add(errorDetail);
+                }
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            // 验证手机号
+            String phone = request.getPhone();
+            if (phone == null || phone.isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                Map<String, String> errorDetail = new HashMap<>();
+                errorDetail.put("message", "手机号不能为空");
+                errorDetails.add(errorDetail);
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            // 查找用户
+            entity.User user = authService.findUserByPhone(phone);
+            if (user == null) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+
+                List<Map<String, String>> errorDetails = new ArrayList<>();
+                Map<String, String> errorDetail = new HashMap<>();
+                errorDetail.put("message", "用户不存在");
+                errorDetails.add(errorDetail);
+                response.put("errors", errorDetails);
+                return response;
+            }
+
+            // 验证用户类型是否为农户
+            if (!"farmer".equals(user.getUserType())) {
+                response.put("code", 403);
+                response.put("message", "只有农户可以执行商品操作");
+                return response;
+            }
+
+            // 执行批量操作
+            ProductBatchActionResultDTO result = productService.batchActionProducts(request);
+
+            response.put("code", 200);
+            response.put("message", "批量操作处理完成");
+            Map<String, Object> data = new HashMap<>();
+            data.put("success_count", result.getSuccess_count());
+            data.put("failure_count", result.getFailure_count());
+            data.put("results", result.getResults());
+            response.put("data", data);
+
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return response;
+        }
+    }
+
+    // 验证批量操作请求参数
+    private List<String> validateBatchActionRequest(ProductBatchActionRequestDTO request) {
+        List<String> errors = new ArrayList<>();
+
+        if (request.getAction() == null || request.getAction().isEmpty()) {
+            errors.add("操作类型不能为空");
+        } else if (!"on-shelf".equals(request.getAction()) &&
+                !"off-shelf".equals(request.getAction()) &&
+                !"delete".equals(request.getAction())) {
+            errors.add("无效的操作类型");
+        }
+
+        if (request.getProduct_ids() == null) {
+            errors.add("商品ID列表不能为空");
+        } else if (request.getProduct_ids().isEmpty()) {
+            errors.add("商品ID列表不能为空");
+        } else if (request.getProduct_ids().size() > 100) {
+            errors.add("一次最多只能操作100个商品");
+        }
+
+        return errors;
+    }
+
 }
