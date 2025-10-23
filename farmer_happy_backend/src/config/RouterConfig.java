@@ -5,9 +5,10 @@ import controller.AuthController;
 import controller.ProductController;
 import dto.auth.*;
 import dto.farmer.FarmerRegisterRequestDTO;
+import dto.farmer.ProductBatchActionRequestDTO; // 新增导入
 import dto.farmer.ProductCreateRequestDTO;
 import dto.farmer.ProductStatusUpdateRequestDTO;
-import dto.farmer.ProductUpdateRequestDTO; // 添加导入
+import dto.farmer.ProductUpdateRequestDTO;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -94,6 +95,11 @@ public class RouterConfig {
         // 处理获取商品列表请求
         if ("/api/v1/farmer/products/list_query".equals(path) && "POST".equals(method)) {
             return productController.getProductList(requestBody);
+        }
+
+        // 处理批量操作商品请求
+        if ("/api/v1/farmer/products/batch-actions".equals(path) && "POST".equals(method)) {
+            return productController.batchActionProducts(parseProductBatchActionRequest(requestBody));
         }
 
         switch (path) {
@@ -303,6 +309,28 @@ public class RouterConfig {
                 }
             }
             request.setImages(images);
+        }
+
+        return request;
+    }
+
+    // 添加解析批量操作请求的方法
+    private ProductBatchActionRequestDTO parseProductBatchActionRequest(Map<String, Object> requestBody) {
+        ProductBatchActionRequestDTO request = new ProductBatchActionRequestDTO();
+
+        request.setAction((String) requestBody.get("action"));
+        request.setPhone((String) requestBody.get("phone"));
+
+        // 处理 product_ids 字段
+        if (requestBody.get("product_ids") instanceof List) {
+            List<?> idsObj = (List<?>) requestBody.get("product_ids");
+            List<String> productIds = new ArrayList<>();
+            for (Object id : idsObj) {
+                if (id instanceof String) {
+                    productIds.add((String) id);
+                }
+            }
+            request.setProduct_ids(productIds);
         }
 
         return request;
