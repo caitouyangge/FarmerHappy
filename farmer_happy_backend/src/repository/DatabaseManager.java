@@ -138,7 +138,87 @@ public class DatabaseManager {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员用户扩展信息表';";
             dbStatement.executeUpdate(createUserAdminsTable);
 
-            // 可以在这里添加更多表的创建语句
+            // 创建运费模板表
+            String createShippingTemplatesTable =
+                    "CREATE TABLE IF NOT EXISTS shipping_templates (" +
+                            "    template_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
+                            "    template_name VARCHAR(100) NOT NULL COMMENT '模板名称'," +
+                            "    shipping_type ENUM('free', 'fixed', 'calculated') NOT NULL DEFAULT 'free' COMMENT '运费类型: free-包邮, fixed-固定运费, calculated-计算运费'," +
+                            "    fixed_amount DECIMAL(10,2) DEFAULT 0 COMMENT '固定运费金额'," +
+                            "    is_default BOOLEAN DEFAULT FALSE COMMENT '是否默认模板'," +
+                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
+                            "    INDEX idx_farmer_id (farmer_id)," +
+                            "    INDEX idx_is_default (is_default)," +
+                            "    INDEX idx_enable (enable)," +
+                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运费模板表';";
+            dbStatement.executeUpdate(createShippingTemplatesTable);
+
+            // 创建商品表
+            String createProductsTable =
+                    "CREATE TABLE IF NOT EXISTS products (" +
+                            "    product_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
+                            "    category ENUM('vegetables', 'fruits', 'grains', 'livestock', 'aquatic') " +
+                            "        NOT NULL COMMENT '商品分类'," +
+                            "    title VARCHAR(100) NOT NULL COMMENT '商品标题'," +
+                            "    specification VARCHAR(200) NOT NULL COMMENT '商品规格描述'," +
+                            "    price DECIMAL(10,2) NOT NULL COMMENT '价格(元)'," +
+                            "    stock INT NOT NULL DEFAULT 0 COMMENT '库存数量'," +
+                            "    description TEXT COMMENT '商品图文详细描述(HTML格式)'," +
+                            "    origin VARCHAR(200) COMMENT '产地信息'," +
+                            "    status ENUM('pending_review', 'on_shelf', 'off_shelf', 'review_rejected') " +
+                            "        NOT NULL DEFAULT 'pending_review' COMMENT '商品状态'," +
+                            "    view_count INT DEFAULT 0 COMMENT '浏览量'," +
+                            "    sales_count INT DEFAULT 0 COMMENT '销量'," +
+                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                            "    INDEX idx_farmer_id (farmer_id)," +
+                            "    INDEX idx_category (category)," +
+                            "    INDEX idx_status (status)," +
+                            "    INDEX idx_enable (enable)," +
+                            "    INDEX idx_created_at (created_at)," +
+                            "    INDEX idx_price (price)," +
+                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品表';";
+            dbStatement.executeUpdate(createProductsTable);
+
+
+            // 创建商品图片表
+            String createProductImagesTable =
+                    "CREATE TABLE IF NOT EXISTS product_images (" +
+                            "    image_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    product_id BIGINT NOT NULL COMMENT '商品ID'," +
+                            "    image_url VARCHAR(500) NOT NULL COMMENT '图片URL'," +
+                            "    sort_order INT DEFAULT 0 COMMENT '排序序号'," +
+                            "    is_main BOOLEAN DEFAULT FALSE COMMENT '是否主图'," +
+                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
+                            "    INDEX idx_product_id (product_id)," +
+                            "    INDEX idx_sort_order (sort_order)," +
+                            "    INDEX idx_enable (enable)," +
+                            "    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品图片表';";
+            dbStatement.executeUpdate(createProductImagesTable);
+
+            // 创建商品审核记录表
+            String createProductReviewsTable =
+                    "CREATE TABLE IF NOT EXISTS product_reviews (" +
+                            "    review_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    product_id BIGINT NOT NULL COMMENT '商品ID'," +
+                            "    reviewer_id BIGINT COMMENT '审核员ID(关联users表)'," +
+                            "    old_status ENUM('pending_review', 'on_shelf', 'off_shelf', 'review_rejected') NOT NULL COMMENT '原状态'," +
+                            "    new_status ENUM('pending_review', 'on_shelf', 'off_shelf', 'review_rejected') NOT NULL COMMENT '新状态'," +
+                            "    review_comment TEXT COMMENT '审核意见'," +
+                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                            "    INDEX idx_product_id (product_id)," +
+                            "    INDEX idx_reviewer_id (reviewer_id)," +
+                            "    INDEX idx_enable (enable)," +
+                            "    INDEX idx_created_at (created_at)," +
+                            "    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品审核记录表';";
+            dbStatement.executeUpdate(createProductReviewsTable);
 
             dbStatement.close();
             dbConnection.close();

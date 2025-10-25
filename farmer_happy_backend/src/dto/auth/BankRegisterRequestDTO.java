@@ -1,4 +1,4 @@
-package dto;
+package dto.auth;
 
 public class BankRegisterRequestDTO extends RegisterRequestDTO {
     private String bankName;

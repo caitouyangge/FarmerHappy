@@ -1,4 +1,6 @@
-package dto;
+package dto.farmer;
+
+import dto.auth.RegisterRequestDTO;
 
 public class FarmerRegisterRequestDTO extends RegisterRequestDTO {
     private String farmName;
