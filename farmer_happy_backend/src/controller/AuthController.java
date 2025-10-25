@@ -1,16 +1,14 @@
+// controller/AuthController.java
 package controller;
 
-import dto.auth.AuthResponseDTO;
-import dto.auth.LoginRequestDTO;
-import dto.auth.RegisterRequestDTO;
+import dto.auth.*;
 import service.auth.AuthService;
 import service.auth.AuthServiceImpl;
 
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class AuthController {
     private AuthService authService;
@@ -20,8 +18,7 @@ public class AuthController {
     }
 
     public Map<String, Object> register(RegisterRequestDTO request) {
-        System.out.println("进入注册控制器，请求参数: " + request.getPhone() + ", " + request.getPassword());
-
+        System.out.println("AuthController.register - 开始处理注册请求");
         Map<String, Object> response = new HashMap<>();
 
         try {
@@ -29,10 +26,11 @@ public class AuthController {
             AuthResponseDTO authResponse = authService.register(request);
             System.out.println("AuthController.register - authService.register 返回成功");
             response.put("code", 200);
-            response.put("message", "成功");
+            response.put("message", "注册成功");
             response.put("data", authResponse);
-            System.out.println("AuthController.register - 响应构建完成: " + response);
+            System.out.println("AuthController.register - 响应构建完成");
         } catch (IllegalArgumentException e) {
+            System.out.println("AuthController.register - 捕获 IllegalArgumentException: " + e.getMessage());
             response.put("code", 400);
             response.put("message", "参数验证失败");
 
@@ -46,9 +44,12 @@ public class AuthController {
             }
             response.put("errors", errors);
         } catch (SQLException e) {
-            if (e.getMessage().contains("该手机号已被注册")) {
+            if (e.getMessage().contains("该手机号已注册此用户类型")) {
                 response.put("code", 409);
-                response.put("message", "该手机号已被注册");
+                response.put("message", "该手机号已注册此用户类型");
+            } else if (e.getMessage().contains("密码错误")) {
+                response.put("code", 400);
+                response.put("message", "密码错误");
             } else {
                 response.put("code", 500);
                 response.put("message", "服务器内部错误");
@@ -91,13 +92,8 @@ public class AuthController {
             System.out.println("AuthController.login - 捕获 SecurityException: " + e.getMessage());
             response.put("code", 401);
             response.put("message", "用户名或密码错误");
-        } catch (SQLException e) {
-            System.out.println("AuthController.login - 捕获 SQLException: " + e.getMessage());
-            e.printStackTrace();
-            response.put("code", 500);
-            response.put("message", "服务器内部错误");
         } catch (Exception e) {
-            System.out.println("AuthController.login - 捕获 Exception: " + e.getMessage());
+            System.out.println("AuthController.login - 捕获异常: " + e.getMessage());
             e.printStackTrace();
             response.put("code", 500);
             response.put("message", "服务器内部错误");
@@ -107,41 +103,30 @@ public class AuthController {
         return response;
     }
 
-    // 提取字段名的辅助方法
-    private String extractFieldName(String errorMsg) {
-        // 如果错误信息包含冒号，说明前面是字段名
-        if (errorMsg.contains(":")) {
-            return errorMsg.substring(0, errorMsg.indexOf(":"));
+    private String extractFieldName(String errorMessage) {
+        // 匹配 "field:message" 或 "field: message" 格式的错误消息
+        Pattern pattern = Pattern.compile("^([\\w_]+):.*");
+        Matcher matcher = pattern.matcher(errorMessage);
+        if (matcher.find()) {
+            return matcher.group(1);
         }
-        // 匹配密码相关错误
-        else if (errorMsg.contains("密码")) {
-            return "password";
-        }
-        // 匹配手机号相关错误
-        else if (errorMsg.contains("手机号")) {
+        // 特殊处理已知错误消息
+        if (errorMessage.contains("该手机号已注册此用户类型")) {
             return "phone";
         }
-        // 匹配用户类型相关错误
-        else if (errorMsg.contains("用户类型")) {
+        if (errorMessage.contains("用户类型不能为空")) {
             return "user_type";
         }
-        // 匹配昵称相关错误
-        else if (errorMsg.contains("昵称")) {
-            return "nickname";
+        if (errorMessage.contains("手机号不能为空")) {
+            return "phone";
         }
-        // 匹配农场名称相关错误
-        else if (errorMsg.contains("农场名称")) {
+        if (errorMessage.contains("密码不能为空")) {
+            return "password";
+        }
+        if (errorMessage.contains("农场名称不能为空")) {
             return "farm_name";
         }
-        // 匹配专业领域相关错误
-        else if (errorMsg.contains("专业领域")) {
-            return "expertise_field";
-        }
-        // 匹配银行名称相关错误
-        else if (errorMsg.contains("银行名称")) {
-            return "bank_name";
-        }
-        // 默认返回unknown
         return "unknown";
     }
+
 }

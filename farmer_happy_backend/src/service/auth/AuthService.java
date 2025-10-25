@@ -1,3 +1,4 @@
+// service/auth/AuthService.java
 package service.auth;
 
 import dto.auth.*;
@@ -12,6 +13,7 @@ public interface AuthService {
     boolean validateRegisterRequest(RegisterRequestDTO registerRequest, List<String> errors);
     User findUserByPhone(String phone) throws SQLException;
     void saveUser(User user) throws SQLException;
+    boolean checkUserTypeExists(String uid, String userType) throws SQLException;
 
     // 新增针对不同类型用户的保存方法
     void saveFarmerExtension(String uid, FarmerRegisterRequestDTO farmerRequest) throws SQLException;

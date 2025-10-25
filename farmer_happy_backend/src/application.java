@@ -302,7 +302,18 @@ public class application {
                                 // 处理转义字符
                                 i++;
                                 if (i < json.length()) {
-                                    valueBuilder.append(json.charAt(i));
+                                    // 处理常见的转义字符
+                                    switch (json.charAt(i)) {
+                                        case '"': valueBuilder.append('"'); break;
+                                        case '\\': valueBuilder.append('\\'); break;
+                                        case '/': valueBuilder.append('/'); break;
+                                        case 'b': valueBuilder.append('\b'); break;
+                                        case 'f': valueBuilder.append('\f'); break;
+                                        case 'n': valueBuilder.append('\n'); break;
+                                        case 'r': valueBuilder.append('\r'); break;
+                                        case 't': valueBuilder.append('\t'); break;
+                                        default: valueBuilder.append(json.charAt(i)); break;
+                                    }
                                 }
                             } else {
                                 valueBuilder.append(json.charAt(i));
@@ -383,6 +394,7 @@ public class application {
 
                     return new ParseResult(null, i);
                 }
+
 
                 // 改进方法：解析JSON数组
                 private ParseResult parseJsonArray(String json, int startIndex) {

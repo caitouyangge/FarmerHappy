@@ -1,3 +1,4 @@
+// service/auth/AuthServiceImpl.java
 package service.auth;
 
 import dto.auth.*;
@@ -24,53 +25,87 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalArgumentException(String.join("; ", errors));
         }
 
-        // 检查手机号是否已存在
-        if (findUserByPhone(registerRequest.getPhone()) != null) {
-            throw new SQLException("该手机号已被注册");
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+            conn.setAutoCommit(false);
+
+            // 查找用户是否存在
+            User user = findUserByPhoneWithConnection(conn, registerRequest.getPhone());
+
+            if (user == null) {
+                // 用户不存在，创建新用户
+                user = new User(
+                        registerRequest.getPassword(),
+                        registerRequest.getNickname() != null ? registerRequest.getNickname() : "",
+                        registerRequest.getPhone()
+                );
+
+                // 保存用户到数据库
+                saveUserWithConnection(conn, user);
+                System.out.println("用户保存成功");
+
+                // 根据用户类型保存扩展信息
+                System.out.println("开始保存扩展信息，用户类型: " + registerRequest.getUserType());
+                saveUserExtensionByType(conn, user.getUid(), registerRequest);
+            } else {
+                // 用户已存在，验证密码
+                if (!user.getPassword().equals(registerRequest.getPassword())) {
+                    throw new IllegalArgumentException("密码错误");
+                }
+
+                // 检查该用户类型是否已经存在
+                if (checkUserTypeExistsWithConnection(conn, user.getUid(), registerRequest.getUserType())) {
+                    throw new IllegalArgumentException("该手机号已注册此用户类型");
+                }
+
+                // 保存扩展信息
+                saveUserExtensionByType(conn, user.getUid(), registerRequest);
+            }
+
+            conn.commit();
+
+            // 生成认证响应
+            System.out.println("开始生成认证响应");
+            AuthResponseDTO response = new AuthResponseDTO();
+            response.setUid(user.getUid());
+            response.setNickname(user.getNickname());
+            response.setPhone(user.getPhone());
+            response.setUserType(registerRequest.getUserType());
+            System.out.println("认证响应生成完成");
+
+            return response;
+        } catch (Exception e) {
+            if (conn != null) {
+                conn.rollback();
+            }
+            throw e;
+        } finally {
+            if (conn != null) {
+                conn.setAutoCommit(true);
+                conn.close();
+            }
         }
+    }
 
-        // 创建用户
-        User user = new User(
-                registerRequest.getPassword(),
-                registerRequest.getNickname() != null ? registerRequest.getNickname() : "",
-                registerRequest.getPhone(),
-                registerRequest.getUserType()
-        );
-
-        // 保存用户到数据库
-        saveUser(user);
-        System.out.println("用户保存成功");
-
-        // 根据用户类型保存扩展信息
-        System.out.println("开始保存扩展信息，用户类型: " + registerRequest.getUserType());
+    private void saveUserExtensionByType(Connection conn, String uid, RegisterRequestDTO registerRequest) throws SQLException {
         if (registerRequest instanceof FarmerRegisterRequestDTO) {
             System.out.println("保存农户扩展信息...");
-            saveFarmerExtension(user.getUid(), (FarmerRegisterRequestDTO) registerRequest);
+            saveFarmerExtensionWithConnection(conn, uid, (FarmerRegisterRequestDTO) registerRequest);
             System.out.println("农户扩展信息保存完成");
         } else if (registerRequest instanceof BuyerRegisterRequestDTO) {
             System.out.println("保存买家扩展信息...");
-            saveBuyerExtension(user.getUid(), (BuyerRegisterRequestDTO) registerRequest);
+            saveBuyerExtensionWithConnection(conn, uid, (BuyerRegisterRequestDTO) registerRequest);
             System.out.println("买家扩展信息保存完成");
         } else if (registerRequest instanceof ExpertRegisterRequestDTO) {
             System.out.println("保存专家扩展信息...");
-            saveExpertExtension(user.getUid(), (ExpertRegisterRequestDTO) registerRequest);
+            saveExpertExtensionWithConnection(conn, uid, (ExpertRegisterRequestDTO) registerRequest);
             System.out.println("专家扩展信息保存完成");
         } else if (registerRequest instanceof BankRegisterRequestDTO) {
             System.out.println("保存银行扩展信息...");
-            saveBankExtension(user.getUid(), (BankRegisterRequestDTO) registerRequest);
+            saveBankExtensionWithConnection(conn, uid, (BankRegisterRequestDTO) registerRequest);
             System.out.println("银行扩展信息保存完成");
         }
-
-        // 生成认证响应
-        System.out.println("开始生成认证响应");
-        AuthResponseDTO response = new AuthResponseDTO();
-        response.setUid(user.getUid());
-        response.setNickname(user.getNickname());
-        response.setPhone(user.getPhone());
-        response.setUserType(user.getUserType());
-        System.out.println("认证响应生成完成");
-
-        return response;
     }
 
     @Override
@@ -84,25 +119,43 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalArgumentException("密码不能为空");
         }
 
-        // 查找用户
-        User user = findUserByPhone(loginRequest.getPhone());
-        if (user == null) {
-            throw new SecurityException("用户名或密码错误");
+        if (loginRequest.getUserType() == null || loginRequest.getUserType().isEmpty()) {
+            throw new IllegalArgumentException("用户类型不能为空");
         }
 
-        // 验证密码
-        if (!user.getPassword().equals(loginRequest.getPassword())) { // 简化处理，实际应使用加密
-            throw new SecurityException("用户名或密码错误");
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+
+            // 查找用户
+            User user = findUserByPhoneWithConnection(conn, loginRequest.getPhone());
+            if (user == null) {
+                throw new SecurityException("用户名或密码错误");
+            }
+
+            // 验证密码
+            if (!user.getPassword().equals(loginRequest.getPassword())) {
+                throw new SecurityException("用户名或密码错误");
+            }
+
+            // 验证用户类型是否存在
+            if (!checkUserTypeExistsWithConnection(conn, user.getUid(), loginRequest.getUserType())) {
+                throw new SecurityException("该用户类型未注册");
+            }
+
+            // 生成认证响应
+            AuthResponseDTO response = new AuthResponseDTO();
+            response.setUid(user.getUid());
+            response.setNickname(user.getNickname());
+            response.setPhone(user.getPhone());
+            response.setUserType(loginRequest.getUserType());
+
+            return response;
+        } finally {
+            if (conn != null) {
+                conn.close();
+            }
         }
-
-        // 生成认证响应
-        AuthResponseDTO response = new AuthResponseDTO();
-        response.setUid(user.getUid());
-        response.setNickname(user.getNickname());
-        response.setPhone(user.getPhone());
-        response.setUserType(user.getUserType());
-
-        return response;
     }
 
     @Override
@@ -214,9 +267,21 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public User findUserByPhone(String phone) throws SQLException {
-        System.out.println("开始查询用户: " + phone);
         try {
             Connection conn = databaseManager.getConnection();
+            User user = findUserByPhoneWithConnection(conn, phone);
+            conn.close();
+            return user;
+        } catch (SQLException e) {
+            System.err.println("查询用户失败: " + e.getMessage());
+            e.printStackTrace();
+            throw new SQLException("查询用户失败: " + e.getMessage());
+        }
+    }
+
+    private User findUserByPhoneWithConnection(Connection conn, String phone) throws SQLException {
+        System.out.println("开始查询用户: " + phone);
+        try {
             System.out.println("数据库连接成功");
             PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users WHERE phone = ?");
             stmt.setString(1, phone);
@@ -230,7 +295,6 @@ public class AuthServiceImpl implements AuthService {
                 user.setPassword(rs.getString("password"));
                 user.setNickname(rs.getString("nickname"));
                 user.setPhone(rs.getString("phone"));
-                user.setUserType(rs.getString("user_type"));
                 user.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
                 user.setUpdatedAt(rs.getTimestamp("updated_at") != null ?
                         rs.getTimestamp("updated_at").toLocalDateTime() : null);
@@ -241,7 +305,6 @@ public class AuthServiceImpl implements AuthService {
 
             rs.close();
             stmt.close();
-            conn.close();
             System.out.println("数据库资源已关闭");
 
             return user;
@@ -254,26 +317,35 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void saveUser(User user) throws SQLException {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+            saveUserWithConnection(conn, user);
+        } finally {
+            if (conn != null) {
+                conn.close();
+            }
+        }
+    }
+
+    private void saveUserWithConnection(Connection conn, User user) throws SQLException {
         System.out.println("开始保存用户: " + user.getPhone());
         try {
-            Connection conn = databaseManager.getConnection();
             System.out.println("数据库连接成功");
             PreparedStatement stmt = conn.prepareStatement(
-                    "INSERT INTO users (uid, password, nickname, phone, user_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    "INSERT INTO users (uid, password, nickname, phone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
             );
             stmt.setString(1, user.getUid());
             stmt.setString(2, user.getPassword());
             stmt.setString(3, user.getNickname());
             stmt.setString(4, user.getPhone());
-            stmt.setString(5, user.getUserType());
-            stmt.setTimestamp(6, Timestamp.valueOf(user.getCreatedAt()));
-            stmt.setTimestamp(7, Timestamp.valueOf(user.getUpdatedAt()));
+            stmt.setTimestamp(5, Timestamp.valueOf(user.getCreatedAt()));
+            stmt.setTimestamp(6, Timestamp.valueOf(user.getUpdatedAt()));
 
             System.out.println("执行插入操作");
             int result = stmt.executeUpdate();
             System.out.println("插入结果: " + result);
             stmt.close();
-            conn.close();
             System.out.println("数据库资源已关闭");
         } catch (SQLException e) {
             System.err.println("保存用户失败: " + e.getMessage());
@@ -283,17 +355,77 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public boolean checkUserTypeExists(String uid, String userType) throws SQLException {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+            boolean exists = checkUserTypeExistsWithConnection(conn, uid, userType);
+            return exists;
+        } finally {
+            if (conn != null) {
+                conn.close();
+            }
+        }
+    }
+
+    private boolean checkUserTypeExistsWithConnection(Connection conn, String uid, String userType) throws SQLException {
+        String tableName = "";
+        switch (userType) {
+            case "farmer":
+                tableName = "user_farmers";
+                break;
+            case "buyer":
+                tableName = "user_buyers";
+                break;
+            case "expert":
+                tableName = "user_experts";
+                break;
+            case "bank":
+                tableName = "user_banks";
+                break;
+            default:
+                return false;
+        }
+
+        String query = "SELECT COUNT(*) as count FROM " + tableName + " WHERE uid = ?";
+        PreparedStatement stmt = conn.prepareStatement(query);
+        stmt.setString(1, uid);
+        ResultSet rs = stmt.executeQuery();
+
+        boolean exists = false;
+        if (rs.next()) {
+            exists = rs.getInt("count") > 0;
+        }
+
+        rs.close();
+        stmt.close();
+        return exists;
+    }
+
+    // 农户扩展信息保存方法
+    @Override
     public void saveFarmerExtension(String uid, FarmerRegisterRequestDTO farmerRequest) throws SQLException {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+            saveFarmerExtensionWithConnection(conn, uid, farmerRequest);
+        } finally {
+            if (conn != null) {
+                conn.close();
+            }
+        }
+    }
+
+    private void saveFarmerExtensionWithConnection(Connection conn, String uid, FarmerRegisterRequestDTO farmerRequest) throws SQLException {
         System.out.println("saveFarmerExtension - 开始");
         System.out.println("UID: " + uid);
         System.out.println("农场名称: " + farmerRequest.getFarmName());
         System.out.println("农场地址: " + farmerRequest.getFarmAddress());
         System.out.println("农场规模: " + farmerRequest.getFarmSize());
-        
+
         try {
-            Connection conn = databaseManager.getConnection();
             System.out.println("saveFarmerExtension - 数据库连接成功");
-            
+
             PreparedStatement stmt = conn.prepareStatement(
                     "INSERT INTO user_farmers (uid, farm_name, farm_address, farm_size) VALUES (?, ?, ?, ?)"
             );
@@ -309,9 +441,8 @@ public class AuthServiceImpl implements AuthService {
             System.out.println("saveFarmerExtension - 执行插入操作");
             int result = stmt.executeUpdate();
             System.out.println("saveFarmerExtension - 插入结果: " + result);
-            
+
             stmt.close();
-            conn.close();
             System.out.println("saveFarmerExtension - 数据库资源已关闭");
         } catch (SQLException e) {
             System.err.println("保存农户扩展信息失败: " + e.getMessage());
@@ -320,10 +451,22 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    // 买家扩展信息保存方法
     @Override
     public void saveBuyerExtension(String uid, BuyerRegisterRequestDTO buyerRequest) throws SQLException {
+        Connection conn = null;
         try {
-            Connection conn = databaseManager.getConnection();
+            conn = databaseManager.getConnection();
+            saveBuyerExtensionWithConnection(conn, uid, buyerRequest);
+        } finally {
+            if (conn != null) {
+                conn.close();
+            }
+        }
+    }
+
+    private void saveBuyerExtensionWithConnection(Connection conn, String uid, BuyerRegisterRequestDTO buyerRequest) throws SQLException {
+        try {
             PreparedStatement stmt = conn.prepareStatement(
                     "INSERT INTO user_buyers (uid, shipping_address) VALUES (?, ?)"
             );
@@ -332,7 +475,6 @@ public class AuthServiceImpl implements AuthService {
 
             stmt.executeUpdate();
             stmt.close();
-            conn.close();
         } catch (SQLException e) {
             System.err.println("保存买家扩展信息失败: " + e.getMessage());
             e.printStackTrace();
@@ -340,12 +482,24 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    // 专家扩展信息保存方法
     @Override
     public void saveExpertExtension(String uid, ExpertRegisterRequestDTO expertRequest) throws SQLException {
+        Connection conn = null;
         try {
-            Connection conn = databaseManager.getConnection();
+            conn = databaseManager.getConnection();
+            saveExpertExtensionWithConnection(conn, uid, expertRequest);
+        } finally {
+            if (conn != null) {
+                conn.close();
+            }
+        }
+    }
+
+    private void saveExpertExtensionWithConnection(Connection conn, String uid, ExpertRegisterRequestDTO expertRequest) throws SQLException {
+        try {
             PreparedStatement stmt = conn.prepareStatement(
-                    "INSERT INTO user_experts (uid, expertise_field, work_experience) VALUES (?, ?, ?)"
+                    "INSERT INTO user_experts (uid, expertise_field, work_experience, service_area, consultation_fee) VALUES (?, ?, ?, ?, ?)"
             );
             stmt.setString(1, uid);
             stmt.setString(2, expertRequest.getExpertiseField());
@@ -354,10 +508,15 @@ public class AuthServiceImpl implements AuthService {
             } else {
                 stmt.setNull(3, Types.INTEGER);
             }
+            stmt.setString(4, expertRequest.getServiceArea());
+            if (expertRequest.getConsultationFee() != null) {
+                stmt.setDouble(5, expertRequest.getConsultationFee());
+            } else {
+                stmt.setNull(5, Types.DECIMAL);
+            }
 
             stmt.executeUpdate();
             stmt.close();
-            conn.close();
         } catch (SQLException e) {
             System.err.println("保存专家扩展信息失败: " + e.getMessage());
             e.printStackTrace();
@@ -365,20 +524,33 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    // 银行扩展信息保存方法
     @Override
     public void saveBankExtension(String uid, BankRegisterRequestDTO bankRequest) throws SQLException {
+        Connection conn = null;
         try {
-            Connection conn = databaseManager.getConnection();
+            conn = databaseManager.getConnection();
+            saveBankExtensionWithConnection(conn, uid, bankRequest);
+        } finally {
+            if (conn != null) {
+                conn.close();
+            }
+        }
+    }
+
+    private void saveBankExtensionWithConnection(Connection conn, String uid, BankRegisterRequestDTO bankRequest) throws SQLException {
+        try {
             PreparedStatement stmt = conn.prepareStatement(
-                    "INSERT INTO user_banks (uid, bank_name, branch_name) VALUES (?, ?, ?)"
+                    "INSERT INTO user_banks (uid, bank_name, branch_name, contact_person, contact_phone) VALUES (?, ?, ?, ?, ?)"
             );
             stmt.setString(1, uid);
             stmt.setString(2, bankRequest.getBankName());
             stmt.setString(3, bankRequest.getBranchName());
+            stmt.setString(4, bankRequest.getContactPerson());
+            stmt.setString(5, bankRequest.getContactPhone());
 
             stmt.executeUpdate();
             stmt.close();
-            conn.close();
         } catch (SQLException e) {
             System.err.println("保存银行扩展信息失败: " + e.getMessage());
             e.printStackTrace();

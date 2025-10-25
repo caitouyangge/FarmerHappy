@@ -1,10 +1,11 @@
+// dto/auth/RegisterRequestDTO.java
 package dto.auth;
 
 public class RegisterRequestDTO {
     private String password;
     private String nickname;
     private String phone;
-    private String userType;
+    private String userType; // 保留这个字段用于注册时指定用户类型
 
     // Getters and Setters
     public String getPassword() {
