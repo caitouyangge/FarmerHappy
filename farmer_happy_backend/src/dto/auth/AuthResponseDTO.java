@@ -1,3 +1,4 @@
+// dto/auth/AuthResponseDTO.java
 package dto.auth;
 
 public class AuthResponseDTO {

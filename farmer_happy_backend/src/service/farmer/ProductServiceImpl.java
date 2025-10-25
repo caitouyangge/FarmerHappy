@@ -100,9 +100,13 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
-            // 验证用户类型
-            if (!"farmer".equals(user.getUserType())) {
-                throw new IllegalArgumentException("只有农户可以操作商品");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    throw new IllegalArgumentException("只有农户可以操作商品");
+                }
+            } catch (SQLException e) {
+                throw new SQLException("验证用户身份失败: " + e.getMessage());
             }
 
             // 获取农户ID
@@ -155,9 +159,13 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
-            // 验证用户类型
-            if (!"farmer".equals(user.getUserType())) {
-                throw new IllegalArgumentException("只有农户可以操作商品");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    throw new IllegalArgumentException("只有农户可以操作商品");
+                }
+            } catch (SQLException e) {
+                throw new SQLException("验证用户身份失败: " + e.getMessage());
             }
 
             // 获取农户ID
@@ -210,9 +218,13 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
-            // 验证用户类型
-            if (!"farmer".equals(user.getUserType())) {
-                throw new IllegalArgumentException("只有农户可以操作商品");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    throw new IllegalArgumentException("只有农户可以操作商品");
+                }
+            } catch (SQLException e) {
+                throw new SQLException("验证用户身份失败: " + e.getMessage());
             }
 
             // 获取农户ID
@@ -249,6 +261,15 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    throw new IllegalArgumentException("只有农户可以操作商品");
+                }
+            } catch (SQLException e) {
+                throw new SQLException("验证用户身份失败: " + e.getMessage());
+            }
+
             // 获取农户ID
             Long farmerId = getFarmerIdByUserId(conn, user.getUid());
 
@@ -277,9 +298,13 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
-            // 验证用户类型是否为农户
-            if (!"farmer".equals(user.getUserType())) {
-                throw new IllegalArgumentException("只有农户可以操作商品");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    throw new IllegalArgumentException("只有农户可以操作商品");
+                }
+            } catch (SQLException e) {
+                throw new SQLException("验证用户身份失败: " + e.getMessage());
             }
 
             // 获取农户ID
@@ -338,8 +363,6 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-
-
     // 完整更新商品
     @Override
     public ProductResponseDTO updateProduct(String productId, ProductUpdateRequestDTO request) throws Exception {
@@ -354,9 +377,13 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
-            // 验证用户类型
-            if (!"farmer".equals(user.getUserType())) {
-                throw new IllegalArgumentException("只有农户可以操作商品");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    throw new IllegalArgumentException("只有农户可以操作商品");
+                }
+            } catch (SQLException e) {
+                throw new SQLException("验证用户身份失败: " + e.getMessage());
             }
 
             // 获取农户ID
@@ -435,9 +462,13 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
-            // 验证用户类型
-            if (!"farmer".equals(user.getUserType())) {
-                throw new IllegalArgumentException("只有农户可以执行商品操作");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    throw new IllegalArgumentException("只有农户可以执行商品操作");
+                }
+            } catch (SQLException e) {
+                throw new SQLException("验证用户身份失败: " + e.getMessage());
             }
 
             // 验证参数
@@ -616,9 +647,13 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
-            // 验证用户类型
-            if (!"farmer".equals(user.getUserType())) {
-                throw new IllegalArgumentException("只有农户可以操作商品");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    throw new IllegalArgumentException("只有农户可以操作商品");
+                }
+            } catch (SQLException e) {
+                throw new SQLException("验证用户身份失败: " + e.getMessage());
             }
 
             // 获取农户ID

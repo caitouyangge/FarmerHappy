@@ -209,17 +209,30 @@ public class RouterConfig {
     }
 
     private Map<String, Object> handleLogin(Map<String, Object> requestBody) {
-        System.out.println("RouterConfig.handleLogin - 开始处理");
-        LoginRequestDTO request = new LoginRequestDTO();
-        request.setPhone((String) requestBody.get("phone"));
-        request.setPassword((String) requestBody.get("password"));
-        System.out.println("RouterConfig.handleLogin - LoginRequestDTO 创建完成");
+        System.out.println("RouterConfig.handleLogin - 开始处理登录请求");
+        System.out.println("请求体: " + requestBody);
 
-        Map<String, Object> loginResult = authController.login(request);
+        LoginRequestDTO loginRequest = new LoginRequestDTO();
+        loginRequest.setPhone((String) requestBody.get("phone"));
+        loginRequest.setPassword((String) requestBody.get("password"));
+        // 同时支持 userType 和 user_type 两种字段名
+        String userType = (String) requestBody.get("userType");
+        if (userType == null) {
+            userType = (String) requestBody.get("user_type");
+        }
+        loginRequest.setUserType(userType);
+
+        System.out.println("RouterConfig.handleLogin - LoginRequestDTO 创建完成");
+        System.out.println("LoginRequestDTO - phone: " + loginRequest.getPhone() +
+                ", password: " + loginRequest.getPassword() +
+                ", userType: " + loginRequest.getUserType());
+
+        Map<String, Object> loginResult = authController.login(loginRequest);
         System.out.println("RouterConfig.handleLogin - authController.login 返回: " + loginResult);
 
         return loginResult;
     }
+
 
     private ProductCreateRequestDTO parseProductRequest(Map<String, Object> requestBody) {
         ProductCreateRequestDTO request = new ProductCreateRequestDTO();

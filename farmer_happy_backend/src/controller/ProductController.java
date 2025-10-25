@@ -67,10 +67,16 @@ public class ProductController {
                 return response;
             }
 
-            // 验证用户类型是否为农户
-            if (!"farmer".equals(user.getUserType())) {
-                response.put("code", 403);
-                response.put("message", "只有农户可以发布商品");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    response.put("code", 403);
+                    response.put("message", "只有农户可以发布商品");
+                    return response;
+                }
+            } catch (SQLException e) {
+                response.put("code", 500);
+                response.put("message", "服务器内部错误: " + e.getMessage());
                 return response;
             }
 
@@ -313,10 +319,16 @@ public class ProductController {
                 return response;
             }
 
-            // 验证用户类型是否为农户
-            if (!"farmer".equals(user.getUserType())) {
-                response.put("code", 403);
-                response.put("message", "只有农户可以查看商品列表");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    response.put("code", 403);
+                    response.put("message", "只有农户可以查看商品列表");
+                    return response;
+                }
+            } catch (SQLException e) {
+                response.put("code", 500);
+                response.put("message", "服务器内部错误: " + e.getMessage());
                 return response;
             }
 
@@ -341,8 +353,6 @@ public class ProductController {
             return response;
         }
     }
-
-
 
     // 更新商品
     public Map<String, Object> updateProduct(String productId, ProductUpdateRequestDTO request) {
@@ -393,10 +403,16 @@ public class ProductController {
                 return response;
             }
 
-            // 验证用户类型是否为农户
-            if (!"farmer".equals(user.getUserType())) {
-                response.put("code", 403);
-                response.put("message", "只有农户可以修改商品");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    response.put("code", 403);
+                    response.put("message", "只有农户可以修改商品");
+                    return response;
+                }
+            } catch (SQLException e) {
+                response.put("code", 500);
+                response.put("message", "服务器内部错误: " + e.getMessage());
                 return response;
             }
 
@@ -558,10 +574,16 @@ public class ProductController {
                 return response;
             }
 
-            // 验证用户类型是否为农户
-            if (!"farmer".equals(user.getUserType())) {
-                response.put("code", 403);
-                response.put("message", "只有农户可以执行商品操作");
+            // 验证用户是否具有农户身份
+            try {
+                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
+                    response.put("code", 403);
+                    response.put("message", "只有农户可以执行商品操作");
+                    return response;
+                }
+            } catch (SQLException e) {
+                response.put("code", 500);
+                response.put("message", "服务器内部错误: " + e.getMessage());
                 return response;
             }
 

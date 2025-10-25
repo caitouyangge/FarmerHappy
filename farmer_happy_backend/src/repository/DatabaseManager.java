@@ -6,7 +6,7 @@ public class DatabaseManager {
     private static final String URL = "jdbc:mysql://localhost:3306/";
     private static final String DB_NAME = "farmer_happy";
     private static final String USERNAME = "root";
-    private static final String PASSWORD = "root";
+    private static final String PASSWORD = "123456";
     private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
 
     private Connection connection;
@@ -45,14 +45,12 @@ public class DatabaseManager {
                             "    phone VARCHAR(11) UNIQUE NOT NULL COMMENT '手机号，11位数字'," +
                             "    password VARCHAR(255) NOT NULL COMMENT '密码（存储基本字符串）'," +
                             "    nickname VARCHAR(30) DEFAULT '' COMMENT '用户昵称，1-30个字符'," +
-                            "    user_type ENUM('farmer', 'buyer', 'expert', 'bank', 'admin') NOT NULL COMMENT '用户类型'," +
                             "    login_attempts INT DEFAULT 0 COMMENT '连续登录失败次数'," +
                             "    locked_until TIMESTAMP NULL COMMENT '账号锁定截止时间'," +
                             "    is_active BOOLEAN DEFAULT TRUE COMMENT '账号是否激活'," +
                             "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
                             "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
                             "    INDEX idx_phone (phone)," +
-                            "    INDEX idx_user_type (user_type)," +
                             "    INDEX idx_created_at (created_at)" +
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户基本信息表';";
             dbStatement.executeUpdate(createUserTable);
