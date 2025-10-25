@@ -1,14 +1,10 @@
 package dto.auth;
 
-import java.time.LocalDateTime;
-
 public class AuthResponseDTO {
     private String uid;
     private String nickname;
     private String phone;
     private String userType;
-    private String token;
-    private LocalDateTime expiresAt;
 
     // Getters and Setters
     public String getUid() {
@@ -41,21 +37,5 @@ public class AuthResponseDTO {
 
     public void setUserType(String userType) {
         this.userType = userType;
-    }
-
-    public String getToken() {
-        return token;
-    }
-
-    public void setToken(String token) {
-        this.token = token;
-    }
-
-    public LocalDateTime getExpiresAt() {
-        return expiresAt;
-    }
-
-    public void setExpiresAt(LocalDateTime expiresAt) {
-        this.expiresAt = expiresAt;
     }
 }
