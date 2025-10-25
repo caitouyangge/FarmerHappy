@@ -25,10 +25,13 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
 
         try {
+            System.out.println("AuthController.register - 调用 authService.register");
             AuthResponseDTO authResponse = authService.register(request);
-            response.put("code", 201);
+            System.out.println("AuthController.register - authService.register 返回成功");
+            response.put("code", 200);
             response.put("message", "成功");
             response.put("data", authResponse);
+            System.out.println("AuthController.register - 响应构建完成: " + response);
         } catch (IllegalArgumentException e) {
             response.put("code", 400);
             response.put("message", "参数验证失败");
@@ -51,22 +54,30 @@ public class AuthController {
                 response.put("message", "服务器内部错误");
             }
         } catch (Exception e) {
+            System.out.println("AuthController.register - 捕获异常: " + e.getMessage());
+            e.printStackTrace();
             response.put("code", 500);
             response.put("message", "服务器内部错误");
         }
 
+        System.out.println("AuthController.register - 返回响应，code=" + response.get("code"));
         return response;
     }
 
     public Map<String, Object> login(LoginRequestDTO request) {
+        System.out.println("AuthController.login - 开始处理登录请求");
         Map<String, Object> response = new HashMap<>();
 
         try {
+            System.out.println("AuthController.login - 调用 authService.login");
             AuthResponseDTO authResponse = authService.login(request);
+            System.out.println("AuthController.login - authService.login 返回成功");
             response.put("code", 200);
             response.put("message", "成功");
             response.put("data", authResponse);
+            System.out.println("AuthController.login - 响应构建完成");
         } catch (IllegalArgumentException e) {
+            System.out.println("AuthController.login - 捕获 IllegalArgumentException: " + e.getMessage());
             response.put("code", 400);
             response.put("message", "参数验证失败");
 
@@ -77,16 +88,22 @@ public class AuthController {
             errors.add(error);
             response.put("errors", errors);
         } catch (SecurityException e) {
+            System.out.println("AuthController.login - 捕获 SecurityException: " + e.getMessage());
             response.put("code", 401);
             response.put("message", "用户名或密码错误");
         } catch (SQLException e) {
+            System.out.println("AuthController.login - 捕获 SQLException: " + e.getMessage());
+            e.printStackTrace();
             response.put("code", 500);
             response.put("message", "服务器内部错误");
         } catch (Exception e) {
+            System.out.println("AuthController.login - 捕获 Exception: " + e.getMessage());
+            e.printStackTrace();
             response.put("code", 500);
             response.put("message", "服务器内部错误");
         }
 
+        System.out.println("AuthController.login - 返回响应，code=" + response.get("code"));
         return response;
     }
 

@@ -109,7 +109,9 @@ public class RouterConfig {
                 }
                 break;
             case "/api/v1/auth/login":
+                System.out.println("RouterConfig.handleRequest - 匹配到登录路径");
                 if ("POST".equals(method)) {
+                    System.out.println("RouterConfig.handleRequest - 调用 handleLogin");
                     return handleLogin(requestBody);
                 }
                 break;
@@ -139,14 +141,17 @@ public class RouterConfig {
     }
 
     private Map<String, Object> handleRegister(Map<String, Object> requestBody) {
+        System.out.println("RouterConfig.handleRegister - 开始处理注册请求");
         String userType = (String) requestBody.get("user_type");
 
         if (userType == null) {
             userType = (String) requestBody.get("userType");
         }
+        System.out.println("RouterConfig.handleRegister - 用户类型: " + userType);
 
         switch (userType) {
             case "farmer":
+                System.out.println("RouterConfig.handleRegister - 处理农户注册");
                 FarmerRegisterRequestDTO farmerRequest = new FarmerRegisterRequestDTO();
                 farmerRequest.setPassword((String) requestBody.get("password"));
                 farmerRequest.setNickname((String) requestBody.get("nickname"));
@@ -157,7 +162,10 @@ public class RouterConfig {
                 if (requestBody.get("farm_size") instanceof Number) {
                     farmerRequest.setFarmSize(((Number) requestBody.get("farm_size")).doubleValue());
                 }
-                return authController.register(farmerRequest);
+                System.out.println("RouterConfig.handleRegister - 调用 authController.register");
+                Map<String, Object> result = authController.register(farmerRequest);
+                System.out.println("RouterConfig.handleRegister - authController.register 返回: " + result);
+                return result;
 
             case "buyer":
                 BuyerRegisterRequestDTO buyerRequest = new BuyerRegisterRequestDTO();
@@ -201,11 +209,14 @@ public class RouterConfig {
     }
 
     private Map<String, Object> handleLogin(Map<String, Object> requestBody) {
+        System.out.println("RouterConfig.handleLogin - 开始处理");
         LoginRequestDTO request = new LoginRequestDTO();
         request.setPhone((String) requestBody.get("phone"));
         request.setPassword((String) requestBody.get("password"));
+        System.out.println("RouterConfig.handleLogin - LoginRequestDTO 创建完成");
 
         Map<String, Object> loginResult = authController.login(request);
+        System.out.println("RouterConfig.handleLogin - authController.login 返回: " + loginResult);
 
         return loginResult;
     }

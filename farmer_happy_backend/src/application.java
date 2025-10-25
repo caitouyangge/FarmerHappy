@@ -44,33 +44,73 @@ public class application {
             server.createContext("/", new HttpHandler() {
                 @Override
                 public void handle(HttpExchange exchange) throws IOException {
-                    // 解析请求信息
-                    String path = exchange.getRequestURI().getPath();
-                    String method = exchange.getRequestMethod();
+                    try {
+                        // 解析请求信息
+                        String path = exchange.getRequestURI().getPath();
+                        String method = exchange.getRequestMethod();
 
-                    // 解析请求体
-                    Map<String, Object> requestBody = parseRequestBody(exchange);
+                        System.out.println("处理请求: " + method + " " + path);
 
-                    // 解析请求头
-                    Map<String, String> headers = new HashMap<>();
-                    for (Map.Entry<String, List<String>> entry : exchange.getRequestHeaders().entrySet()) {
-                        if (!entry.getValue().isEmpty()) {
-                            headers.put(entry.getKey(), entry.getValue().get(0));
+                        // 解析请求体
+                        Map<String, Object> requestBody = parseRequestBody(exchange);
+
+                        // 解析请求头
+                        Map<String, String> headers = new HashMap<>();
+                        for (Map.Entry<String, List<String>> entry : exchange.getRequestHeaders().entrySet()) {
+                            if (!entry.getValue().isEmpty()) {
+                                headers.put(entry.getKey(), entry.getValue().get(0));
+                            }
+                        }
+
+                        // 处理请求并获取响应（不再传递sessionId）
+                        Map<String, Object> response = routerConfig.handleRequest(path, method, requestBody, headers, null);
+
+                        System.out.println("生成响应: code=" + response.get("code"));
+
+                        // 发送响应
+                        String jsonResponse = toJson(response);
+                        System.out.println("JSON响应: " + jsonResponse);
+                        
+                        // 设置正确的Content-Type和字符编码
+                        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+                        
+                        // 根据响应中的code字段返回对应的HTTP状态码
+                        int httpStatusCode = 200;
+                        if (response.containsKey("code")) {
+                            Object codeObj = response.get("code");
+                            if (codeObj instanceof Number) {
+                                httpStatusCode = ((Number) codeObj).intValue();
+                            }
+                        }
+                        
+                        exchange.sendResponseHeaders(httpStatusCode, jsonResponse.getBytes("UTF-8").length);
+
+                        OutputStream os = exchange.getResponseBody();
+                        os.write(jsonResponse.getBytes("UTF-8"));
+                        os.close();
+                        
+                        System.out.println("响应发送完成");
+                    } catch (Exception e) {
+                        System.err.println("处理请求时发生错误: " + e.getMessage());
+                        e.printStackTrace();
+                        
+                        // 发送500错误响应
+                        try {
+                            Map<String, Object> errorResponse = new HashMap<>();
+                            errorResponse.put("code", 500);
+                            errorResponse.put("message", "服务器内部错误: " + e.getMessage());
+                            
+                            String jsonResponse = toJson(errorResponse);
+                            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+                            exchange.sendResponseHeaders(500, jsonResponse.getBytes("UTF-8").length);
+                            
+                            OutputStream os = exchange.getResponseBody();
+                            os.write(jsonResponse.getBytes("UTF-8"));
+                            os.close();
+                        } catch (Exception ex) {
+                            System.err.println("发送错误响应失败: " + ex.getMessage());
                         }
                     }
-
-                    // 处理请求并获取响应（不再传递sessionId）
-                    Map<String, Object> response = routerConfig.handleRequest(path, method, requestBody, headers, null);
-
-                    // 发送响应
-                    String jsonResponse = toJson(response);
-                    // 设置正确的Content-Type和字符编码
-                    exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-                    exchange.sendResponseHeaders(200, jsonResponse.getBytes("UTF-8").length);
-
-                    OutputStream os = exchange.getResponseBody();
-                    os.write(jsonResponse.getBytes("UTF-8"));
-                    os.close();
                 }
 
                 // 替换原有的 parseRequestBody 方法
@@ -228,7 +268,7 @@ public class application {
                 }
 
                 // 新增类：封装解析结果和下一个位置
-                private static class ParseResult {
+                class ParseResult {
                     Object value;
                     int nextIndex;
 
@@ -471,12 +511,6 @@ public class application {
                     }
                     if (dto.getUserType() != null) {
                         json.append("\"userType\":\"").append(escapeJsonString(dto.getUserType())).append("\",");
-                    }
-                    if (dto.getToken() != null) {
-                        json.append("\"token\":\"").append(escapeJsonString(dto.getToken())).append("\",");
-                    }
-                    if (dto.getExpiresAt() != null) {
-                        json.append("\"expiresAt\":\"").append(dto.getExpiresAt().toString()).append("\",");
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1); // 删除最后一个逗号

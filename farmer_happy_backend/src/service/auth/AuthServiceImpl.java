@@ -6,9 +6,7 @@ import entity.User;
 import repository.DatabaseManager;
 
 import java.sql.*;
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 import java.util.ArrayList;
 
 public class AuthServiceImpl implements AuthService {
@@ -41,26 +39,36 @@ public class AuthServiceImpl implements AuthService {
 
         // 保存用户到数据库
         saveUser(user);
+        System.out.println("用户保存成功");
 
         // 根据用户类型保存扩展信息
+        System.out.println("开始保存扩展信息，用户类型: " + registerRequest.getUserType());
         if (registerRequest instanceof FarmerRegisterRequestDTO) {
+            System.out.println("保存农户扩展信息...");
             saveFarmerExtension(user.getUid(), (FarmerRegisterRequestDTO) registerRequest);
+            System.out.println("农户扩展信息保存完成");
         } else if (registerRequest instanceof BuyerRegisterRequestDTO) {
+            System.out.println("保存买家扩展信息...");
             saveBuyerExtension(user.getUid(), (BuyerRegisterRequestDTO) registerRequest);
+            System.out.println("买家扩展信息保存完成");
         } else if (registerRequest instanceof ExpertRegisterRequestDTO) {
+            System.out.println("保存专家扩展信息...");
             saveExpertExtension(user.getUid(), (ExpertRegisterRequestDTO) registerRequest);
+            System.out.println("专家扩展信息保存完成");
         } else if (registerRequest instanceof BankRegisterRequestDTO) {
+            System.out.println("保存银行扩展信息...");
             saveBankExtension(user.getUid(), (BankRegisterRequestDTO) registerRequest);
+            System.out.println("银行扩展信息保存完成");
         }
 
         // 生成认证响应
+        System.out.println("开始生成认证响应");
         AuthResponseDTO response = new AuthResponseDTO();
         response.setUid(user.getUid());
         response.setNickname(user.getNickname());
         response.setPhone(user.getPhone());
         response.setUserType(user.getUserType());
-        response.setToken(UUID.randomUUID().toString()); // 简化处理，实际应使用JWT
-        response.setExpiresAt(LocalDateTime.now().plusHours(1));
+        System.out.println("认证响应生成完成");
 
         return response;
     }
@@ -93,8 +101,6 @@ public class AuthServiceImpl implements AuthService {
         response.setNickname(user.getNickname());
         response.setPhone(user.getPhone());
         response.setUserType(user.getUserType());
-        response.setToken(UUID.randomUUID().toString());
-        response.setExpiresAt(LocalDateTime.now().plusHours(1));
 
         return response;
     }
@@ -278,8 +284,16 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void saveFarmerExtension(String uid, FarmerRegisterRequestDTO farmerRequest) throws SQLException {
+        System.out.println("saveFarmerExtension - 开始");
+        System.out.println("UID: " + uid);
+        System.out.println("农场名称: " + farmerRequest.getFarmName());
+        System.out.println("农场地址: " + farmerRequest.getFarmAddress());
+        System.out.println("农场规模: " + farmerRequest.getFarmSize());
+        
         try {
             Connection conn = databaseManager.getConnection();
+            System.out.println("saveFarmerExtension - 数据库连接成功");
+            
             PreparedStatement stmt = conn.prepareStatement(
                     "INSERT INTO user_farmers (uid, farm_name, farm_address, farm_size) VALUES (?, ?, ?, ?)"
             );
@@ -292,9 +306,13 @@ public class AuthServiceImpl implements AuthService {
                 stmt.setNull(4, Types.DOUBLE);
             }
 
-            stmt.executeUpdate();
+            System.out.println("saveFarmerExtension - 执行插入操作");
+            int result = stmt.executeUpdate();
+            System.out.println("saveFarmerExtension - 插入结果: " + result);
+            
             stmt.close();
             conn.close();
+            System.out.println("saveFarmerExtension - 数据库资源已关闭");
         } catch (SQLException e) {
             System.err.println("保存农户扩展信息失败: " + e.getMessage());
             e.printStackTrace();
