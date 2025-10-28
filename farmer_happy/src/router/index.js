@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Login from '../components/Login.vue';
 import Register from '../components/Register.vue';
+import Home from '../home/Home.vue';
 
 const routes = [
   {
@@ -16,12 +17,32 @@ const routes = [
     path: '/register',
     name: 'Register',
     component: Register
+  },
+  {
+    path: '/home',
+    name: 'Home',
+    component: Home,
+    meta: { requiresAuth: true }
   }
 ];
 
 const router = createRouter({
   history: createWebHistory(process.env.BASE_URL),
   routes
+});
+
+// 路由守卫
+router.beforeEach((to, from, next) => {
+  const userStr = localStorage.getItem('user');
+  const isAuthenticated = !!userStr;
+
+  if (to.meta.requiresAuth && !isAuthenticated) {
+    next('/login');
+  } else if (to.path === '/login' && isAuthenticated) {
+    next('/home');
+  } else {
+    next();
+  }
 });
 
 export default router;

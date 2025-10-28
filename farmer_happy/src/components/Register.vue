@@ -377,20 +377,64 @@ export default {
         await authService.register(form);
         logger.info('REGISTER_COMPONENT', '注册成功，准备跳转到登录页');
         logger.navigation('/register', '/login');
+        
+        // 显示成功提示
+        alert('注册成功！即将跳转到登录页面');
         router.push('/login');
       } catch (error) {
         logger.error('REGISTER_COMPONENT', '注册失败', {
           phone: form.phone,
           userType: form.user_type,
+          errorCode: error.code,
           errorMessage: error.message || error
         }, error);
         
-        if (error.message === 'Phone already exists') {
-          errors.phone = '该手机号已被注册';
-          logger.warn('REGISTER_COMPONENT', '手机号已存在', { phone: form.phone });
+        // 先清空所有错误信息
+        Object.keys(errors).forEach(key => errors[key] = '');
+        
+        // 根据错误码处理不同情况
+        if (error.code === 409) {
+          // 该手机号已注册此用户类型
+          errors.phone = '该手机号已注册此用户类型，请选择其他用户类型或直接登录';
+          logger.warn('REGISTER_COMPONENT', '该手机号已注册此用户类型', { 
+            phone: form.phone,
+            userType: form.user_type
+          });
+        } else if (error.code === 400) {
+          // 可能是密码错误或参数验证失败
+          if (error.message === '密码错误') {
+            errors.password = '该手机号已存在，但密码不正确。如果您已注册过其他身份，请使用相同的密码';
+            logger.warn('REGISTER_COMPONENT', '手机号已存在但密码错误', { 
+              phone: form.phone 
+            });
+          } else if (error.message === '参数验证失败' && error.errors && error.errors.length > 0) {
+            // 处理字段级别的错误
+            console.log('参数验证失败，详细错误：', error.errors);
+            error.errors.forEach(err => {
+              console.log('处理错误字段：', err.field, err.message);
+              if (Object.prototype.hasOwnProperty.call(errors, err.field)) {
+                errors[err.field] = err.message;
+              } else {
+                // 如果前端没有对应的错误字段，显示在密码字段
+                console.warn('未找到对应的错误字段：', err.field);
+              }
+            });
+            logger.warn('REGISTER_COMPONENT', '参数验证失败', { errors: error.errors });
+          } else {
+            // 其他 400 错误
+            errors.password = error.message || '注册失败，请检查输入信息';
+            logger.warn('REGISTER_COMPONENT', '注册失败', { message: error.message });
+          }
+        } else if (error.code === 401) {
+          errors.password = '认证失败，请重新尝试';
+          logger.warn('REGISTER_COMPONENT', '认证失败');
         } else {
-          errors.password = '注册失败，请稍后重试';
-          logger.error('REGISTER_COMPONENT', '注册出现未知错误');
+          // 500 或其他错误
+          errors.password = error.message || '注册失败，服务器内部错误，请稍后重试';
+          logger.error('REGISTER_COMPONENT', '注册出现未知错误', { 
+            code: error.code,
+            message: error.message 
+          });
         }
       } finally {
         loading.value = false;

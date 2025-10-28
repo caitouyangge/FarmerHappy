@@ -27,7 +27,15 @@ export const authService = {
                     code: response.data.code,
                     message: response.data.message
                 });
-                throw new Error(response.data.message || '注册失败');
+                
+                // 根据不同的错误码抛出详细的错误信息
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+                
+                throw errorObj;
             }
             
             logger.info('AUTH', '用户注册成功', { 
@@ -42,7 +50,27 @@ export const authService = {
                 phone: userData.phone,
                 errorMessage: error.response?.data?.message || error.message
             }, error);
-            throw error.response?.data?.message || error.message || error;
+            
+            // 如果是 axios 错误，提取详细的错误信息
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+            
+            // 如果已经是我们构造的错误对象，直接抛出
+            if (error.code && error.message) {
+                throw error;
+            }
+            
+            // 其他错误
+            throw {
+                code: 500,
+                message: error.message || '注册失败，请稍后重试',
+                errors: []
+            };
         }
     },
 

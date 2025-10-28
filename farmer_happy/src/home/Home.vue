@@ -1,0 +1,409 @@
+<template>
+  <div class="home-container">
+    <!-- 顶部导航栏 -->
+    <header class="header">
+      <!-- 左侧用户信息 -->
+      <div class="user-info">
+        <div class="avatar">{{ userInitial }}</div>
+        <div class="user-details">
+          <div class="user-name">{{ userInfo.nickname || '用户' }}</div>
+          <div class="user-phone">{{ userInfo.phone }}</div>
+          <div class="user-role">{{ userRoleText }}</div>
+        </div>
+      </div>
+
+      <!-- 右侧登出按钮 -->
+      <button class="btn-logout" @click="handleLogout">
+        <span class="logout-icon">⎋</span>
+        登出
+      </button>
+    </header>
+
+    <!-- 主内容区域 -->
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 欢迎标题 -->
+        <div class="welcome-section">
+          <h1 class="welcome-title">{{ welcomeMessage }}</h1>
+          <p class="welcome-subtitle">{{ subtitleMessage }}</p>
+        </div>
+
+        <!-- 功能模块区域 -->
+        <div class="modules-section">
+          <h2 class="section-title">功能模块</h2>
+          <div class="modules-grid">
+            <div 
+              v-for="module in availableModules" 
+              :key="module.id"
+              class="module-card"
+              @click="handleModuleClick(module)"
+            >
+              <div class="module-icon">{{ module.icon }}</div>
+              <h3 class="module-name">{{ module.name }}</h3>
+              <p class="module-desc">{{ module.description }}</p>
+              <div class="module-arrow">→</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</template>
+
+<script>
+import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { authService } from '../api/auth';
+import logger from '../utils/logger';
+
+export default {
+  name: 'Home',
+  setup() {
+    const router = useRouter();
+    const userInfo = ref({});
+
+    // 获取用户信息
+    onMounted(() => {
+      logger.lifecycle('Home', 'mounted');
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          userInfo.value = JSON.parse(storedUser);
+          logger.info('HOME', '加载用户信息成功', { userType: userInfo.value.userType });
+        } catch (error) {
+          logger.error('HOME', '解析用户信息失败', {}, error);
+          router.push('/login');
+        }
+      } else {
+        logger.warn('HOME', '未找到用户信息，跳转到登录页');
+        router.push('/login');
+      }
+    });
+
+    // 用户名首字母
+    const userInitial = computed(() => {
+      const name = userInfo.value.nickname || userInfo.value.phone || 'U';
+      return name.charAt(0).toUpperCase();
+    });
+
+    // 用户角色文本
+    const userRoleText = computed(() => {
+      const roleMap = {
+        farmer: '农户',
+        buyer: '买家',
+        expert: '技术专家',
+        bank: '银行'
+      };
+      return roleMap[userInfo.value.userType] || '未知';
+    });
+
+    // 欢迎信息
+    const welcomeMessage = computed(() => {
+      const hour = new Date().getHours();
+      let greeting = '你好';
+      if (hour>5 && hour < 12) greeting = '早上好';
+      else if (hour>12 && hour < 18) greeting = '下午好';
+      else if (hour>18 && hour < 21) greeting = '晚上好';
+      else greeting = '凌晨好';
+      
+      return `${greeting}，${userInfo.value.nickname || '用户'}`;
+    });
+
+    // 副标题信息
+    const subtitleMessage = computed(() => {
+      if (userInfo.value.userType === 'farmer') {
+        return '欢迎来到农乐平台，在这里管理您的农产品';
+      } else if (userInfo.value.userType === 'buyer') {
+        return '欢迎来到农乐平台，发现优质农产品';
+      }
+      return '欢迎来到农乐平台';
+    });
+
+    // 根据用户类型获取可用的功能模块
+    const availableModules = computed(() => {
+      const modules = {
+        farmer: [
+          {
+            id: 'trading',
+            name: '农产品交易',
+            description: '发布和管理您的农产品，查看交易订单',
+            icon: '🌾',
+            route: '/trading'
+          },
+          {
+            id: 'loan',
+            name: '贷款',
+            description: '申请农业贷款，查看贷款进度',
+            icon: '💰',
+            route: '/loan'
+          },
+          {
+            id: 'learning',
+            name: '农业知识学习',
+            description: '学习先进的农业技术和知识',
+            icon: '📚',
+            route: '/learning'
+          }
+        ],
+        buyer: [
+          {
+            id: 'trading',
+            name: '农产品交易',
+            description: '浏览优质农产品，下单购买',
+            icon: '🌾',
+            route: '/trading'
+          }
+        ]
+      };
+
+      return modules[userInfo.value.userType] || [];
+    });
+
+    // 登出
+    const handleLogout = () => {
+      logger.userAction('LOGOUT_CLICK', { userType: userInfo.value.userType });
+      authService.logout();
+      router.push('/login');
+    };
+
+    // 点击功能模块
+    const handleModuleClick = (module) => {
+      logger.userAction('MODULE_CLICK', { 
+        moduleId: module.id,
+        moduleName: module.name,
+        userType: userInfo.value.userType 
+      });
+      
+      // 暂时使用提示，后续可以跳转到对应的路由
+      alert(`即将进入：${module.name}\n功能开发中...`);
+      // router.push(module.route);
+    };
+
+    return {
+      userInfo,
+      userInitial,
+      userRoleText,
+      welcomeMessage,
+      subtitleMessage,
+      availableModules,
+      handleLogout,
+      handleModuleClick
+    };
+  }
+};
+</script>
+
+<style scoped>
+@import '../assets/styles/theme.css';
+
+.home-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+}
+
+/* 顶部导航栏 */
+.header {
+  background: var(--white);
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(107, 70, 193, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(107, 70, 193, 0.3);
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.user-role {
+  font-size: 0.875rem;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.btn-logout {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: transparent;
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+  color: var(--gray-500);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-logout:hover {
+  background: var(--gray-100);
+  border-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.logout-icon {
+  font-size: 1.125rem;
+}
+
+/* 主内容区域 */
+.main-content {
+  padding: 2rem;
+}
+
+.content-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* 欢迎区域 */
+.welcome-section {
+  background: var(--white);
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.08);
+  margin-bottom: 2rem;
+}
+
+.welcome-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+.welcome-subtitle {
+  font-size: 1rem;
+  color: var(--gray-500);
+  margin: 0;
+}
+
+/* 功能模块区域 */
+.modules-section {
+  margin-top: 2rem;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1a202c;
+  margin-bottom: 1.5rem;
+}
+
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.module-card {
+  background: var(--white);
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.08);
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+  border: 2px solid transparent;
+}
+
+.module-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 24px rgba(107, 70, 193, 0.15);
+  border-color: var(--primary-light);
+}
+
+.module-icon {
+  font-size: 3.5rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+}
+
+.module-name {
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: #1a202c;
+  margin: 0 0 0.75rem 0;
+}
+
+.module-desc {
+  font-size: 0.9375rem;
+  color: var(--gray-500);
+  line-height: 1.6;
+  margin: 0;
+  min-height: 2.8rem;
+}
+
+.module-arrow {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  font-size: 1.5rem;
+  color: var(--primary);
+  transition: transform 0.3s;
+}
+
+.module-card:hover .module-arrow {
+  transform: translateX(6px);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .header {
+    padding: 1rem;
+  }
+
+  .main-content {
+    padding: 1rem;
+  }
+
+  .welcome-section {
+    padding: 1.5rem;
+  }
+
+  .welcome-title {
+    font-size: 1.5rem;
+  }
+
+  .modules-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .module-card {
+    padding: 1.5rem;
+  }
+}
+</style>
+

@@ -27,6 +27,22 @@
           <span v-if="errors.password" class="form-error">{{ errors.password }}</span>
         </div>
 
+        <div class="form-group">
+          <label class="form-label">用户类型</label>
+          <select
+            v-model="form.userType"
+            class="form-input"
+            :class="{ 'error': errors.userType }"
+          >
+            <option value="">请选择用户类型</option>
+            <option value="farmer">农户</option>
+            <option value="buyer">买家</option>
+            <option value="expert">技术专家</option>
+            <option value="bank">银行</option>
+          </select>
+          <span v-if="errors.userType" class="form-error">{{ errors.userType }}</span>
+        </div>
+
         <button type="submit" class="btn btn-primary" :disabled="loading">
           {{ loading ? '登录中...' : '登录' }}
         </button>
@@ -53,11 +69,13 @@ export default {
     const loading = ref(false);
     const form = reactive({
       phone: '',
-      password: ''
+      password: '',
+      userType: ''
     });
     const errors = reactive({
       phone: '',
-      password: ''
+      password: '',
+      userType: ''
     });
 
     onMounted(() => {
@@ -74,6 +92,7 @@ export default {
       let isValid = true;
       errors.phone = '';
       errors.password = '';
+      errors.userType = '';
 
       if (!form.phone) {
         errors.phone = '请输入手机号';
@@ -88,12 +107,17 @@ export default {
         isValid = false;
       }
 
+      if (!form.userType) {
+        errors.userType = '请选择用户类型';
+        isValid = false;
+      }
+
       logger.validation('LoginForm', isValid, errors);
       return isValid;
     };
 
     const handleSubmit = async () => {
-      logger.userAction('LOGIN_SUBMIT', { phone: form.phone });
+      logger.userAction('LOGIN_SUBMIT', { phone: form.phone, userType: form.userType });
       
       if (!validateForm()) {
         logger.warn('LOGIN_COMPONENT', '表单验证失败');
@@ -101,7 +125,10 @@ export default {
       }
 
       loading.value = true;
-      logger.info('LOGIN_COMPONENT', '开始提交登录请求', { phone: form.phone });
+      logger.info('LOGIN_COMPONENT', '开始提交登录请求', { 
+        phone: form.phone,
+        userType: form.userType 
+      });
       
       try {
         await authService.login(form);
@@ -111,6 +138,7 @@ export default {
       } catch (error) {
         logger.error('LOGIN_COMPONENT', '登录失败', {
           phone: form.phone,
+          userType: form.userType,
           errorMessage: error.message || error
         }, error);
         

@@ -32,21 +32,22 @@ if not exist "node_modules" (
 )
 cd ..
 
-echo [2/4] 编译后端代码...
-cd farmer_happy_backend\src
-javac -encoding UTF-8 -cp ".;..\lib\*" application.java
+echo [2/4] 编译后端代码（使用 Maven）...
+cd farmer_happy_backend
+echo [提示] 正在使用 Maven 编译项目...
+call mvn clean compile
 if errorlevel 1 (
-    echo [错误] 后端编译失败！
-    cd ..\..
+    echo [错误] Maven 编译失败！
+    cd ..
     pause
     exit /b 1
 )
 echo [成功] 后端编译完成！
-cd ..\..
+cd ..
 
 echo.
 echo [3/4] 启动后端服务（新窗口）...
-start "农乐平台-后端服务" cmd /k "cd /d %cd%\farmer_happy_backend\src && echo 正在启动后端服务... && java -cp ".;..\lib\*" application"
+start "农乐平台-后端服务" cmd /k "cd /d %cd%\farmer_happy_backend && echo 正在启动后端服务... && mvn exec:java -Dexec.mainClass=application"
 
 echo [提示] 等待后端启动...
 timeout /t 3 /nobreak >nul
@@ -69,4 +70,3 @@ echo [提示] 按 F12 打开浏览器控制台查看日志
 echo [提示] 按 Ctrl+C 可停止相应服务
 echo.
 pause
-
