@@ -5,6 +5,7 @@ public class CommentReplyItemDTO {
     private String commentId;
     private String authorUserId;
     private String authorNickname;
+    private String authorRole;
     private String replyToUserId;
     private String replyToNickname;
     private String content;
@@ -33,6 +34,14 @@ public class CommentReplyItemDTO {
 
     public void setAuthorNickname(String authorNickname) {
         this.authorNickname = authorNickname;
+    }
+
+    public String getAuthorRole() {
+        return authorRole;
+    }
+
+    public void setAuthorRole(String authorRole) {
+        this.authorRole = authorRole;
     }
 
     public String getReplyToUserId() {

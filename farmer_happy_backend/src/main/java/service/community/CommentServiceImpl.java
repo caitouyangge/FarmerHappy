@@ -176,6 +176,7 @@ public class CommentServiceImpl implements CommentService {
                     replyDTO.setCommentId(reply.getCommentId());
                     replyDTO.setAuthorUserId(reply.getAuthorUserId());
                     replyDTO.setAuthorNickname(reply.getAuthorNickname());
+                    replyDTO.setAuthorRole(reply.getAuthorRole());
                     replyDTO.setReplyToUserId(reply.getReplyToUserId());
                     replyDTO.setReplyToNickname(reply.getReplyToNickname());
                     replyDTO.setContent(reply.getContent());

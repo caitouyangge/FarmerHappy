@@ -3,6 +3,9 @@ import Login from '../components/Login.vue';
 import Register from '../components/Register.vue';
 import Home from '../home/Home.vue';
 import ProductList from '../trading/ProductList.vue';
+import Community from '../community/Community.vue';
+import ContentDetail from '../community/ContentDetail.vue';
+import ContentForm from '../community/ContentForm.vue';
 
 const routes = [
   {
@@ -29,6 +32,24 @@ const routes = [
     path: '/trading',
     name: 'Trading',
     component: ProductList,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/community',
+    name: 'Community',
+    component: Community,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/community/publish',
+    name: 'ContentForm',
+    component: ContentForm,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/community/:id',
+    name: 'ContentDetail',
+    component: ContentDetail,
     meta: { requiresAuth: true }
   }
 ];

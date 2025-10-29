@@ -883,6 +883,9 @@ public class application {
                     if (dto.getAuthorNickname() != null) {
                         json.append("\"author_nickname\":\"").append(escapeJsonString(dto.getAuthorNickname())).append("\",");
                     }
+                    if (dto.getAuthorRole() != null) {
+                        json.append("\"author_role\":\"").append(escapeJsonString(dto.getAuthorRole())).append("\",");
+                    }
                     if (dto.getReplyToUserId() != null) {
                         json.append("\"reply_to_user_id\":\"").append(escapeJsonString(dto.getReplyToUserId())).append("\",");
                     }

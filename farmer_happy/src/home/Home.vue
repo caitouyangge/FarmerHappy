@@ -115,6 +115,8 @@ export default {
         return '欢迎来到农乐平台，在这里管理您的农产品';
       } else if (userInfo.value.userType === 'buyer') {
         return '欢迎来到农乐平台，发现优质农产品';
+      } else if (userInfo.value.userType === 'expert') {
+        return '欢迎来到农乐平台，与农户分享专业知识';
       }
       return '欢迎来到农乐平台';
     });
@@ -131,18 +133,27 @@ export default {
             route: '/trading'
           },
           {
+            id: 'community',
+            name: '专家农户交流平台',
+            description: '与专家和其他农户交流，分享经验与提问',
+            icon: '💬',
+            route: '/community'
+          },
+          {
             id: 'loan',
             name: '贷款',
             description: '申请农业贷款，查看贷款进度',
             icon: '💰',
             route: '/loan'
           },
+        ],
+        expert: [
           {
-            id: 'learning',
-            name: '农业知识学习',
-            description: '学习先进的农业技术和知识',
-            icon: '📚',
-            route: '/learning'
+            id: 'community',
+            name: '专家农户交流平台',
+            description: '与农户交流，分享专业知识与解答问题',
+            icon: '💬',
+            route: '/community'
           }
         ],
         buyer: [
@@ -174,8 +185,8 @@ export default {
         userType: userInfo.value.userType 
       });
       
-      // 农产品交易模块可以直接跳转
-      if (module.id === 'trading') {
+      // 支持路由的模块直接跳转
+      if (module.id === 'trading' || module.id === 'community') {
         router.push(module.route);
       } else {
         // 其他模块暂时使用提示
