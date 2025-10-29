@@ -6,7 +6,7 @@ public class DatabaseManager {
     private static final String URL = "jdbc:mysql://localhost:3306/";
     private static final String DB_NAME = "farmer_happy";
     private static final String USERNAME = "root";
-    private static final String PASSWORD = "root";
+    private static final String PASSWORD = "123456";
     private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
 
     private Connection connection;
@@ -62,6 +62,7 @@ public class DatabaseManager {
                             "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
                             "    shipping_address VARCHAR(500) COMMENT '默认收货地址'," +
                             "    member_level ENUM('regular', 'silver', 'gold', 'platinum') DEFAULT 'regular' COMMENT '会员等级'," +
+                            "    money DECIMAL(10,2) DEFAULT 0 COMMENT '账户余额（元）'," +
                             "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用买家功能'," +
                             "    UNIQUE KEY uk_uid (uid)," +
                             "    INDEX idx_enable (enable)," +
@@ -78,6 +79,7 @@ public class DatabaseManager {
                             "    farm_name VARCHAR(100) NOT NULL COMMENT '农场名称'," +
                             "    farm_address VARCHAR(200) COMMENT '农场地址'," +
                             "    farm_size DECIMAL(10,2) COMMENT '农场面积（亩）'," +
+                            "    money DECIMAL(10,2) DEFAULT 0 COMMENT '账户余额（元）'," +
                             "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用农户功能'," +
                             "    UNIQUE KEY uk_uid (uid)," +
                             "    INDEX idx_enable (enable)," +
@@ -111,6 +113,7 @@ public class DatabaseManager {
                             "    branch_name VARCHAR(100) COMMENT '分行名称'," +
                             "    contact_person VARCHAR(50) COMMENT '联系人'," +
                             "    contact_phone VARCHAR(20) COMMENT '联系电话'," +
+                            "    money DECIMAL(10,2) DEFAULT 0 COMMENT '账户余额（元）'," +
                             "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用银行功能'," +
                             "    UNIQUE KEY uk_uid (uid)," +
                             "    INDEX idx_enable (enable)," +
