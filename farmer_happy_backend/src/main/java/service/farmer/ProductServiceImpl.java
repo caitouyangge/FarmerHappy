@@ -19,7 +19,7 @@ public class ProductServiceImpl implements ProductService {
     private AuthService authService;
 
     public ProductServiceImpl() {
-        this.databaseManager = new DatabaseManager();
+        this.databaseManager = DatabaseManager.getInstance();
         this.authService = new AuthServiceImpl();
     }
 

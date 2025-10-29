@@ -3,12 +3,15 @@ package config;
 
 import controller.AuthController;
 import controller.ProductController;
+import controller.ContentController;
+import controller.CommentController;
 import dto.auth.*;
 import dto.farmer.FarmerRegisterRequestDTO;
 import dto.farmer.ProductBatchActionRequestDTO;
 import dto.farmer.ProductCreateRequestDTO;
 import dto.farmer.ProductStatusUpdateRequestDTO;
 import dto.farmer.ProductUpdateRequestDTO;
+import dto.community.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,13 +23,71 @@ import java.util.regex.Pattern;
 public class RouterConfig {
     private AuthController authController;
     private ProductController productController;
+    private ContentController contentController;
+    private CommentController commentController;
 
     public RouterConfig() {
         this.authController = new AuthController();
         this.productController = new ProductController();
+        this.contentController = new ContentController();
+        this.commentController = new CommentController();
     }
 
-    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, String sessionId) {
+    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, Map<String, String> queryParams) {
+        // ============= 社区相关路由 =============
+        
+        // 处理发布内容请求
+        if ("/api/v1/content/publish".equals(path) && "POST".equals(method)) {
+            return contentController.publishContent(parsePublishContentRequest(requestBody));
+        }
+        
+        // 处理获取内容列表请求
+        if ("/api/v1/content/list".equals(path) && "GET".equals(method)) {
+            // 从查询参数中获取筛选条件
+            String contentType = queryParams != null ? queryParams.get("content_type") : null;
+            String keyword = queryParams != null ? queryParams.get("keyword") : null;
+            String sort = queryParams != null ? queryParams.get("sort") : null;
+            return contentController.getContentList(contentType, keyword, sort);
+        }
+        
+        // 处理获取内容详情请求 - /api/v1/content/{content_id}
+        Pattern contentDetailPattern = Pattern.compile("/api/v1/content/([^/]+)");
+        Matcher contentDetailMatcher = contentDetailPattern.matcher(path);
+        if (contentDetailMatcher.matches() && "GET".equals(method)) {
+            String contentId = contentDetailMatcher.group(1);
+            // 确保不是 /api/v1/content/list 或 /api/v1/content/publish
+            if (!contentId.equals("list") && !contentId.equals("publish")) {
+                return contentController.getContentDetail(contentId);
+            }
+        }
+        
+        // 处理发表评论请求 - /api/v1/content/{content_id}/comments
+        Pattern postCommentPattern = Pattern.compile("/api/v1/content/([^/]+)/comments");
+        Matcher postCommentMatcher = postCommentPattern.matcher(path);
+        if (postCommentMatcher.matches() && "POST".equals(method)) {
+            String contentId = postCommentMatcher.group(1);
+            return commentController.postComment(contentId, parsePostCommentRequest(requestBody));
+        }
+        
+        // 处理获取评论列表请求 - /api/v1/content/{content_id}/comments
+        if (postCommentPattern.matcher(path).matches() && "GET".equals(method)) {
+            Matcher matcher = postCommentPattern.matcher(path);
+            if (matcher.matches()) {
+                String contentId = matcher.group(1);
+                return commentController.getCommentList(contentId);
+            }
+        }
+        
+        // 处理回复评论请求 - /api/v1/comment/{comment_id}/replies
+        Pattern postReplyPattern = Pattern.compile("/api/v1/comment/([^/]+)/replies");
+        Matcher postReplyMatcher = postReplyPattern.matcher(path);
+        if (postReplyMatcher.matches() && "POST".equals(method)) {
+            String commentId = postReplyMatcher.group(1);
+            return commentController.postReply(commentId, parsePostReplyRequest(requestBody));
+        }
+        
+        // ============= 商品相关路由 =============
+        
         // 处理商品上架请求
         Pattern onShelfPattern = Pattern.compile("/api/v1/farmer/products/([^/]+)/on-shelf");
         Matcher onShelfMatcher = onShelfPattern.matcher(path);
@@ -132,12 +193,17 @@ public class RouterConfig {
 
     // 重载方法以保持向后兼容
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody) {
-        return handleRequest(path, method, requestBody, new HashMap<>(), null);
+        return handleRequest(path, method, requestBody, new HashMap<>(), new HashMap<>());
     }
 
     // 重载方法以保持向后兼容
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers) {
-        return handleRequest(path, method, requestBody, headers, null);
+        return handleRequest(path, method, requestBody, headers, new HashMap<>());
+    }
+    
+    // 旧的sessionId版本兼容
+    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, String sessionId) {
+        return handleRequest(path, method, requestBody, headers, new HashMap<>());
     }
 
     private Map<String, Object> handleRegister(Map<String, Object> requestBody) {
@@ -357,6 +423,44 @@ public class RouterConfig {
             request.setProduct_ids(productIds);
         }
 
+        return request;
+    }
+
+    // ============= 社区相关DTO解析方法 =============
+    
+    private PublishContentRequestDTO parsePublishContentRequest(Map<String, Object> requestBody) {
+        PublishContentRequestDTO request = new PublishContentRequestDTO();
+        request.setTitle((String) requestBody.get("title"));
+        request.setContent((String) requestBody.get("content"));
+        request.setContentType((String) requestBody.get("content_type"));
+        request.setPhone((String) requestBody.get("phone"));
+        
+        // 处理图片数组
+        if (requestBody.get("images") instanceof List) {
+            List<?> imagesObj = (List<?>) requestBody.get("images");
+            List<String> images = new ArrayList<>();
+            for (Object img : imagesObj) {
+                if (img instanceof String) {
+                    images.add((String) img);
+                }
+            }
+            request.setImages(images);
+        }
+        
+        return request;
+    }
+    
+    private PostCommentRequestDTO parsePostCommentRequest(Map<String, Object> requestBody) {
+        PostCommentRequestDTO request = new PostCommentRequestDTO();
+        request.setComment((String) requestBody.get("comment"));
+        request.setPhone((String) requestBody.get("phone"));
+        return request;
+    }
+    
+    private PostReplyRequestDTO parsePostReplyRequest(Map<String, Object> requestBody) {
+        PostReplyRequestDTO request = new PostReplyRequestDTO();
+        request.setComment((String) requestBody.get("comment"));
+        request.setPhone((String) requestBody.get("phone"));
         return request;
     }
 

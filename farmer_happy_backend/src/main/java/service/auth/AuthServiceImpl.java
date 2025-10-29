@@ -14,7 +14,7 @@ public class AuthServiceImpl implements AuthService {
     private DatabaseManager databaseManager;
 
     public AuthServiceImpl() {
-        this.databaseManager = new DatabaseManager();
+        this.databaseManager = DatabaseManager.getInstance();
     }
 
     @Override
