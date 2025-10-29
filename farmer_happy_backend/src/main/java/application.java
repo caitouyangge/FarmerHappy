@@ -8,7 +8,8 @@ import dto.farmer.ProductListResponseDTO;
 import dto.farmer.ProductResponseDTO;
 import dto.farmer.ProductStatusUpdateResponseDTO;
 import dto.farmer.ProductDetailResponseDTO;
-import dto.farmer.ProductBatchActionResultDTO; // 添加导入
+import dto.farmer.ProductBatchActionResultDTO;
+import dto.community.*;
 import repository.DatabaseManager;
 
 import java.io.BufferedReader;
@@ -28,7 +29,7 @@ public class application {
         System.out.println("农乐助农平台后端服务启动中...");
 
         // 初始化数据库管理器
-        DatabaseManager dbManager = new DatabaseManager();
+        DatabaseManager dbManager = DatabaseManager.getInstance();
 
         // 初始化数据库和表
         dbManager.initializeDatabase();
@@ -48,8 +49,9 @@ public class application {
                         // 解析请求信息
                         String path = exchange.getRequestURI().getPath();
                         String method = exchange.getRequestMethod();
+                        String query = exchange.getRequestURI().getQuery();
 
-                        System.out.println("处理请求: " + method + " " + path);
+                        System.out.println("处理请求: " + method + " " + path + (query != null ? "?" + query : ""));
 
                         // 解析请求体
                         Map<String, Object> requestBody = parseRequestBody(exchange);
@@ -62,8 +64,11 @@ public class application {
                             }
                         }
 
-                        // 处理请求并获取响应（不再传递sessionId）
-                        Map<String, Object> response = routerConfig.handleRequest(path, method, requestBody, headers, null);
+                        // 解析URL查询参数
+                        Map<String, String> queryParams = parseQueryParams(query);
+
+                        // 处理请求并获取响应（传递查询参数）
+                        Map<String, Object> response = routerConfig.handleRequest(path, method, requestBody, headers, queryParams);
 
                         System.out.println("生成响应: code=" + response.get("code"));
 
@@ -113,13 +118,37 @@ public class application {
                     }
                 }
 
+                // 解析URL查询参数
+                private Map<String, String> parseQueryParams(String query) {
+                    Map<String, String> params = new HashMap<>();
+                    if (query == null || query.trim().isEmpty()) {
+                        return params;
+                    }
+                    
+                    try {
+                        String[] pairs = query.split("&");
+                        for (String pair : pairs) {
+                            int idx = pair.indexOf("=");
+                            if (idx > 0) {
+                                String key = URLDecoder.decode(pair.substring(0, idx), "UTF-8");
+                                String value = URLDecoder.decode(pair.substring(idx + 1), "UTF-8");
+                                params.put(key, value);
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.err.println("解析查询参数失败: " + e.getMessage());
+                    }
+                    
+                    return params;
+                }
+
                 // 替换原有的 parseRequestBody 方法
                 private Map<String, Object> parseRequestBody(HttpExchange exchange) {
                     try {
                         if ("GET".equals(exchange.getRequestMethod()) ||
                                 "HEAD".equals(exchange.getRequestMethod())) {
-                            // 对于GET请求，从查询参数中解析
-                            return parseQueryParams(exchange.getRequestURI().getQuery());
+                            // 对于GET请求，返回空Map（查询参数已经单独解析）
+                            return new HashMap<>();
                         }
 
                         StringBuilder requestBody = new StringBuilder();
@@ -144,27 +173,6 @@ public class application {
                         e.printStackTrace(); // 打印完整的堆栈跟踪
                         return new HashMap<>();
                     }
-                }
-
-                // 解析查询参数
-                private Map<String, Object> parseQueryParams(String query) {
-                    Map<String, Object> params = new HashMap<>();
-                    if (query != null && !query.isEmpty()) {
-                        String[] pairs = query.split("&");
-                        for (String pair : pairs) {
-                            String[] keyValue = pair.split("=");
-                            if (keyValue.length == 2) {
-                                try {
-                                    String key = URLDecoder.decode(keyValue[0], "UTF-8");
-                                    String value = URLDecoder.decode(keyValue[1], "UTF-8");
-                                    params.put(key, value);
-                                } catch (Exception e) {
-                                    System.err.println("解码查询参数失败: " + e.getMessage());
-                                }
-                            }
-                        }
-                    }
-                    return params;
                 }
 
                 // 改进 parseJsonString 方法
@@ -483,8 +491,26 @@ public class application {
                         return serializeProductDetailResponseDTO((ProductDetailResponseDTO) value);
                     } else if (value instanceof ProductListResponseDTO) {
                         return serializeProductListResponseDTO((ProductListResponseDTO) value);
-                    } else if (value instanceof ProductBatchActionResultDTO) { // 添加对ProductBatchActionResultDTO的支持
+                    } else if (value instanceof ProductBatchActionResultDTO) {
                         return serializeProductBatchActionResultDTO((ProductBatchActionResultDTO) value);
+                    } else if (value instanceof PublishContentResponseDTO) {
+                        return serializePublishContentResponseDTO((PublishContentResponseDTO) value);
+                    } else if (value instanceof ContentListResponseDTO) {
+                        return serializeContentListResponseDTO((ContentListResponseDTO) value);
+                    } else if (value instanceof ContentDetailResponseDTO) {
+                        return serializeContentDetailResponseDTO((ContentDetailResponseDTO) value);
+                    } else if (value instanceof PostCommentResponseDTO) {
+                        return serializePostCommentResponseDTO((PostCommentResponseDTO) value);
+                    } else if (value instanceof PostReplyResponseDTO) {
+                        return serializePostReplyResponseDTO((PostReplyResponseDTO) value);
+                    } else if (value instanceof CommentListResponseDTO) {
+                        return serializeCommentListResponseDTO((CommentListResponseDTO) value);
+                    } else if (value instanceof ContentListItemDTO) {
+                        return serializeContentListItemDTO((ContentListItemDTO) value);
+                    } else if (value instanceof CommentItemDTO) {
+                        return serializeCommentItemDTO((CommentItemDTO) value);
+                    } else if (value instanceof CommentReplyItemDTO) {
+                        return serializeCommentReplyItemDTO((CommentReplyItemDTO) value);
                     } else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
                     }
@@ -685,6 +711,227 @@ public class application {
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // ============= 社区DTO序列化方法 =============
+                
+                // 序列化 PublishContentResponseDTO
+                private String serializePublishContentResponseDTO(PublishContentResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getContentId() != null) {
+                        json.append("\"content_id\":\"").append(escapeJsonString(dto.getContentId())).append("\",");
+                    }
+                    if (dto.getContentType() != null) {
+                        json.append("\"content_type\":\"").append(escapeJsonString(dto.getContentType())).append("\",");
+                    }
+                    if (dto.getCreatedAt() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreatedAt())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 ContentListItemDTO
+                private String serializeContentListItemDTO(ContentListItemDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getContentId() != null) {
+                        json.append("\"content_id\":\"").append(escapeJsonString(dto.getContentId())).append("\",");
+                    }
+                    if (dto.getTitle() != null) {
+                        json.append("\"title\":\"").append(escapeJsonString(dto.getTitle())).append("\",");
+                    }
+                    if (dto.getContent() != null) {
+                        json.append("\"content\":\"").append(escapeJsonString(dto.getContent())).append("\",");
+                    }
+                    if (dto.getContentType() != null) {
+                        json.append("\"content_type\":\"").append(escapeJsonString(dto.getContentType())).append("\",");
+                    }
+                    if (dto.getImages() != null) {
+                        json.append("\"images\":").append(serializeList(dto.getImages())).append(",");
+                    }
+                    if (dto.getAuthorName() != null) {
+                        json.append("\"author_name\":\"").append(escapeJsonString(dto.getAuthorName())).append("\",");
+                    }
+                    if (dto.getAuthorRole() != null) {
+                        json.append("\"author_role\":\"").append(escapeJsonString(dto.getAuthorRole())).append("\",");
+                    }
+                    json.append("\"view_count\":").append(dto.getViewCount()).append(",");
+                    json.append("\"comment_count\":").append(dto.getCommentCount()).append(",");
+                    if (dto.getCreatedAt() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreatedAt())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 ContentListResponseDTO
+                private String serializeContentListResponseDTO(ContentListResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    json.append("\"total\":").append(dto.getTotal()).append(",");
+                    if (dto.getList() != null) {
+                        json.append("\"list\":").append(serializeList(dto.getList())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 ContentDetailResponseDTO
+                private String serializeContentDetailResponseDTO(ContentDetailResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getContentId() != null) {
+                        json.append("\"content_id\":\"").append(escapeJsonString(dto.getContentId())).append("\",");
+                    }
+                    if (dto.getTitle() != null) {
+                        json.append("\"title\":\"").append(escapeJsonString(dto.getTitle())).append("\",");
+                    }
+                    if (dto.getContent() != null) {
+                        json.append("\"content\":\"").append(escapeJsonString(dto.getContent())).append("\",");
+                    }
+                    if (dto.getContentType() != null) {
+                        json.append("\"content_type\":\"").append(escapeJsonString(dto.getContentType())).append("\",");
+                    }
+                    if (dto.getImages() != null) {
+                        json.append("\"images\":").append(serializeList(dto.getImages())).append(",");
+                    }
+                    if (dto.getCreatedAt() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreatedAt())).append("\",");
+                    }
+                    if (dto.getAuthorUserId() != null) {
+                        json.append("\"author_user_id\":\"").append(escapeJsonString(dto.getAuthorUserId())).append("\",");
+                    }
+                    if (dto.getAuthorNickname() != null) {
+                        json.append("\"author_nickname\":\"").append(escapeJsonString(dto.getAuthorNickname())).append("\",");
+                    }
+                    if (dto.getAuthorRole() != null) {
+                        json.append("\"author_role\":\"").append(escapeJsonString(dto.getAuthorRole())).append("\",");
+                    }
+                    json.append("\"view_count\":").append(dto.getViewCount()).append(",");
+                    json.append("\"comment_count\":").append(dto.getCommentCount()).append(",");
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 PostCommentResponseDTO
+                private String serializePostCommentResponseDTO(PostCommentResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getCommentId() != null) {
+                        json.append("\"comment_id\":\"").append(escapeJsonString(dto.getCommentId())).append("\",");
+                    }
+                    if (dto.getCreatedAt() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreatedAt())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 PostReplyResponseDTO
+                private String serializePostReplyResponseDTO(PostReplyResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getCommentId() != null) {
+                        json.append("\"comment_id\":\"").append(escapeJsonString(dto.getCommentId())).append("\",");
+                    }
+                    if (dto.getParentCommentId() != null) {
+                        json.append("\"parent_comment_id\":\"").append(escapeJsonString(dto.getParentCommentId())).append("\",");
+                    }
+                    if (dto.getCreatedAt() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreatedAt())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 CommentReplyItemDTO
+                private String serializeCommentReplyItemDTO(CommentReplyItemDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getCommentId() != null) {
+                        json.append("\"comment_id\":\"").append(escapeJsonString(dto.getCommentId())).append("\",");
+                    }
+                    if (dto.getAuthorUserId() != null) {
+                        json.append("\"author_user_id\":\"").append(escapeJsonString(dto.getAuthorUserId())).append("\",");
+                    }
+                    if (dto.getAuthorNickname() != null) {
+                        json.append("\"author_nickname\":\"").append(escapeJsonString(dto.getAuthorNickname())).append("\",");
+                    }
+                    if (dto.getReplyToUserId() != null) {
+                        json.append("\"reply_to_user_id\":\"").append(escapeJsonString(dto.getReplyToUserId())).append("\",");
+                    }
+                    if (dto.getReplyToNickname() != null) {
+                        json.append("\"reply_to_nickname\":\"").append(escapeJsonString(dto.getReplyToNickname())).append("\",");
+                    }
+                    if (dto.getContent() != null) {
+                        json.append("\"content\":\"").append(escapeJsonString(dto.getContent())).append("\",");
+                    }
+                    if (dto.getCreatedAt() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreatedAt())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 CommentItemDTO
+                private String serializeCommentItemDTO(CommentItemDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getCommentId() != null) {
+                        json.append("\"comment_id\":\"").append(escapeJsonString(dto.getCommentId())).append("\",");
+                    }
+                    if (dto.getAuthorUserId() != null) {
+                        json.append("\"author_user_id\":\"").append(escapeJsonString(dto.getAuthorUserId())).append("\",");
+                    }
+                    if (dto.getAuthorNickname() != null) {
+                        json.append("\"author_nickname\":\"").append(escapeJsonString(dto.getAuthorNickname())).append("\",");
+                    }
+                    if (dto.getAuthorRole() != null) {
+                        json.append("\"author_role\":\"").append(escapeJsonString(dto.getAuthorRole())).append("\",");
+                    }
+                    if (dto.getContent() != null) {
+                        json.append("\"content\":\"").append(escapeJsonString(dto.getContent())).append("\",");
+                    }
+                    if (dto.getCreatedAt() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreatedAt())).append("\",");
+                    }
+                    if (dto.getReplies() != null) {
+                        json.append("\"replies\":").append(serializeList(dto.getReplies())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 CommentListResponseDTO
+                private String serializeCommentListResponseDTO(CommentListResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    json.append("\"total_comments\":").append(dto.getTotalComments()).append(",");
+                    if (dto.getList() != null) {
+                        json.append("\"list\":").append(serializeList(dto.getList())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
                     }
                     json.append("}");
                     return json.toString();
