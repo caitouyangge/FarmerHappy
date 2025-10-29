@@ -5,7 +5,7 @@ import controller.AuthController;
 import controller.ProductController;
 import dto.auth.*;
 import dto.farmer.FarmerRegisterRequestDTO;
-import dto.farmer.ProductBatchActionRequestDTO; // 新增导入
+import dto.farmer.ProductBatchActionRequestDTO;
 import dto.farmer.ProductCreateRequestDTO;
 import dto.farmer.ProductStatusUpdateRequestDTO;
 import dto.farmer.ProductUpdateRequestDTO;
@@ -237,7 +237,7 @@ public class RouterConfig {
     private ProductCreateRequestDTO parseProductRequest(Map<String, Object> requestBody) {
         ProductCreateRequestDTO request = new ProductCreateRequestDTO();
         request.setTitle((String) requestBody.get("title"));
-        request.setSpecification((String) requestBody.get("specification"));
+        request.setDetailedDescription((String) requestBody.get("detailed_description"));
 
         // 处理 price 字段
         Object priceObj = requestBody.get("price");
@@ -292,7 +292,7 @@ public class RouterConfig {
     private ProductUpdateRequestDTO parseProductUpdateRequest(Map<String, Object> requestBody) {
         ProductUpdateRequestDTO request = new ProductUpdateRequestDTO();
         request.setTitle((String) requestBody.get("title"));
-        request.setSpecification((String) requestBody.get("specification"));
+        request.setDetailedDescription((String) requestBody.get("detailed_description"));
 
         // 处理 price 字段
         Object priceObj = requestBody.get("price");

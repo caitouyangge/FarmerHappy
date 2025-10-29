@@ -161,7 +161,7 @@ public class DatabaseManager {
                             "    category ENUM('vegetables', 'fruits', 'grains', 'livestock', 'aquatic') " +
                             "        NOT NULL COMMENT '商品分类'," +
                             "    title VARCHAR(100) NOT NULL COMMENT '商品标题'," +
-                            "    specification VARCHAR(200) NOT NULL COMMENT '商品规格描述'," +
+                            "    detailed_description VARCHAR(200) NOT NULL COMMENT '商品详细介绍'," +
                             "    price DECIMAL(10,2) NOT NULL COMMENT '价格(元)'," +
                             "    stock INT NOT NULL DEFAULT 0 COMMENT '库存数量'," +
                             "    description TEXT COMMENT '商品图文详细描述(HTML格式)'," +
@@ -217,6 +217,16 @@ public class DatabaseManager {
                             "    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE" +
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品审核记录表';";
             dbStatement.executeUpdate(createProductReviewsTable);
+
+            // 更新表结构：将specification列改为detailed_description
+            try {
+                String alterTableSql = "ALTER TABLE products CHANGE COLUMN specification detailed_description VARCHAR(200) NOT NULL COMMENT '商品详细介绍'";
+                dbStatement.executeUpdate(alterTableSql);
+                System.out.println("表结构更新成功：specification -> detailed_description");
+            } catch (SQLException e) {
+                // 如果列不存在或已经更新过，忽略错误
+                System.out.println("表结构更新跳过：" + e.getMessage());
+            }
 
             dbStatement.close();
             dbConnection.close();

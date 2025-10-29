@@ -431,7 +431,7 @@ export default {
         } else {
           // 500 或其他错误
           errors.password = error.message || '注册失败，服务器内部错误，请稍后重试';
-          logger.error('REGISTER_COMPONENT', '注册出现未知错误', { 
+          logger.error('REGISTER_COMPONENT', '注册出现无错误', { 
             code: error.code,
             message: error.message 
           });

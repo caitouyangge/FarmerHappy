@@ -9,7 +9,7 @@ public class Product {
     private Long farmerId;
     private String category;
     private String title;
-    private String specification;
+    private String detailedDescription;
     private double price;
     private int stock;
     private String description;
@@ -54,12 +54,12 @@ public class Product {
         this.title = title;
     }
 
-    public String getSpecification() {
-        return specification;
+    public String getDetailedDescription() {
+        return detailedDescription;
     }
 
-    public void setSpecification(String specification) {
-        this.specification = specification;
+    public void setDetailedDescription(String detailedDescription) {
+        this.detailedDescription = detailedDescription;
     }
 
     public double getPrice() {

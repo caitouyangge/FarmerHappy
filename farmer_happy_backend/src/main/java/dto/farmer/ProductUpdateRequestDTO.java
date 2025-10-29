@@ -5,7 +5,7 @@ import java.util.List;
 
 public class ProductUpdateRequestDTO {
     private String title;
-    private String specification;
+    private String detailedDescription;
     private Double price;  // 改为 Double 包装类型
     private Integer stock; // 改为 Integer 包装类型
     private String description;
@@ -23,12 +23,12 @@ public class ProductUpdateRequestDTO {
         this.title = title;
     }
 
-    public String getSpecification() {
-        return specification;
+    public String getDetailedDescription() {
+        return detailedDescription;
     }
 
-    public void setSpecification(String specification) {
-        this.specification = specification;
+    public void setDetailedDescription(String detailedDescription) {
+        this.detailedDescription = detailedDescription;
     }
 
     public Double getPrice() {

@@ -83,11 +83,15 @@ public class application {
                             }
                         }
                         
-                        exchange.sendResponseHeaders(httpStatusCode, jsonResponse.getBytes("UTF-8").length);
-
-                        OutputStream os = exchange.getResponseBody();
-                        os.write(jsonResponse.getBytes("UTF-8"));
-                        os.close();
+                        // 对于204状态码，不发送响应体
+                        if (httpStatusCode == 204) {
+                            exchange.sendResponseHeaders(httpStatusCode, -1);
+                        } else {
+                            exchange.sendResponseHeaders(httpStatusCode, jsonResponse.getBytes("UTF-8").length);
+                            OutputStream os = exchange.getResponseBody();
+                            os.write(jsonResponse.getBytes("UTF-8"));
+                            os.close();
+                        }
                         
                         System.out.println("响应发送完成");
                     } catch (Exception e) {
@@ -109,6 +113,12 @@ public class application {
                             os.close();
                         } catch (Exception ex) {
                             System.err.println("发送错误响应失败: " + ex.getMessage());
+                            // 如果发送错误响应也失败，尝试发送基本的错误状态码
+                            try {
+                                exchange.sendResponseHeaders(500, -1);
+                            } catch (Exception ex2) {
+                                System.err.println("发送基本错误状态码也失败: " + ex2.getMessage());
+                            }
                         }
                     }
                 }
@@ -564,8 +574,8 @@ public class application {
                     if (dto.getTitle() != null) {
                         json.append("\"title\":\"").append(escapeJsonString(dto.getTitle())).append("\",");
                     }
-                    if (dto.getSpecification() != null) {
-                        json.append("\"specification\":\"").append(escapeJsonString(dto.getSpecification())).append("\",");
+                    if (dto.getDetailedDescription() != null) {
+                        json.append("\"detailed_description\":\"").append(escapeJsonString(dto.getDetailedDescription())).append("\",");
                     }
                     json.append("\"price\":").append(dto.getPrice()).append(",");
                     json.append("\"stock\":").append(dto.getStock()).append(",");
@@ -618,8 +628,8 @@ public class application {
                     if (dto.getTitle() != null) {
                         json.append("\"title\":\"").append(escapeJsonString(dto.getTitle())).append("\",");
                     }
-                    if (dto.getSpecification() != null) {
-                        json.append("\"specification\":\"").append(escapeJsonString(dto.getSpecification())).append("\",");
+                    if (dto.getDetailedDescription() != null) {
+                        json.append("\"detailed_description\":\"").append(escapeJsonString(dto.getDetailedDescription())).append("\",");
                     }
                     json.append("\"price\":").append(dto.getPrice()).append(",");
                     json.append("\"stock\":").append(dto.getStock()).append(",");

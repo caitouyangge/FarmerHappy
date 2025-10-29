@@ -94,7 +94,7 @@ export default {
         expert: '技术专家',
         bank: '银行'
       };
-      return roleMap[userInfo.value.userType] || '未知';
+      return roleMap[userInfo.value.userType] || '无';
     });
 
     // 欢迎信息
@@ -174,9 +174,13 @@ export default {
         userType: userInfo.value.userType 
       });
       
-      // 暂时使用提示，后续可以跳转到对应的路由
-      alert(`即将进入：${module.name}\n功能开发中...`);
-      // router.push(module.route);
+      // 农产品交易模块可以直接跳转
+      if (module.id === 'trading') {
+        router.push(module.route);
+      } else {
+        // 其他模块暂时使用提示
+        alert(`即将进入：${module.name}\n功能开发中...`);
+      }
     };
 
     return {

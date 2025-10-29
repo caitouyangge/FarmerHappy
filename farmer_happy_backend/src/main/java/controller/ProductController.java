@@ -450,8 +450,8 @@ public class ProductController {
             errors.add("商品标题长度不能超过100个字符");
         }
 
-        if (request.getSpecification() == null || request.getSpecification().isEmpty()) {
-            errors.add("商品规格描述不能为空");
+        if (request.getDetailedDescription() == null || request.getDetailedDescription().isEmpty()) {
+            errors.add("商品详细介绍不能为空");
         }
 
         if (request.getPrice() == null || request.getPrice() <= 0) {
@@ -474,9 +474,9 @@ public class ProductController {
         if (request.getCategory() == null || request.getCategory().isEmpty()) {
             errors.add("商品分类不能为空");
         } else {
-            Set<String> validCategories = new HashSet<>(Arrays.asList("vegetables", "fruits", "grains", "livestock", "aquatic"));
+            Set<String> validCategories = new HashSet<>(Arrays.asList("vegetables", "fruits", "grains"));
             if (!validCategories.contains(request.getCategory())) {
-                errors.add("商品分类无效，必须是以下值之一: vegetables, fruits, grains, livestock, aquatic");
+                errors.add("商品分类无效，必须是以下值之一: vegetables, fruits, grains");
             }
         }
 
@@ -492,8 +492,8 @@ public class ProductController {
             errors.add("商品标题长度不能超过100个字符");
         }
 
-        if (request.getSpecification() != null && request.getSpecification().isEmpty()) {
-            errors.add("商品规格描述不能为空");
+        if (request.getDetailedDescription() != null && request.getDetailedDescription().isEmpty()) {
+            errors.add("商品详细介绍不能为空");
         }
 
         if (request.getPrice() != null && request.getPrice() <= 0) {

@@ -38,7 +38,7 @@ public class ProductServiceImpl implements ProductService {
             product.setFarmerId(farmerIdLong);
             product.setCategory(request.getCategory());
             product.setTitle(request.getTitle());
-            product.setSpecification(request.getSpecification());
+            product.setDetailedDescription(request.getDetailedDescription());
             product.setPrice(request.getPrice());
             product.setStock(request.getStock());
             product.setDescription(request.getDescription());
@@ -58,9 +58,9 @@ public class ProductServiceImpl implements ProductService {
 
             // 构建响应对象
             ProductResponseDTO response = new ProductResponseDTO();
-            response.setProduct_id("prod-" + productId);
+            response.setProduct_id(String.valueOf(productId));
             response.setTitle(product.getTitle());
-            response.setSpecification(product.getSpecification());
+            response.setDetailedDescription(product.getDetailedDescription());
             response.setPrice(product.getPrice());
             response.setStock(product.getStock());
             response.setImages(request.getImages());
@@ -346,7 +346,7 @@ public class ProductServiceImpl implements ProductService {
             List<ProductListResponseDTO> productList = new ArrayList<>();
             while (rs.next()) {
                 ProductListResponseDTO product = new ProductListResponseDTO();
-                product.setProduct_id("prod-" + rs.getLong("product_id"));
+                product.setProduct_id(String.valueOf(rs.getLong("product_id")));
                 product.setTitle(rs.getString("title"));
                 product.setPrice(rs.getDouble("price"));
                 product.setStock(rs.getInt("stock"));
@@ -399,7 +399,7 @@ public class ProductServiceImpl implements ProductService {
             product.setFarmerId(farmerId);
             product.setCategory(request.getCategory() != null ? request.getCategory() : existingProduct.getCategory());
             product.setTitle(request.getTitle() != null ? request.getTitle() : existingProduct.getTitle());
-            product.setSpecification(request.getSpecification() != null ? request.getSpecification() : existingProduct.getSpecification());
+            product.setDetailedDescription(request.getDetailedDescription() != null ? request.getDetailedDescription() : existingProduct.getDetailedDescription());
             product.setPrice(request.getPrice() != null ? request.getPrice() : existingProduct.getPrice());
             product.setStock(request.getStock() != null ? request.getStock() : existingProduct.getStock());
             product.setDescription(request.getDescription() != null ? request.getDescription() : existingProduct.getDescription());
@@ -421,9 +421,9 @@ public class ProductServiceImpl implements ProductService {
 
             // 构建响应对象
             ProductResponseDTO response = new ProductResponseDTO();
-            response.setProduct_id("prod-" + prodId);
+            response.setProduct_id(String.valueOf(prodId));
             response.setTitle(product.getTitle());
-            response.setSpecification(product.getSpecification());
+            response.setDetailedDescription(product.getDetailedDescription());
             response.setPrice(product.getPrice());
             response.setStock(product.getStock());
             response.setImages(request.getImages());
@@ -498,13 +498,8 @@ public class ProductServiceImpl implements ProductService {
                 item.setProduct_id(productId);
 
                 try {
-                    // 提取产品ID数字部分
-                    long prodId;
-                    if (productId.startsWith("prod-")) {
-                        prodId = Long.parseLong(productId.substring(5));
-                    } else {
-                        prodId = Long.parseLong(productId);
-                    }
+                    // 解析产品ID
+                    long prodId = Long.parseLong(productId);
 
                     // 验证商品是否属于该农户
                     if (!isProductOwnedByFarmer(conn, prodId, user.getUid())) {
@@ -671,7 +666,7 @@ public class ProductServiceImpl implements ProductService {
             // 只有当请求中的字段不为null时才更新
             product.setCategory(request.getCategory() != null ? request.getCategory() : existingProduct.getCategory());
             product.setTitle(request.getTitle() != null ? request.getTitle() : existingProduct.getTitle());
-            product.setSpecification(request.getSpecification() != null ? request.getSpecification() : existingProduct.getSpecification());
+            product.setDetailedDescription(request.getDetailedDescription() != null ? request.getDetailedDescription() : existingProduct.getDetailedDescription());
             product.setPrice(request.getPrice() != null ? request.getPrice() : existingProduct.getPrice());
             product.setStock(request.getStock() != null ? request.getStock() : existingProduct.getStock());
             product.setDescription(request.getDescription() != null ? request.getDescription() : existingProduct.getDescription());
@@ -695,9 +690,9 @@ public class ProductServiceImpl implements ProductService {
 
             // 构建响应对象
             ProductResponseDTO response = new ProductResponseDTO();
-            response.setProduct_id("prod-" + prodId);
+            response.setProduct_id(String.valueOf(prodId));
             response.setTitle(product.getTitle());
-            response.setSpecification(product.getSpecification());
+            response.setDetailedDescription(product.getDetailedDescription());
             response.setPrice(product.getPrice());
             response.setStock(product.getStock());
 
@@ -743,13 +738,13 @@ public class ProductServiceImpl implements ProductService {
 
     // 插入产品信息
     private long insertProduct(Connection conn, Product product) throws SQLException {
-        String sql = "INSERT INTO products (farmer_id, category, title, specification, price, stock, description, origin, status, enable, created_at) " +
+        String sql = "INSERT INTO products (farmer_id, category, title, detailed_description, price, stock, description, origin, status, enable, created_at) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
         stmt.setLong(1, product.getFarmerId());
         stmt.setString(2, product.getCategory());
         stmt.setString(3, product.getTitle());
-        stmt.setString(4, product.getSpecification());
+        stmt.setString(4, product.getDetailedDescription());
         stmt.setDouble(5, product.getPrice());
         stmt.setInt(6, product.getStock());
         stmt.setString(7, product.getDescription());
@@ -844,9 +839,9 @@ public class ProductServiceImpl implements ProductService {
         while (rs.next()) {
             if (productDetail == null) {
                 productDetail = new ProductDetailResponseDTO();
-                productDetail.setProduct_id("prod-" + rs.getLong("product_id"));
+                productDetail.setProduct_id(String.valueOf(rs.getLong("product_id")));
                 productDetail.setTitle(rs.getString("title"));
-                productDetail.setSpecification(rs.getString("specification"));
+                productDetail.setDetailedDescription(rs.getString("detailed_description"));
                 productDetail.setPrice(rs.getDouble("price"));
                 productDetail.setStock(rs.getInt("stock"));
                 productDetail.setDescription(rs.getString("description"));
@@ -874,12 +869,12 @@ public class ProductServiceImpl implements ProductService {
 
     // 更新商品信息
     private void updateProduct(Connection conn, Product product) throws SQLException {
-        String sql = "UPDATE products SET category = ?, title = ?, specification = ?, price = ?, stock = ?, " +
+        String sql = "UPDATE products SET category = ?, title = ?, detailed_description = ?, price = ?, stock = ?, " +
                 "description = ?, origin = ? WHERE product_id = ? AND farmer_id = ?";
         PreparedStatement stmt = conn.prepareStatement(sql);
         stmt.setString(1, product.getCategory());
         stmt.setString(2, product.getTitle());
-        stmt.setString(3, product.getSpecification());
+        stmt.setString(3, product.getDetailedDescription());
         stmt.setDouble(4, product.getPrice());
         stmt.setInt(5, product.getStock());
         stmt.setString(6, product.getDescription());
@@ -930,7 +925,7 @@ public class ProductServiceImpl implements ProductService {
             product.setFarmerId(rs.getLong("farmer_id"));
             product.setCategory(rs.getString("category"));
             product.setTitle(rs.getString("title"));
-            product.setSpecification(rs.getString("specification"));
+            product.setDetailedDescription(rs.getString("detailed_description"));
             product.setPrice(rs.getDouble("price"));
             product.setStock(rs.getInt("stock"));
             product.setDescription(rs.getString("description"));

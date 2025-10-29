@@ -7,7 +7,7 @@ import java.util.List;
 public class ProductDetailResponseDTO {
     private String product_id;
     private String title;
-    private String specification;
+    private String detailedDescription;
     private double price;
     private int stock;
     private String description;
@@ -35,12 +35,12 @@ public class ProductDetailResponseDTO {
         this.title = title;
     }
 
-    public String getSpecification() {
-        return specification;
+    public String getDetailedDescription() {
+        return detailedDescription;
     }
 
-    public void setSpecification(String specification) {
-        this.specification = specification;
+    public void setDetailedDescription(String detailedDescription) {
+        this.detailedDescription = detailedDescription;
     }
 
     public double getPrice() {
