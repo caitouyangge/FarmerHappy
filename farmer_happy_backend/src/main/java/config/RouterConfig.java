@@ -5,6 +5,7 @@ import controller.AuthController;
 import controller.ProductController;
 import controller.ContentController;
 import controller.CommentController;
+import controller.OrderController;
 import dto.auth.*;
 import dto.farmer.FarmerRegisterRequestDTO;
 import dto.farmer.ProductBatchActionRequestDTO;
@@ -12,6 +13,7 @@ import dto.farmer.ProductCreateRequestDTO;
 import dto.farmer.ProductStatusUpdateRequestDTO;
 import dto.farmer.ProductUpdateRequestDTO;
 import dto.community.*;
+import dto.buyer.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,15 +27,78 @@ public class RouterConfig {
     private ProductController productController;
     private ContentController contentController;
     private CommentController commentController;
+    private OrderController orderController;
 
     public RouterConfig() {
         this.authController = new AuthController();
         this.productController = new ProductController();
         this.contentController = new ContentController();
         this.commentController = new CommentController();
+        this.orderController = new OrderController();
     }
 
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, Map<String, String> queryParams) {
+        // ============= 买家订单相关路由 =============
+        
+        // 创建订单 - /api/v1/buyer/orders
+        if ("/api/v1/buyer/orders".equals(path) && "POST".equals(method)) {
+            CreateOrderRequestDTO request = parseCreateOrderRequest(requestBody);
+            return orderController.createOrder(request);
+        }
+        
+        // 更新订单信息 - /api/v1/buyer/orders/{order_id}
+        Pattern updateOrderPattern = Pattern.compile("/api/v1/buyer/orders/([^/]+)");
+        Matcher updateOrderMatcher = updateOrderPattern.matcher(path);
+        if (updateOrderMatcher.matches() && "PUT".equals(method)) {
+            String orderId = updateOrderMatcher.group(1);
+            UpdateOrderRequestDTO request = parseUpdateOrderRequest(requestBody);
+            return orderController.updateOrder(orderId, request);
+        }
+        
+        // 获取订单详情 - /api/v1/buyer/orders/query/{order_id}
+        Pattern getOrderDetailPattern = Pattern.compile("/api/v1/buyer/orders/query/([^/]+)");
+        Matcher getOrderDetailMatcher = getOrderDetailPattern.matcher(path);
+        if (getOrderDetailMatcher.matches() && "POST".equals(method)) {
+            String orderId = getOrderDetailMatcher.group(1);
+            QueryOrderRequestDTO request = parseQueryOrderRequest(requestBody);
+            return orderController.getOrderDetail(orderId, request);
+        }
+        
+        // 获取订单列表 - /api/v1/buyer/orders/list_query
+        if ("/api/v1/buyer/orders/list_query".equals(path) && "POST".equals(method)) {
+            String buyerPhone = queryParams.get("buyer_phone");
+            String status = queryParams.get("status");
+            String title = queryParams.get("title");
+            return orderController.getOrderList(buyerPhone, status, title);
+        }
+        
+        // 取消订单 - /api/v1/buyer/orders/{order_id}/cancel
+        Pattern cancelOrderPattern = Pattern.compile("/api/v1/buyer/orders/([^/]+)/cancel");
+        Matcher cancelOrderMatcher = cancelOrderPattern.matcher(path);
+        if (cancelOrderMatcher.matches() && "POST".equals(method)) {
+            String orderId = cancelOrderMatcher.group(1);
+            CancelOrderRequestDTO request = parseCancelOrderRequest(requestBody);
+            return orderController.cancelOrder(orderId, request);
+        }
+        
+        // 申请退货退款 - /api/v1/buyer/orders/{order_id}/refund
+        Pattern refundOrderPattern = Pattern.compile("/api/v1/buyer/orders/([^/]+)/refund");
+        Matcher refundOrderMatcher = refundOrderPattern.matcher(path);
+        if (refundOrderMatcher.matches() && "POST".equals(method)) {
+            String orderId = refundOrderMatcher.group(1);
+            RefundRequestDTO request = parseRefundRequest(requestBody);
+            return orderController.applyRefund(orderId, request);
+        }
+        
+        // 确认收货 - /api/v1/buyer/orders/{order_id}/confirm_receipt
+        Pattern confirmReceiptPattern = Pattern.compile("/api/v1/buyer/orders/([^/]+)/confirm_receipt");
+        Matcher confirmReceiptMatcher = confirmReceiptPattern.matcher(path);
+        if (confirmReceiptMatcher.matches() && "POST".equals(method)) {
+            String orderId = confirmReceiptMatcher.group(1);
+            ConfirmReceiptRequestDTO request = parseConfirmReceiptRequest(requestBody);
+            return orderController.confirmReceipt(orderId, request);
+        }
+        
         // ============= 社区相关路由 =============
         
         // 处理发布内容请求
@@ -461,6 +526,61 @@ public class RouterConfig {
         PostReplyRequestDTO request = new PostReplyRequestDTO();
         request.setComment((String) requestBody.get("comment"));
         request.setPhone((String) requestBody.get("phone"));
+        return request;
+    }
+    
+    // ============= 订单相关DTO解析方法 =============
+    
+    private CreateOrderRequestDTO parseCreateOrderRequest(Map<String, Object> requestBody) {
+        CreateOrderRequestDTO request = new CreateOrderRequestDTO();
+        request.setProductId((String) requestBody.get("product_id"));
+        
+        Object quantityObj = requestBody.get("quantity");
+        if (quantityObj instanceof Number) {
+            request.setQuantity(((Number) quantityObj).intValue());
+        }
+        
+        request.setBuyerName((String) requestBody.get("buyer_name"));
+        request.setBuyerAddress((String) requestBody.get("buyer_address"));
+        request.setBuyerPhone((String) requestBody.get("buyer_phone"));
+        request.setRemark((String) requestBody.get("remark"));
+        
+        return request;
+    }
+    
+    private UpdateOrderRequestDTO parseUpdateOrderRequest(Map<String, Object> requestBody) {
+        UpdateOrderRequestDTO request = new UpdateOrderRequestDTO();
+        request.setBuyerName((String) requestBody.get("buyer_name"));
+        request.setBuyerAddress((String) requestBody.get("buyer_address"));
+        request.setBuyerPhone((String) requestBody.get("buyer_phone"));
+        request.setRemark((String) requestBody.get("remark"));
+        return request;
+    }
+    
+    private QueryOrderRequestDTO parseQueryOrderRequest(Map<String, Object> requestBody) {
+        QueryOrderRequestDTO request = new QueryOrderRequestDTO();
+        request.setBuyerPhone((String) requestBody.get("buyer_phone"));
+        return request;
+    }
+    
+    private CancelOrderRequestDTO parseCancelOrderRequest(Map<String, Object> requestBody) {
+        CancelOrderRequestDTO request = new CancelOrderRequestDTO();
+        request.setCancelReason((String) requestBody.get("cancel_reason"));
+        request.setBuyerPhone((String) requestBody.get("buyer_phone"));
+        return request;
+    }
+    
+    private RefundRequestDTO parseRefundRequest(Map<String, Object> requestBody) {
+        RefundRequestDTO request = new RefundRequestDTO();
+        request.setRefundReason((String) requestBody.get("refund_reason"));
+        request.setRefundType((String) requestBody.get("refund_type"));
+        request.setBuyerPhone((String) requestBody.get("buyer_phone"));
+        return request;
+    }
+    
+    private ConfirmReceiptRequestDTO parseConfirmReceiptRequest(Map<String, Object> requestBody) {
+        ConfirmReceiptRequestDTO request = new ConfirmReceiptRequestDTO();
+        request.setBuyerPhone((String) requestBody.get("buyer_phone"));
         return request;
     }
 
