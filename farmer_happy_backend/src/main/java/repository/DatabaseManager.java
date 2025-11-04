@@ -10,7 +10,7 @@ public class DatabaseManager {
     private static final String URL = "jdbc:mysql://localhost:3306/";
     private static final String DB_NAME = "farmer_happy";
     private static final String USERNAME = "root";
-    private static final String PASSWORD = "root";
+    private static final String PASSWORD = "123456";
     private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
 
     private static DatabaseManager instance;
@@ -156,22 +156,6 @@ public class DatabaseManager {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员用户扩展信息表';";
             dbStatement.executeUpdate(createUserAdminsTable);
 
-            // 创建运费模板表
-            String createShippingTemplatesTable =
-                    "CREATE TABLE IF NOT EXISTS shipping_templates (" +
-                            "    template_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
-                            "    template_name VARCHAR(100) NOT NULL COMMENT '模板名称'," +
-                            "    shipping_type ENUM('free', 'fixed', 'calculated') NOT NULL DEFAULT 'free' COMMENT '运费类型: free-包邮, fixed-固定运费, calculated-计算运费'," +
-                            "    fixed_amount DECIMAL(10,2) DEFAULT 0 COMMENT '固定运费金额'," +
-                            "    is_default BOOLEAN DEFAULT FALSE COMMENT '是否默认模板'," +
-                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
-                            "    INDEX idx_farmer_id (farmer_id)," +
-                            "    INDEX idx_is_default (is_default)," +
-                            "    INDEX idx_enable (enable)," +
-                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运费模板表';";
-            dbStatement.executeUpdate(createShippingTemplatesTable);
 
             // 创建商品表
             String createProductsTable =
@@ -240,12 +224,36 @@ public class DatabaseManager {
 
             // 更新表结构：将specification列改为detailed_description
             try {
-                String alterTableSql = "ALTER TABLE products CHANGE COLUMN specification detailed_description VARCHAR(200) NOT NULL COMMENT '商品详细介绍'";
-                dbStatement.executeUpdate(alterTableSql);
-                System.out.println("表结构更新成功：specification -> detailed_description");
+                // 首先检查列是否存在
+                String checkColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
+                        "WHERE TABLE_SCHEMA = '" + DB_NAME + "' AND TABLE_NAME = 'products' AND COLUMN_NAME = 'specification'";
+                ResultSet rsCheck = dbStatement.executeQuery(checkColumnSql);
+                
+                if (rsCheck.next()) {
+                    // specification 列存在，需要改名
+                    String alterTableSql = "ALTER TABLE products CHANGE COLUMN specification detailed_description VARCHAR(200) NOT NULL COMMENT '商品详细介绍'";
+                    dbStatement.executeUpdate(alterTableSql);
+                    System.out.println("表结构更新成功：specification -> detailed_description");
+                } else {
+                    // specification 列不存在，检查 detailed_description 是否存在
+                    String checkNewColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
+                            "WHERE TABLE_SCHEMA = '" + DB_NAME + "' AND TABLE_NAME = 'products' AND COLUMN_NAME = 'detailed_description'";
+                    ResultSet rsCheckNew = dbStatement.executeQuery(checkNewColumnSql);
+                    
+                    if (!rsCheckNew.next()) {
+                        // detailed_description 列也不存在，添加它
+                        String addColumnSql = "ALTER TABLE products ADD COLUMN detailed_description VARCHAR(200) NOT NULL COMMENT '商品详细介绍' AFTER title";
+                        dbStatement.executeUpdate(addColumnSql);
+                        System.out.println("表结构更新成功：添加 detailed_description 列");
+                    } else {
+                        System.out.println("表结构检查：detailed_description 列已存在，无需更新");
+                    }
+                    rsCheckNew.close();
+                }
+                rsCheck.close();
             } catch (SQLException e) {
-                // 如果列不存在或已经更新过，忽略错误
-                System.out.println("表结构更新跳过：" + e.getMessage());
+                // 如果更新失败，记录错误但不中断程序
+                System.err.println("表结构更新失败：" + e.getMessage());
             }
             // 创建社区内容表
             String createContentsTable =
@@ -303,6 +311,45 @@ public class DatabaseManager {
                             "    FOREIGN KEY (author_user_id) REFERENCES users(uid) ON DELETE CASCADE" +
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='社区评论表';";
             dbStatement.executeUpdate(createCommentsTable);
+
+            // 创建订单表
+            String createOrdersTable =
+                    "CREATE TABLE IF NOT EXISTS orders (" +
+                            "    order_id VARCHAR(50) PRIMARY KEY COMMENT '订单唯一ID'," +
+                            "    buyer_uid VARCHAR(36) NOT NULL COMMENT '买家UID'," +
+                            "    farmer_uid VARCHAR(36) NOT NULL COMMENT '农户UID'," +
+                            "    product_id BIGINT NOT NULL COMMENT '商品ID'," +
+                            "    product_title VARCHAR(100) NOT NULL COMMENT '下单时的商品标题'," +
+                            "    product_specification VARCHAR(200) NOT NULL COMMENT '下单时的商品规格'," +
+                            "    product_price DECIMAL(10,2) NOT NULL COMMENT '下单时的商品单价'," +
+                            "    quantity INT NOT NULL COMMENT '购买数量'," +
+                            "    total_amount DECIMAL(10,2) NOT NULL COMMENT '订单总金额'," +
+                            "    buyer_name VARCHAR(50) NOT NULL COMMENT '收货人姓名'," +
+                            "    buyer_address VARCHAR(200) NOT NULL COMMENT '收货地址'," +
+                            "    buyer_phone VARCHAR(11) NOT NULL COMMENT '收货人手机号'," +
+                            "    remark VARCHAR(500) COMMENT '订单备注'," +
+                            "    status ENUM('shipped', 'completed', 'cancelled', 'refunded') " +
+                            "        DEFAULT 'shipped' COMMENT '订单状态'," +
+                            "    refund_reason VARCHAR(200) COMMENT '退款原因'," +
+                            "    refund_type ENUM('only_refund', 'return_and_refund') COMMENT '退款类型'," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
+                            "    shipped_at TIMESTAMP NULL COMMENT '发货时间'," +
+                            "    completed_at TIMESTAMP NULL COMMENT '完成时间'," +
+                            "    cancelled_at TIMESTAMP NULL COMMENT '取消时间'," +
+                            "    refunded_at TIMESTAMP NULL COMMENT '退款时间'," +
+                            "    INDEX idx_buyer_uid (buyer_uid)," +
+                            "    INDEX idx_farmer_uid (farmer_uid)," +
+                            "    INDEX idx_product_id (product_id)," +
+                            "    INDEX idx_status (status)," +
+                            "    INDEX idx_created_at (created_at)," +
+                            "    INDEX idx_buyer_status (buyer_uid, status)," +
+                            "    INDEX idx_farmer_status (farmer_uid, status)," +
+                            "    FOREIGN KEY (buyer_uid) REFERENCES users(uid) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (farmer_uid) REFERENCES users(uid) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单表';";
+            dbStatement.executeUpdate(createOrdersTable);
 
             dbStatement.close();
             dbConnection.close();
@@ -672,5 +719,478 @@ public class DatabaseManager {
             closeConnection();
         }
         return role;
+    }
+
+    // ============= 订单相关方法 =============
+
+    /**
+     * 创建订单
+     */
+    public void createOrder(entity.Order order) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            // 由于订单直接创建为 shipped 状态，需要设置 shipped_at 时间
+            String sql = "INSERT INTO orders (order_id, buyer_uid, farmer_uid, product_id, " +
+                    "product_title, product_specification, product_price, quantity, total_amount, " +
+                    "buyer_name, buyer_address, buyer_phone, remark, status, shipped_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, order.getOrderId());
+            stmt.setString(2, order.getBuyerUid());
+            stmt.setString(3, order.getFarmerUid());
+            stmt.setLong(4, order.getProductId());
+            stmt.setString(5, order.getProductTitle());
+            stmt.setString(6, order.getProductSpecification());
+            stmt.setBigDecimal(7, order.getProductPrice());
+            stmt.setInt(8, order.getQuantity());
+            stmt.setBigDecimal(9, order.getTotalAmount());
+            stmt.setString(10, order.getBuyerName());
+            stmt.setString(11, order.getBuyerAddress());
+            stmt.setString(12, order.getBuyerPhone());
+            stmt.setString(13, order.getRemark());
+            stmt.setString(14, order.getStatus());
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 根据订单ID查找订单
+     */
+    public entity.Order findOrderById(String orderId) throws SQLException {
+        Connection conn = getConnection();
+        entity.Order order = null;
+        try {
+            String sql = "SELECT * FROM orders WHERE order_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, orderId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                order = new entity.Order();
+                order.setOrderId(rs.getString("order_id"));
+                order.setBuyerUid(rs.getString("buyer_uid"));
+                order.setFarmerUid(rs.getString("farmer_uid"));
+                order.setProductId(rs.getLong("product_id"));
+                order.setProductTitle(rs.getString("product_title"));
+                order.setProductSpecification(rs.getString("product_specification"));
+                order.setProductPrice(rs.getBigDecimal("product_price"));
+                order.setQuantity(rs.getInt("quantity"));
+                order.setTotalAmount(rs.getBigDecimal("total_amount"));
+                order.setBuyerName(rs.getString("buyer_name"));
+                order.setBuyerAddress(rs.getString("buyer_address"));
+                order.setBuyerPhone(rs.getString("buyer_phone"));
+                order.setRemark(rs.getString("remark"));
+                order.setStatus(rs.getString("status"));
+                order.setRefundReason(rs.getString("refund_reason"));
+                order.setRefundType(rs.getString("refund_type"));
+                order.setCreatedAt(rs.getTimestamp("created_at"));
+                order.setUpdatedAt(rs.getTimestamp("updated_at"));
+                order.setShippedAt(rs.getTimestamp("shipped_at"));
+                order.setCompletedAt(rs.getTimestamp("completed_at"));
+                order.setCancelledAt(rs.getTimestamp("cancelled_at"));
+                order.setRefundedAt(rs.getTimestamp("refunded_at"));
+
+                // 查询商品图片
+                String imgSql = "SELECT image_url FROM product_images WHERE product_id = ? ORDER BY sort_order LIMIT 3";
+                PreparedStatement imgStmt = conn.prepareStatement(imgSql);
+                imgStmt.setLong(1, order.getProductId());
+                ResultSet imgRs = imgStmt.executeQuery();
+                List<String> images = new ArrayList<>();
+                while (imgRs.next()) {
+                    images.add(imgRs.getString("image_url"));
+                }
+                order.setImages(images);
+                imgRs.close();
+                imgStmt.close();
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return order;
+    }
+
+    /**
+     * 更新订单信息
+     */
+    public void updateOrder(String orderId, String buyerName, String buyerAddress, String remark) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            StringBuilder sql = new StringBuilder("UPDATE orders SET ");
+            List<Object> params = new ArrayList<>();
+            
+            if (buyerName != null && !buyerName.trim().isEmpty()) {
+                sql.append("buyer_name = ?, ");
+                params.add(buyerName);
+            }
+            if (buyerAddress != null && !buyerAddress.trim().isEmpty()) {
+                sql.append("buyer_address = ?, ");
+                params.add(buyerAddress);
+            }
+            if (remark != null) {
+                sql.append("remark = ?, ");
+                params.add(remark);
+            }
+            
+            // 移除最后的逗号和空格
+            sql.setLength(sql.length() - 2);
+            sql.append(" WHERE order_id = ?");
+            params.add(orderId);
+            
+            PreparedStatement stmt = conn.prepareStatement(sql.toString());
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setObject(i + 1, params.get(i));
+            }
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 更新订单状态
+     */
+    public void updateOrderStatus(String orderId, String status, Timestamp timestamp) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String timestampField = null;
+            switch (status) {
+                case "shipped":
+                    timestampField = "shipped_at";
+                    break;
+                case "completed":
+                    timestampField = "completed_at";
+                    break;
+                case "cancelled":
+                    timestampField = "cancelled_at";
+                    break;
+                case "refunded":
+                    timestampField = "refunded_at";
+                    break;
+            }
+            
+            String sql;
+            if (timestampField != null) {
+                sql = "UPDATE orders SET status = ?, " + timestampField + " = ? WHERE order_id = ?";
+            } else {
+                sql = "UPDATE orders SET status = ? WHERE order_id = ?";
+            }
+            
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, status);
+            if (timestampField != null) {
+                stmt.setTimestamp(2, timestamp);
+                stmt.setString(3, orderId);
+            } else {
+                stmt.setString(2, orderId);
+            }
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 更新订单退款信息（不修改订单状态，状态由调用方通过 updateOrderStatus 设置）
+     */
+    public void updateOrderRefund(String orderId, String refundReason, String refundType) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            // 关闭自动提交以使用事务
+            conn.setAutoCommit(false);
+            
+            String sql = "UPDATE orders SET refund_reason = ?, refund_type = ? WHERE order_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, refundReason);
+            stmt.setString(2, refundType);
+            stmt.setString(3, orderId);
+            
+            int rowsAffected = stmt.executeUpdate();
+            System.out.println("updateOrderRefund - 更新行数: " + rowsAffected + ", orderId: " + orderId + ", refundReason: " + refundReason + ", refundType: " + refundType);
+            
+            stmt.close();
+            
+            // 提交事务
+            conn.commit();
+        } catch (SQLException e) {
+            // 回滚事务
+            try {
+                conn.rollback();
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+            }
+            throw e;
+        } finally {
+            try {
+                // 恢复自动提交
+                conn.setAutoCommit(true);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            closeConnection();
+        }
+    }
+
+    /**
+     * 获取买家订单列表
+     */
+    public List<entity.Order> findOrdersByBuyer(String buyerUid, String status, String title) throws SQLException {
+        Connection conn = getConnection();
+        List<entity.Order> orders = new ArrayList<>();
+        try {
+            StringBuilder sql = new StringBuilder("SELECT * FROM orders WHERE buyer_uid = ?");
+            List<Object> params = new ArrayList<>();
+            params.add(buyerUid);
+            
+            if (status != null && !status.trim().isEmpty()) {
+                sql.append(" AND status = ?");
+                params.add(status);
+            }
+            if (title != null && !title.trim().isEmpty()) {
+                sql.append(" AND product_title LIKE ?");
+                params.add("%" + title + "%");
+            }
+            
+            sql.append(" ORDER BY created_at DESC");
+            
+            PreparedStatement stmt = conn.prepareStatement(sql.toString());
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setObject(i + 1, params.get(i));
+            }
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                entity.Order order = new entity.Order();
+                order.setOrderId(rs.getString("order_id"));
+                order.setBuyerUid(rs.getString("buyer_uid"));
+                order.setFarmerUid(rs.getString("farmer_uid"));
+                order.setProductId(rs.getLong("product_id"));
+                order.setProductTitle(rs.getString("product_title"));
+                order.setProductSpecification(rs.getString("product_specification"));
+                order.setProductPrice(rs.getBigDecimal("product_price"));
+                order.setQuantity(rs.getInt("quantity"));
+                order.setTotalAmount(rs.getBigDecimal("total_amount"));
+                order.setBuyerName(rs.getString("buyer_name"));
+                order.setBuyerAddress(rs.getString("buyer_address"));
+                order.setBuyerPhone(rs.getString("buyer_phone"));
+                order.setRemark(rs.getString("remark"));
+                order.setStatus(rs.getString("status"));
+                order.setCreatedAt(rs.getTimestamp("created_at"));
+                
+                // 查询商品主图
+                String imgSql = "SELECT image_url FROM product_images WHERE product_id = ? AND is_main = TRUE LIMIT 1";
+                PreparedStatement imgStmt = conn.prepareStatement(imgSql);
+                imgStmt.setLong(1, order.getProductId());
+                ResultSet imgRs = imgStmt.executeQuery();
+                List<String> images = new ArrayList<>();
+                if (imgRs.next()) {
+                    images.add(imgRs.getString("image_url"));
+                }
+                order.setImages(images);
+                imgRs.close();
+                imgStmt.close();
+                
+                orders.add(order);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return orders;
+    }
+
+    /**
+     * 根据买家手机号获取买家UID
+     */
+    public String getBuyerUidByPhone(String phone) throws SQLException {
+        Connection conn = getConnection();
+        String uid = null;
+        try {
+            String sql = "SELECT u.uid FROM users u " +
+                    "JOIN user_buyers ub ON u.uid = ub.uid " +
+                    "WHERE u.phone = ? AND ub.enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, phone);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                uid = rs.getString("uid");
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return uid;
+    }
+
+    /**
+     * 根据买家手机号获取买家余额
+     */
+    public java.math.BigDecimal getBuyerBalance(String phone) throws SQLException {
+        Connection conn = getConnection();
+        java.math.BigDecimal balance = null;
+        try {
+            String sql = "SELECT ub.money FROM users u " +
+                    "JOIN user_buyers ub ON u.uid = ub.uid " +
+                    "WHERE u.phone = ? AND ub.enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, phone);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                balance = rs.getBigDecimal("money");
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return balance;
+    }
+
+    /**
+     * 更新买家余额
+     */
+    public void updateBuyerBalance(String buyerUid, java.math.BigDecimal amount) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE user_buyers SET money = money + ? WHERE uid = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setBigDecimal(1, amount);
+            stmt.setString(2, buyerUid);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 更新农户余额
+     */
+    public void updateFarmerBalance(String farmerUid, java.math.BigDecimal amount) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE user_farmers SET money = money + ? WHERE uid = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setBigDecimal(1, amount);
+            stmt.setString(2, farmerUid);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 更新商品库存
+     */
+    public void updateProductStock(Long productId, int change) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE products SET stock = stock + ? WHERE product_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setInt(1, change);
+            stmt.setLong(2, productId);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 更新商品销量
+     */
+    public void updateProductSalesCount(Long productId, int change) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE products SET sales_count = sales_count + ? WHERE product_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setInt(1, change);
+            stmt.setLong(2, productId);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 根据商品ID获取商品信息
+     */
+    public entity.Product getProductById(Long productId) throws SQLException {
+        Connection conn = getConnection();
+        entity.Product product = null;
+        try {
+            String sql = "SELECT * FROM products WHERE product_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, productId);
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                product = new entity.Product();
+                product.setProductId(rs.getLong("product_id"));
+                product.setFarmerId(rs.getLong("farmer_id"));
+                product.setCategory(rs.getString("category"));
+                product.setTitle(rs.getString("title"));
+                product.setDetailedDescription(rs.getString("detailed_description"));
+                product.setPrice(rs.getDouble("price"));
+                product.setStock(rs.getInt("stock"));
+                product.setDescription(rs.getString("description"));
+                product.setOrigin(rs.getString("origin"));
+                product.setStatus(rs.getString("status"));
+                product.setViewCount(rs.getInt("view_count"));
+                product.setSalesCount(rs.getInt("sales_count"));
+                product.setEnable(rs.getBoolean("enable"));
+                product.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+                
+                // 查询商品图片
+                String imgSql = "SELECT image_url FROM product_images WHERE product_id = ? ORDER BY sort_order";
+                PreparedStatement imgStmt = conn.prepareStatement(imgSql);
+                imgStmt.setLong(1, productId);
+                ResultSet imgRs = imgStmt.executeQuery();
+                List<String> images = new ArrayList<>();
+                while (imgRs.next()) {
+                    images.add(imgRs.getString("image_url"));
+                }
+                product.setImages(images);
+                imgRs.close();
+                imgStmt.close();
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return product;
+    }
+
+    /**
+     * 根据农户ID获取农户UID
+     */
+    public String getFarmerUidByFarmerId(Long farmerId) throws SQLException {
+        Connection conn = getConnection();
+        String farmerUid = null;
+        try {
+            String sql = "SELECT uid FROM user_farmers WHERE farmer_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, farmerId);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                farmerUid = rs.getString("uid");
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return farmerUid;
     }
 }

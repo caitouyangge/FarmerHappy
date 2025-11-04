@@ -10,6 +10,7 @@ import dto.farmer.ProductStatusUpdateResponseDTO;
 import dto.farmer.ProductDetailResponseDTO;
 import dto.farmer.ProductBatchActionResultDTO;
 import dto.community.*;
+import dto.buyer.*;
 import repository.DatabaseManager;
 
 import java.io.BufferedReader;
@@ -521,6 +522,22 @@ public class application {
                         return serializeCommentItemDTO((CommentItemDTO) value);
                     } else if (value instanceof CommentReplyItemDTO) {
                         return serializeCommentReplyItemDTO((CommentReplyItemDTO) value);
+                    } else if (value instanceof CreateOrderResponseDTO) {
+                        return serializeCreateOrderResponseDTO((CreateOrderResponseDTO) value);
+                    } else if (value instanceof UpdateOrderResponseDTO) {
+                        return serializeUpdateOrderResponseDTO((UpdateOrderResponseDTO) value);
+                    } else if (value instanceof OrderDetailResponseDTO) {
+                        return serializeOrderDetailResponseDTO((OrderDetailResponseDTO) value);
+                    } else if (value instanceof OrderListResponseDTO) {
+                        return serializeOrderListResponseDTO((OrderListResponseDTO) value);
+                    } else if (value instanceof OrderListItemDTO) {
+                        return serializeOrderListItemDTO((OrderListItemDTO) value);
+                    } else if (value instanceof CancelOrderResponseDTO) {
+                        return serializeCancelOrderResponseDTO((CancelOrderResponseDTO) value);
+                    } else if (value instanceof RefundResponseDTO) {
+                        return serializeRefundResponseDTO((RefundResponseDTO) value);
+                    } else if (value instanceof ConfirmReceiptResponseDTO) {
+                        return serializeConfirmReceiptResponseDTO((ConfirmReceiptResponseDTO) value);
                     } else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
                     }
@@ -667,9 +684,6 @@ public class application {
                     }
                     if (dto.getOrigin() != null) {
                         json.append("\"origin\":\"").append(escapeJsonString(dto.getOrigin())).append("\",");
-                    }
-                    if (dto.getShipping_template_id() != null) {
-                        json.append("\"shipping_template_id\":\"").append(escapeJsonString(dto.getShipping_template_id())).append("\",");
                     }
                     if (dto.getStatus() != null) {
                         json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
@@ -942,6 +956,291 @@ public class application {
                     json.append("\"total_comments\":").append(dto.getTotalComments()).append(",");
                     if (dto.getList() != null) {
                         json.append("\"list\":").append(serializeList(dto.getList())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // ============= 订单相关DTO序列化方法 =============
+                
+                // 序列化 CreateOrderResponseDTO
+                private String serializeCreateOrderResponseDTO(CreateOrderResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getOrderId() != null) {
+                        json.append("\"order_id\":\"").append(escapeJsonString(dto.getOrderId())).append("\",");
+                    }
+                    if (dto.getProductId() != null) {
+                        json.append("\"product_id\":\"").append(escapeJsonString(dto.getProductId())).append("\",");
+                    }
+                    if (dto.getTitle() != null) {
+                        json.append("\"title\":\"").append(escapeJsonString(dto.getTitle())).append("\",");
+                    }
+                    if (dto.getPrice() != null) {
+                        json.append("\"price\":").append(dto.getPrice()).append(",");
+                    }
+                    if (dto.getQuantity() != null) {
+                        json.append("\"quantity\":").append(dto.getQuantity()).append(",");
+                    }
+                    if (dto.getTotalAmount() != null) {
+                        json.append("\"total_amount\":").append(dto.getTotalAmount()).append(",");
+                    }
+                    if (dto.getBuyerName() != null) {
+                        json.append("\"buyer_name\":\"").append(escapeJsonString(dto.getBuyerName())).append("\",");
+                    }
+                    if (dto.getBuyerAddress() != null) {
+                        json.append("\"buyer_address\":\"").append(escapeJsonString(dto.getBuyerAddress())).append("\",");
+                    }
+                    if (dto.getBuyerPhone() != null) {
+                        json.append("\"buyer_phone\":\"").append(escapeJsonString(dto.getBuyerPhone())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getCreatedAt() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreatedAt())).append("\",");
+                    }
+                    if (dto.getLinks() != null) {
+                        json.append("\"_links\":").append(serializeValue(dto.getLinks())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+                
+                // 序列化 UpdateOrderResponseDTO
+                private String serializeUpdateOrderResponseDTO(UpdateOrderResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getOrderId() != null) {
+                        json.append("\"order_id\":\"").append(escapeJsonString(dto.getOrderId())).append("\",");
+                    }
+                    if (dto.getBuyerName() != null) {
+                        json.append("\"buyer_name\":\"").append(escapeJsonString(dto.getBuyerName())).append("\",");
+                    }
+                    if (dto.getBuyerAddress() != null) {
+                        json.append("\"buyer_address\":\"").append(escapeJsonString(dto.getBuyerAddress())).append("\",");
+                    }
+                    if (dto.getBuyerPhone() != null) {
+                        json.append("\"buyer_phone\":\"").append(escapeJsonString(dto.getBuyerPhone())).append("\",");
+                    }
+                    if (dto.getRemark() != null) {
+                        json.append("\"remark\":\"").append(escapeJsonString(dto.getRemark())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getUpdatedAt() != null) {
+                        json.append("\"updated_at\":\"").append(escapeJsonString(dto.getUpdatedAt())).append("\",");
+                    }
+                    if (dto.getLinks() != null) {
+                        json.append("\"_links\":").append(serializeValue(dto.getLinks())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+                
+                // 序列化 OrderDetailResponseDTO
+                private String serializeOrderDetailResponseDTO(OrderDetailResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getOrderId() != null) {
+                        json.append("\"order_id\":\"").append(escapeJsonString(dto.getOrderId())).append("\",");
+                    }
+                    if (dto.getProductId() != null) {
+                        json.append("\"product_id\":\"").append(escapeJsonString(dto.getProductId())).append("\",");
+                    }
+                    if (dto.getTitle() != null) {
+                        json.append("\"title\":\"").append(escapeJsonString(dto.getTitle())).append("\",");
+                    }
+                    if (dto.getSpecification() != null) {
+                        json.append("\"specification\":\"").append(escapeJsonString(dto.getSpecification())).append("\",");
+                    }
+                    if (dto.getPrice() != null) {
+                        json.append("\"price\":").append(dto.getPrice()).append(",");
+                    }
+                    if (dto.getQuantity() != null) {
+                        json.append("\"quantity\":").append(dto.getQuantity()).append(",");
+                    }
+                    if (dto.getTotalAmount() != null) {
+                        json.append("\"total_amount\":").append(dto.getTotalAmount()).append(",");
+                    }
+                    if (dto.getBuyerName() != null) {
+                        json.append("\"buyer_name\":\"").append(escapeJsonString(dto.getBuyerName())).append("\",");
+                    }
+                    if (dto.getBuyerAddress() != null) {
+                        json.append("\"buyer_address\":\"").append(escapeJsonString(dto.getBuyerAddress())).append("\",");
+                    }
+                    if (dto.getBuyerPhone() != null) {
+                        json.append("\"buyer_phone\":\"").append(escapeJsonString(dto.getBuyerPhone())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getRemark() != null) {
+                        json.append("\"remark\":\"").append(escapeJsonString(dto.getRemark())).append("\",");
+                    }
+                    if (dto.getCreatedAt() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreatedAt())).append("\",");
+                    }
+                    if (dto.getShippedAt() != null) {
+                        json.append("\"shipped_at\":\"").append(escapeJsonString(dto.getShippedAt())).append("\",");
+                    } else {
+                        json.append("\"shipped_at\":null,");
+                    }
+                    if (dto.getCompletedAt() != null) {
+                        json.append("\"completed_at\":\"").append(escapeJsonString(dto.getCompletedAt())).append("\",");
+                    } else {
+                        json.append("\"completed_at\":null,");
+                    }
+                    if (dto.getCancelledAt() != null) {
+                        json.append("\"cancelled_at\":\"").append(escapeJsonString(dto.getCancelledAt())).append("\",");
+                    } else {
+                        json.append("\"cancelled_at\":null,");
+                    }
+                    if (dto.getRefundedAt() != null) {
+                        json.append("\"refunded_at\":\"").append(escapeJsonString(dto.getRefundedAt())).append("\",");
+                    } else {
+                        json.append("\"refunded_at\":null,");
+                    }
+                    if (dto.getImages() != null) {
+                        json.append("\"images\":").append(serializeList(dto.getImages())).append(",");
+                    }
+                    if (dto.getLinks() != null) {
+                        json.append("\"_links\":").append(serializeValue(dto.getLinks())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+                
+                // 序列化 OrderListItemDTO
+                private String serializeOrderListItemDTO(OrderListItemDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getOrderId() != null) {
+                        json.append("\"order_id\":\"").append(escapeJsonString(dto.getOrderId())).append("\",");
+                    }
+                    if (dto.getProductId() != null) {
+                        json.append("\"product_id\":\"").append(escapeJsonString(dto.getProductId())).append("\",");
+                    }
+                    if (dto.getTitle() != null) {
+                        json.append("\"title\":\"").append(escapeJsonString(dto.getTitle())).append("\",");
+                    }
+                    if (dto.getQuantity() != null) {
+                        json.append("\"quantity\":").append(dto.getQuantity()).append(",");
+                    }
+                    if (dto.getTotalAmount() != null) {
+                        json.append("\"total_amount\":").append(dto.getTotalAmount()).append(",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getCreatedAt() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreatedAt())).append("\",");
+                    }
+                    if (dto.getMainImageUrl() != null) {
+                        json.append("\"main_image_url\":\"").append(escapeJsonString(dto.getMainImageUrl())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+                
+                // 序列化 OrderListResponseDTO
+                private String serializeOrderListResponseDTO(OrderListResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getList() != null) {
+                        json.append("\"list\":").append(serializeList(dto.getList())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+                
+                // 序列化 CancelOrderResponseDTO
+                private String serializeCancelOrderResponseDTO(CancelOrderResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getOrderId() != null) {
+                        json.append("\"order_id\":\"").append(escapeJsonString(dto.getOrderId())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getRefundAmount() != null) {
+                        json.append("\"refund_amount\":").append(dto.getRefundAmount()).append(",");
+                    }
+                    if (dto.getCancelReason() != null) {
+                        json.append("\"cancel_reason\":\"").append(escapeJsonString(dto.getCancelReason())).append("\",");
+                    }
+                    if (dto.getCancelledAt() != null) {
+                        json.append("\"cancelled_at\":\"").append(escapeJsonString(dto.getCancelledAt())).append("\",");
+                    }
+                    if (dto.getLinks() != null) {
+                        json.append("\"_links\":").append(serializeValue(dto.getLinks())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+                
+                // 序列化 RefundResponseDTO
+                private String serializeRefundResponseDTO(RefundResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getOrderId() != null) {
+                        json.append("\"order_id\":\"").append(escapeJsonString(dto.getOrderId())).append("\",");
+                    }
+                    if (dto.getRefundType() != null) {
+                        json.append("\"refund_type\":\"").append(escapeJsonString(dto.getRefundType())).append("\",");
+                    }
+                    if (dto.getRefundAmount() != null) {
+                        json.append("\"refund_amount\":").append(dto.getRefundAmount()).append(",");
+                    }
+                    if (dto.getRefundReason() != null) {
+                        json.append("\"refund_reason\":\"").append(escapeJsonString(dto.getRefundReason())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getAppliedAt() != null) {
+                        json.append("\"applied_at\":\"").append(escapeJsonString(dto.getAppliedAt())).append("\",");
+                    }
+                    if (dto.getLinks() != null) {
+                        json.append("\"_links\":").append(serializeValue(dto.getLinks())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+                
+                // 序列化 ConfirmReceiptResponseDTO
+                private String serializeConfirmReceiptResponseDTO(ConfirmReceiptResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getOrderId() != null) {
+                        json.append("\"order_id\":\"").append(escapeJsonString(dto.getOrderId())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getCompletedAt() != null) {
+                        json.append("\"completed_at\":\"").append(escapeJsonString(dto.getCompletedAt())).append("\",");
+                    }
+                    if (dto.getLinks() != null) {
+                        json.append("\"_links\":").append(serializeValue(dto.getLinks())).append(",");
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1);
