@@ -10,7 +10,7 @@ public class DatabaseManager {
     private static final String URL = "jdbc:mysql://localhost:3306/";
     private static final String DB_NAME = "farmer_happy";
     private static final String USERNAME = "root";
-    private static final String PASSWORD = "root";
+    private static final String PASSWORD = "123456";
     private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
 
     private static DatabaseManager instance;
@@ -65,7 +65,7 @@ public class DatabaseManager {
                             "    login_attempts INT DEFAULT 0 COMMENT '连续登录失败次数'," +
                             "    locked_until TIMESTAMP NULL COMMENT '账号锁定截止时间'," +
                             "    is_active BOOLEAN DEFAULT TRUE COMMENT '账号是否激活'," +
-                            "    money DECIMAL(10,2) DEFAULT 0 COMMENT '账户余额（元）'," +
+                            "    money DECIMAL(10,2) DEFAULT 1000 COMMENT '账户余额（元）'," +
                             "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
                             "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
                             "    INDEX idx_phone (phone)," +
@@ -81,7 +81,7 @@ public class DatabaseManager {
                 
                 if (!rsCheckMoney.next()) {
                     // money 列不存在，添加它
-                    String addMoneyColumnSql = "ALTER TABLE users ADD COLUMN money DECIMAL(10,2) DEFAULT 0 COMMENT '账户余额（元）' AFTER is_active";
+                    String addMoneyColumnSql = "ALTER TABLE users ADD COLUMN money DECIMAL(10,2) DEFAULT 1000 COMMENT '账户余额（元）' AFTER is_active";
                     dbStatement.executeUpdate(addMoneyColumnSql);
                     System.out.println("表结构更新成功：为users表添加money字段");
                 } else {
