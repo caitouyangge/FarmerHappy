@@ -10,7 +10,7 @@ public class DatabaseManager {
     private static final String URL = "jdbc:mysql://localhost:3306/";
     private static final String DB_NAME = "farmer_happy";
     private static final String USERNAME = "root";
-    private static final String PASSWORD = "123456";
+    private static final String PASSWORD = "root";
     private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
 
     private static DatabaseManager instance;
@@ -65,12 +65,33 @@ public class DatabaseManager {
                             "    login_attempts INT DEFAULT 0 COMMENT '连续登录失败次数'," +
                             "    locked_until TIMESTAMP NULL COMMENT '账号锁定截止时间'," +
                             "    is_active BOOLEAN DEFAULT TRUE COMMENT '账号是否激活'," +
+                            "    money DECIMAL(10,2) DEFAULT 0 COMMENT '账户余额（元）'," +
                             "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
                             "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
                             "    INDEX idx_phone (phone)," +
                             "    INDEX idx_created_at (created_at)" +
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户基本信息表';";
             dbStatement.executeUpdate(createUserTable);
+
+            // 检查并添加money字段（如果不存在）
+            try {
+                String checkMoneyColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
+                        "WHERE TABLE_SCHEMA = '" + DB_NAME + "' AND TABLE_NAME = 'users' AND COLUMN_NAME = 'money'";
+                ResultSet rsCheckMoney = dbStatement.executeQuery(checkMoneyColumnSql);
+                
+                if (!rsCheckMoney.next()) {
+                    // money 列不存在，添加它
+                    String addMoneyColumnSql = "ALTER TABLE users ADD COLUMN money DECIMAL(10,2) DEFAULT 0 COMMENT '账户余额（元）' AFTER is_active";
+                    dbStatement.executeUpdate(addMoneyColumnSql);
+                    System.out.println("表结构更新成功：为users表添加money字段");
+                } else {
+                    System.out.println("表结构检查：users表的money字段已存在，无需更新");
+                }
+                rsCheckMoney.close();
+            } catch (SQLException e) {
+                // 如果更新失败，记录错误但不中断程序
+                System.err.println("表结构更新失败（添加money字段）：" + e.getMessage());
+            }
 
 // 创建买家扩展表
             String createUserBuyersTable =
@@ -79,7 +100,6 @@ public class DatabaseManager {
                             "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
                             "    shipping_address VARCHAR(500) COMMENT '默认收货地址'," +
                             "    member_level ENUM('regular', 'silver', 'gold', 'platinum') DEFAULT 'regular' COMMENT '会员等级'," +
-                            "    money DECIMAL(10,2) DEFAULT 0 COMMENT '账户余额（元）'," +
                             "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用买家功能'," +
                             "    UNIQUE KEY uk_uid (uid)," +
                             "    INDEX idx_enable (enable)," +
@@ -96,7 +116,6 @@ public class DatabaseManager {
                             "    farm_name VARCHAR(100) NOT NULL COMMENT '农场名称'," +
                             "    farm_address VARCHAR(200) COMMENT '农场地址'," +
                             "    farm_size DECIMAL(10,2) COMMENT '农场面积（亩）'," +
-                            "    money DECIMAL(10,2) DEFAULT 0 COMMENT '账户余额（元）'," +
                             "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用农户功能'," +
                             "    UNIQUE KEY uk_uid (uid)," +
                             "    INDEX idx_enable (enable)," +
@@ -130,7 +149,6 @@ public class DatabaseManager {
                             "    branch_name VARCHAR(100) COMMENT '分行名称'," +
                             "    contact_person VARCHAR(50) COMMENT '联系人'," +
                             "    contact_phone VARCHAR(20) COMMENT '联系电话'," +
-                            "    money DECIMAL(10,2) DEFAULT 0 COMMENT '账户余额（元）'," +
                             "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用银行功能'," +
                             "    UNIQUE KEY uk_uid (uid)," +
                             "    INDEX idx_enable (enable)," +
@@ -1037,8 +1055,56 @@ public class DatabaseManager {
         Connection conn = getConnection();
         java.math.BigDecimal balance = null;
         try {
-            String sql = "SELECT ub.money FROM users u " +
+            String sql = "SELECT u.money FROM users u " +
                     "JOIN user_buyers ub ON u.uid = ub.uid " +
+                    "WHERE u.phone = ? AND ub.enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, phone);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                balance = rs.getBigDecimal("money");
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return balance;
+    }
+
+    /**
+     * 根据农户手机号获取农户余额
+     */
+    public java.math.BigDecimal getFarmerBalance(String phone) throws SQLException {
+        Connection conn = getConnection();
+        java.math.BigDecimal balance = null;
+        try {
+            String sql = "SELECT u.money FROM users u " +
+                    "JOIN user_farmers uf ON u.uid = uf.uid " +
+                    "WHERE u.phone = ? AND uf.enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, phone);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                balance = rs.getBigDecimal("money");
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return balance;
+    }
+
+    /**
+     * 根据银行手机号获取银行余额
+     */
+    public java.math.BigDecimal getBankBalance(String phone) throws SQLException {
+        Connection conn = getConnection();
+        java.math.BigDecimal balance = null;
+        try {
+            String sql = "SELECT u.money FROM users u " +
+                    "JOIN user_banks ub ON u.uid = ub.uid " +
                     "WHERE u.phone = ? AND ub.enable = TRUE";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, phone);
@@ -1060,7 +1126,7 @@ public class DatabaseManager {
     public void updateBuyerBalance(String buyerUid, java.math.BigDecimal amount) throws SQLException {
         Connection conn = getConnection();
         try {
-            String sql = "UPDATE user_buyers SET money = money + ? WHERE uid = ?";
+            String sql = "UPDATE users SET money = money + ? WHERE uid = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setBigDecimal(1, amount);
             stmt.setString(2, buyerUid);
@@ -1077,7 +1143,7 @@ public class DatabaseManager {
     public void updateFarmerBalance(String farmerUid, java.math.BigDecimal amount) throws SQLException {
         Connection conn = getConnection();
         try {
-            String sql = "UPDATE user_farmers SET money = money + ? WHERE uid = ?";
+            String sql = "UPDATE users SET money = money + ? WHERE uid = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setBigDecimal(1, amount);
             stmt.setString(2, farmerUid);
@@ -1192,5 +1258,98 @@ public class DatabaseManager {
             closeConnection();
         }
         return farmerUid;
+    }
+
+    /**
+     * 根据农户手机号获取农户UID
+     */
+    public String getFarmerUidByPhone(String phone) throws SQLException {
+        Connection conn = getConnection();
+        String uid = null;
+        try {
+            String sql = "SELECT u.uid FROM users u " +
+                    "JOIN user_farmers uf ON u.uid = uf.uid " +
+                    "WHERE u.phone = ? AND uf.enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, phone);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                uid = rs.getString("uid");
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return uid;
+    }
+
+    /**
+     * 获取农户订单列表
+     */
+    public List<entity.Order> findOrdersByFarmer(String farmerUid, String status, String title) throws SQLException {
+        Connection conn = getConnection();
+        List<entity.Order> orders = new ArrayList<>();
+        try {
+            StringBuilder sql = new StringBuilder("SELECT * FROM orders WHERE farmer_uid = ?");
+            List<Object> params = new ArrayList<>();
+            params.add(farmerUid);
+            
+            if (status != null && !status.trim().isEmpty()) {
+                sql.append(" AND status = ?");
+                params.add(status);
+            }
+            if (title != null && !title.trim().isEmpty()) {
+                sql.append(" AND product_title LIKE ?");
+                params.add("%" + title + "%");
+            }
+            
+            sql.append(" ORDER BY created_at DESC");
+            
+            PreparedStatement stmt = conn.prepareStatement(sql.toString());
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setObject(i + 1, params.get(i));
+            }
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                entity.Order order = new entity.Order();
+                order.setOrderId(rs.getString("order_id"));
+                order.setBuyerUid(rs.getString("buyer_uid"));
+                order.setFarmerUid(rs.getString("farmer_uid"));
+                order.setProductId(rs.getLong("product_id"));
+                order.setProductTitle(rs.getString("product_title"));
+                order.setProductSpecification(rs.getString("product_specification"));
+                order.setProductPrice(rs.getBigDecimal("product_price"));
+                order.setQuantity(rs.getInt("quantity"));
+                order.setTotalAmount(rs.getBigDecimal("total_amount"));
+                order.setBuyerName(rs.getString("buyer_name"));
+                order.setBuyerAddress(rs.getString("buyer_address"));
+                order.setBuyerPhone(rs.getString("buyer_phone"));
+                order.setRemark(rs.getString("remark"));
+                order.setStatus(rs.getString("status"));
+                order.setCreatedAt(rs.getTimestamp("created_at"));
+                
+                // 查询商品主图
+                String imgSql = "SELECT image_url FROM product_images WHERE product_id = ? AND is_main = TRUE LIMIT 1";
+                PreparedStatement imgStmt = conn.prepareStatement(imgSql);
+                imgStmt.setLong(1, order.getProductId());
+                ResultSet imgRs = imgStmt.executeQuery();
+                List<String> images = new ArrayList<>();
+                if (imgRs.next()) {
+                    images.add(imgRs.getString("image_url"));
+                }
+                order.setImages(images);
+                imgRs.close();
+                imgStmt.close();
+                
+                orders.add(order);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return orders;
     }
 }

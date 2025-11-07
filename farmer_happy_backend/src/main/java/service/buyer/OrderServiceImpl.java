@@ -3,6 +3,7 @@ package service.buyer;
 import dto.buyer.*;
 import entity.Order;
 import entity.Product;
+import exception.ValidationException;
 import repository.DatabaseManager;
 
 import java.math.BigDecimal;
@@ -298,15 +299,84 @@ public class OrderServiceImpl implements OrderService {
         return new OrderListResponseDTO(list);
     }
     
-    @Override
-    public CancelOrderResponseDTO cancelOrder(String orderId, CancelOrderRequestDTO request) throws Exception {
+    /**
+     * 获取农户订单列表
+     * @param farmerPhone 农户手机号
+     * @param status 订单状态（可选）
+     * @param title 商品标题（可选）
+     * @return 订单列表
+     * @throws Exception 如果查询失败
+     */
+    public OrderListResponseDTO getFarmerOrderList(String farmerPhone, String status, String title) throws Exception {
         // 1. 参数验证
-        validateCancelOrderRequest(request);
+        if (farmerPhone == null || !farmerPhone.matches("\\d{11}")) {
+            throw new RuntimeException("手机号格式不正确，必须是11位数字");
+        }
         
-        // 2. 验证买家是否存在
-        String buyerUid = dbManager.getBuyerUidByPhone(request.getBuyerPhone());
-        if (buyerUid == null) {
-            throw new RuntimeException("买家账户不存在或未启用");
+        // 2. 验证状态值（如果提供）
+        if (status != null && !status.trim().isEmpty()) {
+            String[] validStatuses = {"shipped", "completed", "cancelled", "refunded"};
+            boolean isValid = false;
+            for (String validStatus : validStatuses) {
+                if (validStatus.equals(status)) {
+                    isValid = true;
+                    break;
+                }
+            }
+            if (!isValid) {
+                throw new RuntimeException("无效的订单状态，允许的值：shipped, completed, cancelled, refunded");
+            }
+        }
+        
+        // 3. 验证农户是否存在
+        String farmerUid = dbManager.getFarmerUidByPhone(farmerPhone);
+        if (farmerUid == null) {
+            throw new RuntimeException("农户账户不存在或未启用");
+        }
+        
+        // 4. 查询订单列表
+        List<Order> orders = dbManager.findOrdersByFarmer(farmerUid, status, title);
+        
+        // 5. 构建响应
+        List<OrderListItemDTO> list = new ArrayList<>();
+        for (Order order : orders) {
+            OrderListItemDTO item = new OrderListItemDTO();
+            item.setOrderId(order.getOrderId());
+            item.setProductId(String.valueOf(order.getProductId()));
+            item.setTitle(order.getProductTitle());
+            item.setQuantity(order.getQuantity());
+            item.setTotalAmount(order.getTotalAmount());
+            item.setStatus(order.getStatus());
+            item.setCreatedAt(dateFormat.format(order.getCreatedAt()));
+            
+            // 设置商品主图
+            if (order.getImages() != null && !order.getImages().isEmpty()) {
+                item.setMainImageUrl(order.getImages().get(0));
+            }
+            
+            list.add(item);
+        }
+        
+        return new OrderListResponseDTO(list);
+    }
+    
+    /**
+     * 获取农户订单详情
+     * @param orderId 订单ID
+     * @param farmerPhone 农户手机号
+     * @return 订单详情
+     * @throws Exception 如果查询失败
+     */
+    public OrderDetailResponseDTO getFarmerOrderDetail(String orderId, String farmerPhone) throws Exception {
+        // 1. 参数验证
+        if (farmerPhone == null || !farmerPhone.matches("\\d{11}")) {
+            throw new RuntimeException("手机号格式不正确，必须是11位数字");
+        }
+        
+        // 2. 验证农户是否存在
+        String farmerUid = dbManager.getFarmerUidByPhone(farmerPhone);
+        if (farmerUid == null) {
+            throw new RuntimeException("农户账户不存在或未启用");
         }
         
         // 3. 验证订单是否存在
@@ -315,43 +385,34 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("订单不存在");
         }
         
-        // 4. 验证订单是否属于该买家
-        if (!order.getBuyerUid().equals(buyerUid)) {
+        // 4. 验证订单是否属于该农户
+        if (!order.getFarmerUid().equals(farmerUid)) {
             throw new RuntimeException("无权限访问该订单");
         }
         
-        // 5. 验证订单状态 - 只有已发货状态才能取消
-        if (!"shipped".equals(order.getStatus())) {
-            throw new RuntimeException("当前订单状态不允许取消");
-        }
-        
-        // 6. 处理退款
-        Timestamp now = new Timestamp(System.currentTimeMillis());
-        
-        // 6.1 更新订单状态为已退款
-        dbManager.updateOrderStatus(orderId, "refunded", now);
-        dbManager.updateOrderRefund(orderId, request.getCancelReason(), "only_refund");
-        
-        // 6.2 恢复库存
-        dbManager.updateProductStock(order.getProductId(), order.getQuantity());
-        
-        // 6.3 退款给买家
-        dbManager.updateBuyerBalance(order.getBuyerUid(), order.getTotalAmount());
-        
-        // 6.4 减少销量
-        dbManager.updateProductSalesCount(order.getProductId(), -order.getQuantity());
-        
-        // 7. 构建响应
-        CancelOrderResponseDTO response = new CancelOrderResponseDTO();
+        // 5. 构建响应
+        OrderDetailResponseDTO response = new OrderDetailResponseDTO();
         response.setOrderId(order.getOrderId());
-        response.setStatus("refunded");
-        response.setRefundAmount(order.getTotalAmount());
-        response.setCancelReason(request.getCancelReason());
-        response.setCancelledAt(dateFormat.format(now));
+        response.setProductId(String.valueOf(order.getProductId()));
+        response.setTitle(order.getProductTitle());
+        response.setSpecification(order.getProductSpecification());
+        response.setPrice(order.getProductPrice());
+        response.setQuantity(order.getQuantity());
+        response.setTotalAmount(order.getTotalAmount());
+        response.setBuyerName(order.getBuyerName());
+        response.setBuyerAddress(order.getBuyerAddress());
+        response.setBuyerPhone(order.getBuyerPhone());
+        response.setStatus(order.getStatus());
+        response.setRemark(order.getRemark());
+        response.setCreatedAt(dateFormat.format(order.getCreatedAt()));
+        response.setShippedAt(order.getShippedAt() != null ? dateFormat.format(order.getShippedAt()) : null);
+        response.setCompletedAt(order.getCompletedAt() != null ? dateFormat.format(order.getCompletedAt()) : null);
+        response.setCancelledAt(order.getCancelledAt() != null ? dateFormat.format(order.getCancelledAt()) : null);
+        response.setRefundedAt(order.getRefundedAt() != null ? dateFormat.format(order.getRefundedAt()) : null);
+        response.setImages(order.getImages());
         
-        Map<String, String> links = new HashMap<>();
-        links.put("self", "/api/v1/buyer/orders/" + order.getOrderId());
-        response.setLinks(links);
+        // 农户不需要操作链接
+        response.setLinks(new HashMap<>());
         
         return response;
     }
@@ -533,7 +594,16 @@ public class OrderServiceImpl implements OrderService {
         }
         
         if (!errors.isEmpty()) {
-            throw new IllegalArgumentException("参数验证失败");
+            // 构建详细的错误消息
+            StringBuilder errorMessage = new StringBuilder("参数验证失败：");
+            for (int i = 0; i < errors.size(); i++) {
+                Map<String, String> error = errors.get(i);
+                errorMessage.append(error.get("message"));
+                if (i < errors.size() - 1) {
+                    errorMessage.append("；");
+                }
+            }
+            throw new ValidationException(errorMessage.toString(), errors);
         }
     }
     
@@ -574,17 +644,16 @@ public class OrderServiceImpl implements OrderService {
         }
         
         if (!errors.isEmpty()) {
-            throw new IllegalArgumentException("参数验证失败");
-        }
-    }
-    
-    private void validateCancelOrderRequest(CancelOrderRequestDTO request) throws Exception {
-        if (request.getBuyerPhone() == null || !request.getBuyerPhone().matches("\\d{11}")) {
-            throw new IllegalArgumentException("手机号格式不正确，必须是11位数字");
-        }
-        
-        if (request.getCancelReason() != null && request.getCancelReason().length() > 200) {
-            throw new IllegalArgumentException("取消原因长度不能超过200个字符");
+            // 构建详细的错误消息
+            StringBuilder errorMessage = new StringBuilder("参数验证失败：");
+            for (int i = 0; i < errors.size(); i++) {
+                Map<String, String> error = errors.get(i);
+                errorMessage.append(error.get("message"));
+                if (i < errors.size() - 1) {
+                    errorMessage.append("；");
+                }
+            }
+            throw new ValidationException(errorMessage.toString(), errors);
         }
     }
     

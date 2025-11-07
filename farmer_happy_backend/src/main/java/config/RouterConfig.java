@@ -72,13 +72,30 @@ public class RouterConfig {
             return orderController.getOrderList(buyerPhone, status, title);
         }
         
-        // 取消订单 - /api/v1/buyer/orders/{order_id}/cancel
-        Pattern cancelOrderPattern = Pattern.compile("/api/v1/buyer/orders/([^/]+)/cancel");
-        Matcher cancelOrderMatcher = cancelOrderPattern.matcher(path);
-        if (cancelOrderMatcher.matches() && "POST".equals(method)) {
-            String orderId = cancelOrderMatcher.group(1);
-            CancelOrderRequestDTO request = parseCancelOrderRequest(requestBody);
-            return orderController.cancelOrder(orderId, request);
+        // ============= 农户订单相关路由 =============
+        
+        // 获取农户订单列表 - /api/v1/farmer/orders/list_query
+        if ("/api/v1/farmer/orders/list_query".equals(path) && "POST".equals(method)) {
+            String farmerPhone = queryParams.get("farmer_phone");
+            String status = queryParams.get("status");
+            String title = queryParams.get("title");
+            return orderController.getFarmerOrderList(farmerPhone, status, title);
+        }
+        
+        // 获取农户订单详情 - /api/v1/farmer/orders/query/{order_id}
+        Pattern getFarmerOrderDetailPattern = Pattern.compile("/api/v1/farmer/orders/query/([^/]+)");
+        Matcher getFarmerOrderDetailMatcher = getFarmerOrderDetailPattern.matcher(path);
+        if (getFarmerOrderDetailMatcher.matches() && "POST".equals(method)) {
+            String orderId = getFarmerOrderDetailMatcher.group(1);
+            String farmerPhone = null;
+            if (requestBody != null) {
+                farmerPhone = (String) requestBody.get("farmer_phone");
+            }
+            // 如果没有从请求体中获取到，尝试从查询参数获取
+            if (farmerPhone == null && queryParams != null) {
+                farmerPhone = queryParams.get("farmer_phone");
+            }
+            return orderController.getFarmerOrderDetail(orderId, farmerPhone);
         }
         
         // 申请退货退款 - /api/v1/buyer/orders/{order_id}/refund
@@ -226,6 +243,19 @@ public class RouterConfig {
         // 处理批量操作商品请求
         if ("/api/v1/farmer/products/batch-actions".equals(path) && "POST".equals(method)) {
             return productController.batchActionProducts(parseProductBatchActionRequest(requestBody));
+        }
+
+        // 获取用户余额 - /api/v1/auth/balance
+        if ("/api/v1/auth/balance".equals(path) && "GET".equals(method)) {
+            String phone = queryParams != null ? queryParams.get("phone") : null;
+            String userType = queryParams != null ? queryParams.get("user_type") : null;
+            if (phone == null && requestBody != null) {
+                phone = (String) requestBody.get("phone");
+            }
+            if (userType == null && requestBody != null) {
+                userType = (String) requestBody.get("user_type");
+            }
+            return authController.getBalance(phone, userType);
         }
 
         switch (path) {
@@ -559,13 +589,6 @@ public class RouterConfig {
     
     private QueryOrderRequestDTO parseQueryOrderRequest(Map<String, Object> requestBody) {
         QueryOrderRequestDTO request = new QueryOrderRequestDTO();
-        request.setBuyerPhone((String) requestBody.get("buyer_phone"));
-        return request;
-    }
-    
-    private CancelOrderRequestDTO parseCancelOrderRequest(Map<String, Object> requestBody) {
-        CancelOrderRequestDTO request = new CancelOrderRequestDTO();
-        request.setCancelReason((String) requestBody.get("cancel_reason"));
         request.setBuyerPhone((String) requestBody.get("buyer_phone"));
         return request;
     }

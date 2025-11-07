@@ -43,7 +43,7 @@ public class ProductServiceImpl implements ProductService {
             product.setStock(request.getStock());
             product.setDescription(request.getDescription());
             product.setOrigin(request.getOrigin());
-            product.setStatus("pending_review"); // 初始状态为待审核
+            product.setStatus("on_shelf"); // 初始状态为已上架
             product.setEnable(true);
             product.setCreatedAt(LocalDateTime.now());
 

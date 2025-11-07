@@ -44,15 +44,6 @@ public interface OrderService {
     OrderListResponseDTO getOrderList(String buyerPhone, String status, String title) throws Exception;
     
     /**
-     * 取消订单
-     * @param orderId 订单ID
-     * @param request 取消订单请求
-     * @return 取消订单响应
-     * @throws Exception 如果取消失败
-     */
-    CancelOrderResponseDTO cancelOrder(String orderId, CancelOrderRequestDTO request) throws Exception;
-    
-    /**
      * 申请退货退款
      * @param orderId 订单ID
      * @param request 退款请求

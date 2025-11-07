@@ -83,12 +83,13 @@
         </button>
         
         <button 
-          v-else-if="product.status === 'sold_out'"
+          v-else
           class="action-btn disabled-btn" 
           disabled
+          :title="getPurchaseDisabledReason"
         >
-          <span class="btn-icon">❌</span>
-          售罄
+          <span class="btn-icon">🛒</span>
+          {{ getPurchaseButtonText }}
         </button>
       </template>
     </div>
@@ -128,6 +129,34 @@ export default {
         aquatic: '水产'
       };
       return categoryMap[props.product.category] || props.product.category || '其他';
+    });
+
+    // 获取购买按钮文本
+    const getPurchaseButtonText = computed(() => {
+      if (props.product.status === 'sold_out' || props.product.stock === 0) {
+        return '已售罄';
+      }
+      if (props.product.status === 'off_shelf') {
+        return '已下架';
+      }
+      if (props.product.status === 'draft') {
+        return '未上架';
+      }
+      return '暂不可购买';
+    });
+
+    // 获取购买禁用原因
+    const getPurchaseDisabledReason = computed(() => {
+      if (props.product.status === 'sold_out' || props.product.stock === 0) {
+        return '商品已售罄';
+      }
+      if (props.product.status === 'off_shelf') {
+        return '商品已下架';
+      }
+      if (props.product.status === 'draft') {
+        return '商品未上架';
+      }
+      return '商品暂不可购买';
     });
 
     // 格式化日期
@@ -193,6 +222,8 @@ export default {
     return {
       categoryText,
       formatDate,
+      getPurchaseButtonText,
+      getPurchaseDisabledReason,
       handleSelect,
       handleView,
       handleEdit,

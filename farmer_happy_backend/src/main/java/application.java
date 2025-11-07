@@ -532,8 +532,6 @@ public class application {
                         return serializeOrderListResponseDTO((OrderListResponseDTO) value);
                     } else if (value instanceof OrderListItemDTO) {
                         return serializeOrderListItemDTO((OrderListItemDTO) value);
-                    } else if (value instanceof CancelOrderResponseDTO) {
-                        return serializeCancelOrderResponseDTO((CancelOrderResponseDTO) value);
                     } else if (value instanceof RefundResponseDTO) {
                         return serializeRefundResponseDTO((RefundResponseDTO) value);
                     } else if (value instanceof ConfirmReceiptResponseDTO) {
@@ -1160,34 +1158,6 @@ public class application {
                     StringBuilder json = new StringBuilder("{");
                     if (dto.getList() != null) {
                         json.append("\"list\":").append(serializeList(dto.getList())).append(",");
-                    }
-                    if (json.length() > 1) {
-                        json.deleteCharAt(json.length() - 1);
-                    }
-                    json.append("}");
-                    return json.toString();
-                }
-                
-                // 序列化 CancelOrderResponseDTO
-                private String serializeCancelOrderResponseDTO(CancelOrderResponseDTO dto) {
-                    StringBuilder json = new StringBuilder("{");
-                    if (dto.getOrderId() != null) {
-                        json.append("\"order_id\":\"").append(escapeJsonString(dto.getOrderId())).append("\",");
-                    }
-                    if (dto.getStatus() != null) {
-                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
-                    }
-                    if (dto.getRefundAmount() != null) {
-                        json.append("\"refund_amount\":").append(dto.getRefundAmount()).append(",");
-                    }
-                    if (dto.getCancelReason() != null) {
-                        json.append("\"cancel_reason\":\"").append(escapeJsonString(dto.getCancelReason())).append("\",");
-                    }
-                    if (dto.getCancelledAt() != null) {
-                        json.append("\"cancelled_at\":\"").append(escapeJsonString(dto.getCancelledAt())).append("\",");
-                    }
-                    if (dto.getLinks() != null) {
-                        json.append("\"_links\":").append(serializeValue(dto.getLinks())).append(",");
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1);

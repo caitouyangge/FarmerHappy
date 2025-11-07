@@ -143,12 +143,28 @@ public class AuthServiceImpl implements AuthService {
                 throw new SecurityException("该用户类型未注册");
             }
 
+            // 获取用户余额
+            java.math.BigDecimal balance = null;
+            String userType = loginRequest.getUserType();
+            if ("buyer".equals(userType)) {
+                balance = databaseManager.getBuyerBalance(loginRequest.getPhone());
+            } else if ("farmer".equals(userType)) {
+                balance = databaseManager.getFarmerBalance(loginRequest.getPhone());
+            } else if ("bank".equals(userType)) {
+                balance = databaseManager.getBankBalance(loginRequest.getPhone());
+            }
+            // 如果余额为null，设置为0
+            if (balance == null) {
+                balance = java.math.BigDecimal.ZERO;
+            }
+
             // 生成认证响应
             AuthResponseDTO response = new AuthResponseDTO();
             response.setUid(user.getUid());
             response.setNickname(user.getNickname());
             response.setPhone(user.getPhone());
             response.setUserType(loginRequest.getUserType());
+            response.setMoney(balance);
 
             return response;
         } finally {
@@ -295,6 +311,9 @@ public class AuthServiceImpl implements AuthService {
                 user.setPassword(rs.getString("password"));
                 user.setNickname(rs.getString("nickname"));
                 user.setPhone(rs.getString("phone"));
+                // 读取money字段，如果为null则设为0
+                java.math.BigDecimal money = rs.getBigDecimal("money");
+                user.setMoney(money != null ? money : java.math.BigDecimal.ZERO);
                 user.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
                 user.setUpdatedAt(rs.getTimestamp("updated_at") != null ?
                         rs.getTimestamp("updated_at").toLocalDateTime() : null);
@@ -556,5 +575,19 @@ public class AuthServiceImpl implements AuthService {
             e.printStackTrace();
             throw new SQLException("保存银行扩展信息失败: " + e.getMessage());
         }
+    }
+
+    @Override
+    public java.math.BigDecimal getBalance(String phone, String userType) throws SQLException {
+        java.math.BigDecimal balance = null;
+        if ("buyer".equals(userType)) {
+            balance = databaseManager.getBuyerBalance(phone);
+        } else if ("farmer".equals(userType)) {
+            balance = databaseManager.getFarmerBalance(phone);
+        } else if ("bank".equals(userType)) {
+            balance = databaseManager.getBankBalance(phone);
+        }
+        // 如果余额为null，返回0
+        return balance != null ? balance : java.math.BigDecimal.ZERO;
     }
 }

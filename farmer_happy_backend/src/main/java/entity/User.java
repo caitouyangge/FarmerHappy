@@ -1,6 +1,7 @@
 // entity/User.java
 package entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -9,6 +10,7 @@ public class User {
     private String password;
     private String nickname;
     private String phone;
+    private BigDecimal money;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -57,6 +59,14 @@ public class User {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public BigDecimal getMoney() {
+        return money;
+    }
+
+    public void setMoney(BigDecimal money) {
+        this.money = money;
     }
 
     public LocalDateTime getCreatedAt() {

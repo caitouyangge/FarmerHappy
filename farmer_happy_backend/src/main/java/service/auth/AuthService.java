@@ -4,6 +4,7 @@ package service.auth;
 import dto.auth.*;
 import dto.farmer.FarmerRegisterRequestDTO;
 import entity.User;
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.List;
 
@@ -14,6 +15,7 @@ public interface AuthService {
     User findUserByPhone(String phone) throws SQLException;
     void saveUser(User user) throws SQLException;
     boolean checkUserTypeExists(String uid, String userType) throws SQLException;
+    BigDecimal getBalance(String phone, String userType) throws SQLException;
 
     // 新增针对不同类型用户的保存方法
     void saveFarmerExtension(String uid, FarmerRegisterRequestDTO farmerRequest) throws SQLException;
