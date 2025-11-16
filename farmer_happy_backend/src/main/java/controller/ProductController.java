@@ -84,7 +84,7 @@ public class ProductController {
             ProductResponseDTO product = productService.createProduct(request, user.getUid());
 
             response.put("code", 201);
-            response.put("message", "商品发布成功，等待审核");
+            response.put("message", "商品发布成功");
             response.put("data", product);
 
             return response;

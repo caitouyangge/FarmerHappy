@@ -122,6 +122,48 @@ export const authService = {
         }
     },
 
+    async getBalance(phone, userType) {
+        try {
+            logger.apiRequest('GET', `${API_URL}/balance`, { phone, user_type: userType });
+            logger.info('AUTH', '开始获取用户余额', { phone, userType });
+            
+            const response = await axios.get(`${API_URL}/balance`, {
+                params: {
+                    phone: phone,
+                    user_type: userType
+                }
+            });
+            
+            logger.apiResponse('GET', `${API_URL}/balance`, response.status, {
+                code: response.data.code,
+                success: response.data.code === 200
+            });
+            
+            if (response.data.code !== 200) {
+                logger.error('AUTH', '获取余额失败', {
+                    phone,
+                    userType,
+                    code: response.data.code,
+                    message: response.data.message
+                });
+                throw new Error(response.data.message || '获取余额失败');
+            }
+            
+            const balance = response.data.data?.balance || 0;
+            logger.info('AUTH', '获取余额成功', { phone, userType, balance });
+            
+            return balance;
+        } catch (error) {
+            logger.apiError('GET', `${API_URL}/balance`, error);
+            logger.error('AUTH', '获取余额失败', {
+                phone,
+                userType,
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+            throw error.response?.data?.message || error.message || error;
+        }
+    },
+
     logout() {
         logger.info('AUTH', '用户登出');
         const user = localStorage.getItem('user');

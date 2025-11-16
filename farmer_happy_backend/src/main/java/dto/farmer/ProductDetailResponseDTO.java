@@ -13,7 +13,6 @@ public class ProductDetailResponseDTO {
     private String description;
     private List<String> images;
     private String origin;
-    private String shipping_template_id;
     private String status;
     private LocalDateTime created_at;
     private LocalDateTime updated_at;
@@ -81,14 +80,6 @@ public class ProductDetailResponseDTO {
 
     public void setOrigin(String origin) {
         this.origin = origin;
-    }
-
-    public String getShipping_template_id() {
-        return shipping_template_id;
-    }
-
-    public void setShipping_template_id(String shipping_template_id) {
-        this.shipping_template_id = shipping_template_id;
     }
 
     public String getStatus() {

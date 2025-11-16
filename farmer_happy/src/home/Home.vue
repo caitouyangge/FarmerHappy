@@ -9,6 +9,11 @@
           <div class="user-name">{{ userInfo.nickname || '用户' }}</div>
           <div class="user-phone">{{ userInfo.phone }}</div>
           <div class="user-role">{{ userRoleText }}</div>
+          <div v-if="shouldShowBalance" class="user-balance">
+            <span class="balance-label">余额：</span>
+            <span v-if="loadingBalance" class="balance-loading">加载中...</span>
+            <span v-else class="balance-amount">¥{{ formattedBalance }}</span>
+          </div>
         </div>
       </div>
 
@@ -61,15 +66,20 @@ export default {
   setup() {
     const router = useRouter();
     const userInfo = ref({});
+    const balance = ref(null);
+    const loadingBalance = ref(false);
 
     // 获取用户信息
-    onMounted(() => {
+    onMounted(async () => {
       logger.lifecycle('Home', 'mounted');
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
         try {
           userInfo.value = JSON.parse(storedUser);
           logger.info('HOME', '加载用户信息成功', { userType: userInfo.value.userType });
+          
+          // 实时获取余额
+          await loadBalance();
         } catch (error) {
           logger.error('HOME', '解析用户信息失败', {}, error);
           router.push('/login');
@@ -79,6 +89,28 @@ export default {
         router.push('/login');
       }
     });
+
+    // 加载余额
+    const loadBalance = async () => {
+      const userType = userInfo.value.userType;
+      if (userType === 'farmer' || userType === 'buyer' || userType === 'bank') {
+        loadingBalance.value = true;
+        try {
+          const currentBalance = await authService.getBalance(userInfo.value.phone, userType);
+          balance.value = currentBalance;
+          // 同时更新localStorage中的余额
+          userInfo.value.money = currentBalance;
+          localStorage.setItem('user', JSON.stringify(userInfo.value));
+          logger.info('HOME', '获取余额成功', { balance: currentBalance });
+        } catch (error) {
+          logger.error('HOME', '获取余额失败', {}, error);
+          // 如果获取失败，使用localStorage中的余额
+          balance.value = userInfo.value.money || 0;
+        } finally {
+          loadingBalance.value = false;
+        }
+      }
+    };
 
     // 用户名首字母
     const userInitial = computed(() => {
@@ -95,6 +127,26 @@ export default {
         bank: '银行'
       };
       return roleMap[userInfo.value.userType] || '无';
+    });
+
+    // 是否显示余额（仅对农户、买家、银行显示）
+    const shouldShowBalance = computed(() => {
+      const userType = userInfo.value.userType;
+      return userType === 'farmer' || userType === 'buyer' || userType === 'bank';
+    });
+
+    // 格式化余额
+    const formattedBalance = computed(() => {
+      const currentBalance = balance.value !== null ? balance.value : userInfo.value.money;
+      if (currentBalance === null || currentBalance === undefined) {
+        return '0.00';
+      }
+      // 确保是数字类型
+      const numBalance = typeof currentBalance === 'number' ? currentBalance : parseFloat(currentBalance);
+      if (isNaN(numBalance)) {
+        return '0.00';
+      }
+      return numBalance.toFixed(2);
     });
 
     // 欢迎信息
@@ -133,6 +185,13 @@ export default {
             route: '/trading'
           },
           {
+            id: 'orders',
+            name: '我的订单',
+            description: '查看和管理您的订单',
+            icon: '📦',
+            route: '/orders'
+          },
+          {
             id: 'community',
             name: '专家农户交流平台',
             description: '与专家和其他农户交流，分享经验与提问',
@@ -163,6 +222,13 @@ export default {
             description: '浏览优质农产品，下单购买',
             icon: '🌾',
             route: '/trading'
+          },
+          {
+            id: 'orders',
+            name: '我的订单',
+            description: '查看和管理您的订单',
+            icon: '📦',
+            route: '/orders'
           }
         ]
       };
@@ -186,7 +252,7 @@ export default {
       });
       
       // 支持路由的模块直接跳转
-      if (module.id === 'trading' || module.id === 'community') {
+      if (module.id === 'trading' || module.id === 'community' || module.id === 'orders') {
         router.push(module.route);
       } else {
         // 其他模块暂时使用提示
@@ -196,13 +262,18 @@ export default {
 
     return {
       userInfo,
+      balance,
+      loadingBalance,
       userInitial,
       userRoleText,
+      shouldShowBalance,
+      formattedBalance,
       welcomeMessage,
       subtitleMessage,
       availableModules,
       handleLogout,
-      handleModuleClick
+      handleModuleClick,
+      loadBalance
     };
   }
 };
@@ -264,6 +335,31 @@ export default {
   font-size: 0.875rem;
   color: var(--primary);
   font-weight: 500;
+}
+
+.user-balance {
+  font-size: 0.875rem;
+  color: #10b981;
+  font-weight: 600;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.balance-label {
+  color: var(--gray-500);
+  font-weight: 400;
+}
+
+.balance-amount {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.balance-loading {
+  color: var(--gray-500);
+  font-size: 0.75rem;
 }
 
 .btn-logout {

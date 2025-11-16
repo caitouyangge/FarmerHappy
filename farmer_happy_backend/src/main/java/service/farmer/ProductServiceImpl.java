@@ -43,7 +43,7 @@ public class ProductServiceImpl implements ProductService {
             product.setStock(request.getStock());
             product.setDescription(request.getDescription());
             product.setOrigin(request.getOrigin());
-            product.setStatus("pending_review"); // 初始状态为待审核
+            product.setStatus("on_shelf"); // 初始状态为已上架
             product.setEnable(true);
             product.setCreatedAt(LocalDateTime.now());
 
@@ -848,9 +848,6 @@ public class ProductServiceImpl implements ProductService {
                 productDetail.setOrigin(rs.getString("origin"));
                 productDetail.setStatus(rs.getString("status"));
                 productDetail.setCreated_at(rs.getTimestamp("created_at").toLocalDateTime());
-
-                // shipping_template_id 暂时设置为空，因为数据库表中没有该字段
-                productDetail.setShipping_template_id(null);
             }
 
             String imageUrl = rs.getString("image_url");

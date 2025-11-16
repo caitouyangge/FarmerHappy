@@ -138,18 +138,27 @@
               </button>
               
               <button 
-                v-else-if="product.status === 'sold_out'"
+                v-else
                 class="action-btn disabled-btn" 
                 disabled
+                :title="getPurchaseDisabledReason"
               >
-                <span class="btn-icon">❌</span>
-                已售罄
+                <span class="btn-icon">🛒</span>
+                {{ getPurchaseButtonText }}
               </button>
             </template>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 订单表单弹窗 -->
+    <OrderForm
+      v-if="showOrderForm && product"
+      :product="product"
+      @close="showOrderForm = false"
+      @success="handleOrderSuccess"
+    />
   </div>
 </template>
 
@@ -157,9 +166,13 @@
 import { ref, computed, onMounted } from 'vue';
 import { productService } from '../api/product';
 import logger from '../utils/logger';
+import OrderForm from './OrderForm.vue';
 
 export default {
   name: 'ProductDetail',
+  components: {
+    OrderForm
+  },
   props: {
     productId: {
       type: [String, Number],
@@ -172,6 +185,7 @@ export default {
     const loading = ref(false);
     const error = ref('');
     const userInfo = ref({});
+    const showOrderForm = ref(false);
 
     // 获取用户信息
     onMounted(() => {
@@ -198,6 +212,36 @@ export default {
         grains: '粮食'
       };
       return categoryMap[product.value.category] || product.value.category || '其他';
+    });
+
+    // 获取购买按钮文本
+    const getPurchaseButtonText = computed(() => {
+      if (!product.value) return '暂不可购买';
+      if (product.value.status === 'sold_out' || product.value.stock === 0) {
+        return '已售罄';
+      }
+      if (product.value.status === 'off_shelf') {
+        return '已下架';
+      }
+      if (product.value.status === 'draft') {
+        return '未上架';
+      }
+      return '暂不可购买';
+    });
+
+    // 获取购买禁用原因
+    const getPurchaseDisabledReason = computed(() => {
+      if (!product.value) return '商品信息加载中';
+      if (product.value.status === 'sold_out' || product.value.stock === 0) {
+        return '商品已售罄';
+      }
+      if (product.value.status === 'off_shelf') {
+        return '商品已下架';
+      }
+      if (product.value.status === 'draft') {
+        return '商品未上架';
+      }
+      return '商品暂不可购买';
     });
 
     // 加载产品详情
@@ -317,7 +361,19 @@ export default {
     // 购买产品
     const handlePurchase = () => {
       logger.userAction('PRODUCT_DETAIL_PURCHASE', { productId: props.productId });
+      if (product.value && product.value.status === 'on_shelf' && product.value.stock > 0) {
+        showOrderForm.value = true;
+      } else {
+        alert('商品不可购买');
+      }
+    };
+
+    // 订单创建成功
+    const handleOrderSuccess = (orderData) => {
+      logger.info('PRODUCT_DETAIL', '订单创建成功', { orderId: orderData?.order_id });
       emit('purchase', product.value);
+      // 重新加载产品详情以更新库存
+      loadProductDetail();
     };
 
     return {
@@ -326,6 +382,8 @@ export default {
       error,
       isFarmer,
       categoryText,
+      getPurchaseButtonText,
+      getPurchaseDisabledReason,
       loadProductDetail,
       formatDate,
       handleClose,
@@ -334,7 +392,9 @@ export default {
       handleDelete,
       handleOnShelf,
       handleOffShelf,
-      handlePurchase
+      handlePurchase,
+      showOrderForm,
+      handleOrderSuccess
     };
   }
 };

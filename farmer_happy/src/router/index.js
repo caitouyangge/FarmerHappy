@@ -6,6 +6,8 @@ import ProductList from '../trading/ProductList.vue';
 import Community from '../community/Community.vue';
 import ContentDetail from '../community/ContentDetail.vue';
 import ContentForm from '../community/ContentForm.vue';
+import OrderList from '../orders/OrderList.vue';
+import OrderDetail from '../orders/OrderDetail.vue';
 
 const routes = [
   {
@@ -50,6 +52,18 @@ const routes = [
     path: '/community/:id',
     name: 'ContentDetail',
     component: ContentDetail,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/orders',
+    name: 'OrderList',
+    component: OrderList,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/orders/:id',
+    name: 'OrderDetail',
+    component: OrderDetail,
     meta: { requiresAuth: true }
   }
 ];

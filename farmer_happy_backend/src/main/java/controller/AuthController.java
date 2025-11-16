@@ -103,6 +103,44 @@ public class AuthController {
         return response;
     }
 
+    public Map<String, Object> getBalance(String phone, String userType) {
+        System.out.println("AuthController.getBalance - 开始处理获取余额请求");
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            if (phone == null || phone.isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "手机号不能为空");
+                return response;
+            }
+
+            if (userType == null || userType.isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "用户类型不能为空");
+                return response;
+            }
+
+            java.math.BigDecimal balance = authService.getBalance(phone, userType);
+            if (balance == null) {
+                balance = java.math.BigDecimal.ZERO;
+            }
+
+            response.put("code", 200);
+            response.put("message", "成功");
+            Map<String, Object> data = new HashMap<>();
+            data.put("balance", balance);
+            response.put("data", data);
+            System.out.println("AuthController.getBalance - 返回余额: " + balance);
+        } catch (Exception e) {
+            System.out.println("AuthController.getBalance - 捕获异常: " + e.getMessage());
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+        }
+
+        return response;
+    }
+
     private String extractFieldName(String errorMessage) {
         System.out.println("AuthController.extractFieldName - 处理错误消息: [" + errorMessage + "]");
         

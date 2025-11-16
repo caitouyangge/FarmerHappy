@@ -96,7 +96,7 @@
     <!-- 分页 -->
     <div class="pagination-section" v-if="products.length > 0">
       <div class="pagination-info">
-        共 {{ totalCount }} 个产品
+        共 {{ displayTotalCount }} 个产品
       </div>
       <div class="pagination-controls">
         <button 
@@ -107,12 +107,12 @@
           上一页
         </button>
         <span class="pagination-info">
-          第 {{ currentPage }} 页 / 共 {{ totalPages }} 页
+          第 {{ currentPage }} 页 / 共 {{ totalPages || 1 }} 页
         </span>
         <button 
           class="pagination-btn" 
           @click="handlePageChange(currentPage + 1)"
-          :disabled="currentPage >= totalPages"
+          :disabled="currentPage >= totalPages || products.length < pageSize"
         >
           下一页
         </button>
@@ -133,6 +133,7 @@
       v-if="showProductDetail"
       :product-id="viewingProductId"
       @close="showProductDetail = false"
+      @purchase="handlePurchase"
     />
 
     <!-- 批量操作弹窗 -->
@@ -141,6 +142,14 @@
       :selected-count="selectedProducts.length"
       @close="showBatchModal = false"
       @confirm="handleBatchConfirm"
+    />
+
+    <!-- 订单表单弹窗 -->
+    <OrderForm
+      v-if="showOrderForm && purchasingProduct"
+      :product="purchasingProduct"
+      @close="showOrderForm = false"
+      @success="handleOrderSuccess"
     />
   </div>
 </template>
@@ -154,6 +163,7 @@ import ProductCard from '../components/ProductCard.vue';
 import ProductForm from '../components/ProductForm.vue';
 import ProductDetail from '../components/ProductDetail.vue';
 import BatchActionModal from '../components/BatchActionModal.vue';
+import OrderForm from '../components/OrderForm.vue';
 
 export default {
   name: 'ProductList',
@@ -161,7 +171,8 @@ export default {
     ProductCard,
     ProductForm,
     ProductDetail,
-    BatchActionModal
+    BatchActionModal,
+    OrderForm
   },
   setup() {
     const router = useRouter();
@@ -174,14 +185,34 @@ export default {
     const showCreateForm = ref(false);
     const showProductDetail = ref(false);
     const showBatchModal = ref(false);
+    const showOrderForm = ref(false);
     const editingProduct = ref(null);
     const viewingProductId = ref(null);
+    const purchasingProduct = ref(null);
 
     // 分页相关
     const currentPage = ref(1);
-    const pageSize = ref(12);
+    const pageSize = ref(15);
     const totalCount = ref(0);
-    const totalPages = computed(() => Math.ceil(totalCount.value / pageSize.value));
+    // 根据实际返回的商品数量计算总页数
+    // 如果当前页返回的商品数等于pageSize，说明可能还有下一页
+    // 如果当前页返回的商品数小于pageSize，说明这是最后一页
+    const totalPages = computed(() => {
+      if (products.value.length === 0) return 0;
+      // 如果当前页商品数等于pageSize，可能还有更多页
+      if (products.value.length === pageSize.value) {
+        // 至少是当前页+1，但不知道具体有多少页，先显示当前页+1
+        return currentPage.value + 1;
+      } else {
+        // 当前页不满，说明是最后一页
+        return currentPage.value;
+      }
+    });
+    // 计算总商品数（用于显示）
+    const displayTotalCount = computed(() => {
+      if (products.value.length === 0) return 0;
+      return products.value.length + (currentPage.value - 1) * pageSize.value;
+    });
 
     // 用户类型判断
     const isFarmer = computed(() => userInfo.value.userType === 'farmer');
@@ -361,7 +392,21 @@ export default {
     // 购买产品
     const handlePurchase = (product) => {
       logger.userAction('PURCHASE_PRODUCT', { productId: product.product_id });
-      alert(`购买功能开发中...\n产品：${product.title}`);
+      if (product.status === 'on_shelf' && product.stock > 0) {
+        purchasingProduct.value = product;
+        showOrderForm.value = true;
+      } else {
+        alert('商品不可购买');
+      }
+    };
+
+    // 订单创建成功
+    const handleOrderSuccess = (orderData) => {
+      logger.info('PRODUCT_LIST', '订单创建成功', { orderId: orderData?.order_id });
+      showOrderForm.value = false;
+      purchasingProduct.value = null;
+      // 重新加载产品列表以更新库存
+      loadProducts();
     };
 
     // 批量操作
@@ -411,11 +456,15 @@ export default {
       showCreateForm,
       showProductDetail,
       showBatchModal,
+      showOrderForm,
       editingProduct,
       viewingProductId,
+      purchasingProduct,
       currentPage,
+      pageSize,
       totalCount,
       totalPages,
+      displayTotalCount,
       isFarmer,
       userRoleText,
       goBack,
@@ -432,7 +481,8 @@ export default {
       handleBatchAction,
       handleBatchConfirm,
       handleFormClose,
-      handleFormSuccess
+      handleFormSuccess,
+      handleOrderSuccess
     };
   }
 };

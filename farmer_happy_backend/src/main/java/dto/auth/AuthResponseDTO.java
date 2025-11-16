@@ -1,11 +1,14 @@
 // dto/auth/AuthResponseDTO.java
 package dto.auth;
 
+import java.math.BigDecimal;
+
 public class AuthResponseDTO {
     private String uid;
     private String nickname;
     private String phone;
     private String userType;
+    private BigDecimal money;
 
     // Getters and Setters
     public String getUid() {
@@ -38,5 +41,13 @@ public class AuthResponseDTO {
 
     public void setUserType(String userType) {
         this.userType = userType;
+    }
+
+    public BigDecimal getMoney() {
+        return money;
+    }
+
+    public void setMoney(BigDecimal money) {
+        this.money = money;
     }
 }
