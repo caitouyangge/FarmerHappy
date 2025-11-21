@@ -11,6 +11,7 @@ import dto.farmer.ProductDetailResponseDTO;
 import dto.farmer.ProductBatchActionResultDTO;
 import dto.community.*;
 import dto.buyer.*;
+import dto.financing.*;
 import repository.DatabaseManager;
 
 import java.io.BufferedReader;
@@ -536,7 +537,19 @@ public class application {
                         return serializeRefundResponseDTO((RefundResponseDTO) value);
                     } else if (value instanceof ConfirmReceiptResponseDTO) {
                         return serializeConfirmReceiptResponseDTO((ConfirmReceiptResponseDTO) value);
-                    } else {
+                    }else if (value instanceof BankLoanProductResponseDTO) {
+                        return serializeBankLoanProductResponseDTO((BankLoanProductResponseDTO) value);
+                    } else if (value instanceof LoanProductsResponseDTO) {
+                        return serializeLoanProductsResponseDTO((LoanProductsResponseDTO) value);
+                    } else if (value instanceof CreditLimitDTO) {
+                        return serializeCreditLimitDTO((CreditLimitDTO) value);
+                    } else if (value instanceof CreditApplicationDTO) {
+                        return serializeCreditApplicationDTO((CreditApplicationDTO) value);
+                    } else if (value instanceof LoanProductDTO) {
+                        return serializeLoanProductDTO((LoanProductDTO) value);
+                    }
+
+                    else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
                     }
                 }
@@ -1189,6 +1202,158 @@ public class application {
                     }
                     if (dto.getLinks() != null) {
                         json.append("\"_links\":").append(serializeValue(dto.getLinks())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 BankLoanProductResponseDTO
+                private String serializeBankLoanProductResponseDTO(BankLoanProductResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getProduct_id() != null) {
+                        json.append("\"product_id\":\"").append(escapeJsonString(dto.getProduct_id())).append("\",");
+                    }
+                    if (dto.getProduct_code() != null) {
+                        json.append("\"product_code\":\"").append(escapeJsonString(dto.getProduct_code())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getCreated_at() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreated_at().toString())).append("\",");
+                    }
+                    if (dto.getCreated_by() != null) {
+                        json.append("\"created_by\":\"").append(escapeJsonString(dto.getCreated_by())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 LoanProductsResponseDTO
+                private String serializeLoanProductsResponseDTO(LoanProductsResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    json.append("\"total\":").append(dto.getTotal()).append(",");
+                    if (dto.getAvailable_products() != null) {
+                        json.append("\"available_products\":").append(serializeList(dto.getAvailable_products())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 CreditLimitDTO
+                private String serializeCreditLimitDTO(CreditLimitDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getTotal_limit() != null) {
+                        json.append("\"total_limit\":").append(dto.getTotal_limit()).append(",");
+                    }
+                    if (dto.getUsed_limit() != null) {
+                        json.append("\"used_limit\":").append(dto.getUsed_limit()).append(",");
+                    }
+                    if (dto.getAvailable_limit() != null) {
+                        json.append("\"available_limit\":").append(dto.getAvailable_limit()).append(",");
+                    }
+                    if (dto.getCurrency() != null) {
+                        json.append("\"currency\":\"").append(escapeJsonString(dto.getCurrency())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getLast_updated() != null) {
+                        json.append("\"last_updated\":\"").append(escapeJsonString(dto.getLast_updated().toString())).append("\",");
+                    } else {
+                        json.append("\"last_updated\":null,");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 CreditApplicationDTO
+                private String serializeCreditApplicationDTO(CreditApplicationDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getApplication_id() != null) {
+                        json.append("\"application_id\":\"").append(escapeJsonString(dto.getApplication_id())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getCreated_at() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreated_at().toString())).append("\",");
+                    }
+                    if (dto.getApply_amount() != null) {
+                        json.append("\"apply_amount\":").append(dto.getApply_amount()).append(",");
+                    }
+                    if (dto.getProof_type() != null) {
+                        json.append("\"proof_type\":\"").append(escapeJsonString(dto.getProof_type())).append("\",");
+                    }
+                    if (dto.getProof_images() != null) {
+                        json.append("\"proof_images\":").append(serializeList(dto.getProof_images())).append(",");
+                    }
+                    if (dto.getDescription() != null) {
+                        json.append("\"description\":\"").append(escapeJsonString(dto.getDescription())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 LoanProductDTO
+                private String serializeLoanProductDTO(LoanProductDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getProduct_id() != null) {
+                        json.append("\"product_id\":\"").append(escapeJsonString(dto.getProduct_id())).append("\",");
+                    }
+                    if (dto.getProduct_name() != null) {
+                        json.append("\"product_name\":\"").append(escapeJsonString(dto.getProduct_name())).append("\",");
+                    }
+                    if (dto.getProduct_code() != null) {
+                        json.append("\"product_code\":\"").append(escapeJsonString(dto.getProduct_code())).append("\",");
+                    }
+                    if (dto.getMin_credit_limit() != null) {
+                        json.append("\"min_credit_limit\":").append(dto.getMin_credit_limit()).append(",");
+                    }
+                    if (dto.getMax_amount() != null) {
+                        json.append("\"max_amount\":").append(dto.getMax_amount()).append(",");
+                    }
+                    if (dto.getInterest_rate() != null) {
+                        json.append("\"interest_rate\":").append(dto.getInterest_rate()).append(",");
+                    }
+                    if (dto.getTerm_months() != null) {
+                        json.append("\"term_months\":").append(dto.getTerm_months()).append(",");
+                    }
+                    if (dto.getRepayment_method() != null) {
+                        json.append("\"repayment_method\":\"").append(escapeJsonString(dto.getRepayment_method())).append("\",");
+                    }
+                    if (dto.getRepayment_method_name() != null) {
+                        json.append("\"repayment_method_name\":\"").append(escapeJsonString(dto.getRepayment_method_name())).append("\",");
+                    }
+                    if (dto.getDescription() != null) {
+                        json.append("\"description\":\"").append(escapeJsonString(dto.getDescription())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getCan_apply() != null) {
+                        json.append("\"can_apply\":").append(dto.getCan_apply().toString().toLowerCase()).append(",");
+                    }
+                    if (dto.getReason() != null) {
+                        json.append("\"reason\":\"").append(escapeJsonString(dto.getReason())).append("\",");
+                    }
+                    if (dto.getMax_apply_amount() != null) {
+                        json.append("\"max_apply_amount\":").append(dto.getMax_apply_amount()).append(",");
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1);
