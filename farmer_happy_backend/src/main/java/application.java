@@ -104,17 +104,17 @@ public class application {
                     } catch (Exception e) {
                         System.err.println("处理请求时发生错误: " + e.getMessage());
                         e.printStackTrace();
-                        
+
                         // 发送500错误响应
                         try {
                             Map<String, Object> errorResponse = new HashMap<>();
                             errorResponse.put("code", 500);
                             errorResponse.put("message", "服务器内部错误: " + e.getMessage());
-                            
+
                             String jsonResponse = toJson(errorResponse);
                             exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
                             exchange.sendResponseHeaders(500, jsonResponse.getBytes("UTF-8").length);
-                            
+
                             OutputStream os = exchange.getResponseBody();
                             os.write(jsonResponse.getBytes("UTF-8"));
                             os.close();
@@ -128,6 +128,7 @@ public class application {
                             }
                         }
                     }
+
                 }
 
                 // 解析URL查询参数
@@ -547,6 +548,16 @@ public class application {
                         return serializeCreditApplicationDTO((CreditApplicationDTO) value);
                     } else if (value instanceof LoanProductDTO) {
                         return serializeLoanProductDTO((LoanProductDTO) value);
+                    }else if (value instanceof SingleLoanApplicationResponseDTO) {
+                        return serializeSingleLoanApplicationResponseDTO((SingleLoanApplicationResponseDTO) value);
+                    } else if (value instanceof JointLoanApplicationResponseDTO) {
+                        return serializeJointLoanApplicationResponseDTO((JointLoanApplicationResponseDTO) value);
+                    } else if (value instanceof JointPartnerDTO) {
+                        return serializeJointPartnerDTO((JointPartnerDTO) value);
+                    }else if (value instanceof PartnersResponseDTO) {
+                        return serializePartnersResponseDTO((PartnersResponseDTO) value);
+                    }else if (value instanceof PartnerItemDTO) {
+                        return serializePartnerItemDTO((PartnerItemDTO) value);
                     }
 
                     else {
@@ -570,6 +581,23 @@ public class application {
                         }
                     }
                     json.append("]");
+                    return json.toString();
+                }
+
+                // 序列化 PartnersResponseDTO
+                private String serializePartnersResponseDTO(PartnersResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    json.append("\"total\":").append(dto.getTotal()).append(",");
+                    if (dto.getPartners() != null) {
+                        json.append("\"partners\":").append(serializeList(dto.getPartners())).append(",");
+                    }
+                    if (dto.getRecommendation_reason() != null) {
+                        json.append("\"recommendation_reason\":\"").append(escapeJsonString(dto.getRecommendation_reason())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
                     return json.toString();
                 }
 
@@ -668,6 +696,86 @@ public class application {
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                private String serializeSingleLoanApplicationResponseDTO(SingleLoanApplicationResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getLoan_application_id() != null) {
+                        json.append("\"loan_application_id\":\"").append(escapeJsonString(dto.getLoan_application_id())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getProduct_name() != null) {
+                        json.append("\"product_name\":\"").append(escapeJsonString(dto.getProduct_name())).append("\",");
+                    }
+                    if (dto.getApply_amount() != null) {
+                        json.append("\"apply_amount\":").append(dto.getApply_amount()).append(",");
+                    }
+                    if (dto.getEstimated_monthly_payment() != null) {
+                        json.append("\"estimated_monthly_payment\":").append(dto.getEstimated_monthly_payment()).append(",");
+                    }
+                    if (dto.getCreated_at() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreated_at().toString())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 JointLoanApplicationResponseDTO
+                private String serializeJointLoanApplicationResponseDTO(JointLoanApplicationResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getLoan_application_id() != null) {
+                        json.append("\"loan_application_id\":\"").append(escapeJsonString(dto.getLoan_application_id())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getProduct_name() != null) {
+                        json.append("\"product_name\":\"").append(escapeJsonString(dto.getProduct_name())).append("\",");
+                    }
+                    if (dto.getApply_amount() != null) {
+                        json.append("\"apply_amount\":").append(dto.getApply_amount()).append(",");
+                    }
+                    if (dto.getInitiator_phone() != null) {
+                        json.append("\"initiator_phone\":\"").append(escapeJsonString(dto.getInitiator_phone())).append("\",");
+                    }
+                    if (dto.getPartners() != null) {
+                        json.append("\"partners\":").append(serializeList(dto.getPartners())).append(",");
+                    }
+                    if (dto.getCreated_at() != null) {
+                        json.append("\"created_at\":\"").append(escapeJsonString(dto.getCreated_at().toString())).append("\",");
+                    }
+                    if (dto.getNext_step() != null) {
+                        json.append("\"next_step\":\"").append(escapeJsonString(dto.getNext_step())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 JointPartnerDTO
+                private String serializeJointPartnerDTO(JointPartnerDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getPhone() != null) {
+                        json.append("\"phone\":\"").append(escapeJsonString(dto.getPhone())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getInvited_at() != null) {
+                        json.append("\"invited_at\":\"").append(escapeJsonString(dto.getInvited_at().toString())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
                     }
                     json.append("}");
                     return json.toString();
@@ -1158,6 +1266,28 @@ public class application {
                     }
                     if (dto.getMainImageUrl() != null) {
                         json.append("\"main_image_url\":\"").append(escapeJsonString(dto.getMainImageUrl())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 PartnerItemDTO
+                private String serializePartnerItemDTO(PartnerItemDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getPhone() != null) {
+                        json.append("\"phone\":\"").append(escapeJsonString(dto.getPhone())).append("\",");
+                    }
+                    if (dto.getNickname() != null) {
+                        json.append("\"nickname\":\"").append(escapeJsonString(dto.getNickname())).append("\",");
+                    }
+                    if (dto.getAvailable_credit_limit() != null) {
+                        json.append("\"available_credit_limit\":").append(dto.getAvailable_credit_limit()).append(",");
+                    }
+                    if (dto.getTotal_credit_limit() != null) {
+                        json.append("\"total_credit_limit\":").append(dto.getTotal_credit_limit()).append(",");
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1);

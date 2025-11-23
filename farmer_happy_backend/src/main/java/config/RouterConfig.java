@@ -69,6 +69,24 @@ public class RouterConfig {
             return financingController.publishLoanProduct(request);
         }
 
+        // 申请单人贷款
+        if ("/api/v1/financing/loans/single".equals(path) && "POST".equals(method)) {
+            SingleLoanApplicationRequestDTO request = parseSingleLoanApplicationRequest(requestBody);
+            return financingController.applyForSingleLoan(request);
+        }
+
+        // 申请联合贷款
+        if ("/api/v1/financing/loans/joint".equals(path) && "POST".equals(method)) {
+            JointLoanApplicationRequestDTO request = parseJointLoanApplicationRequest(requestBody);
+            return financingController.applyForJointLoan(request);
+        }
+
+        // 浏览可联合农户
+        if ("/api/v1/financing/partners".equals(path) && "POST".equals(method)) {
+            PartnersRequestDTO request = parsePartnersRequest(requestBody);
+            return financingController.getJointPartners(request);
+        }
+
         // ============= 买家订单相关路由 =============
 
         // 创建订单 - /api/v1/buyer/orders
@@ -711,4 +729,76 @@ public class RouterConfig {
 
         return request;
     }
+
+    private SingleLoanApplicationRequestDTO parseSingleLoanApplicationRequest(Map<String, Object> requestBody) {
+        SingleLoanApplicationRequestDTO request = new SingleLoanApplicationRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        request.setProduct_id((String) requestBody.get("product_id"));
+        request.setPurpose((String) requestBody.get("purpose"));
+        request.setRepayment_source((String) requestBody.get("repayment_source"));
+
+        // 处理数值类型字段
+        if (requestBody.get("apply_amount") instanceof Number) {
+            request.setApply_amount(BigDecimal.valueOf(((Number) requestBody.get("apply_amount")).doubleValue()));
+        }
+
+        return request;
+    }
+
+    private JointLoanApplicationRequestDTO parseJointLoanApplicationRequest(Map<String, Object> requestBody) {
+        JointLoanApplicationRequestDTO request = new JointLoanApplicationRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        request.setProduct_id((String) requestBody.get("product_id"));
+        request.setPurpose((String) requestBody.get("purpose"));
+        request.setRepayment_plan((String) requestBody.get("repayment_plan"));
+        request.setJoint_agreement((Boolean) requestBody.get("joint_agreement"));
+
+        // 处理数值类型字段
+        if (requestBody.get("apply_amount") instanceof Number) {
+            request.setApply_amount(BigDecimal.valueOf(((Number) requestBody.get("apply_amount")).doubleValue()));
+        }
+
+        // 处理伙伴手机号数组
+        if (requestBody.get("partner_phones") instanceof List) {
+            List<?> phonesObj = (List<?>) requestBody.get("partner_phones");
+            List<String> phones = new ArrayList<>();
+            for (Object phone : phonesObj) {
+                if (phone instanceof String) {
+                    phones.add((String) phone);
+                }
+            }
+            request.setPartner_phones(phones);
+        }
+
+        return request;
+    }
+
+    private PartnersRequestDTO parsePartnersRequest(Map<String, Object> requestBody) {
+        PartnersRequestDTO request = new PartnersRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+
+        // 处理数值类型字段
+        if (requestBody.get("min_credit_limit") instanceof Number) {
+            request.setMin_credit_limit(BigDecimal.valueOf(((Number) requestBody.get("min_credit_limit")).doubleValue()));
+        }
+
+        if (requestBody.get("max_partners") instanceof Number) {
+            request.setMax_partners(((Number) requestBody.get("max_partners")).intValue());
+        }
+
+        // 处理排除手机号数组
+        if (requestBody.get("exclude_phones") instanceof List) {
+            List<?> phonesObj = (List<?>) requestBody.get("exclude_phones");
+            List<String> phones = new ArrayList<>();
+            for (Object phone : phonesObj) {
+                if (phone instanceof String) {
+                    phones.add((String) phone);
+                }
+            }
+            request.setExclude_phones(phones);
+        }
+
+        return request;
+    }
+
 }
