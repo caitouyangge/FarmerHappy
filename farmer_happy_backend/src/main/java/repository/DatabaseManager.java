@@ -468,6 +468,50 @@ public class DatabaseManager {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款申请表';";
             dbStatement.executeUpdate(createLoanApplicationsTable);
 
+            // 创建联合贷款申请表
+            String createJointLoanApplicationsTable =
+                    "CREATE TABLE IF NOT EXISTS joint_loan_applications (" +
+                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    loan_application_id BIGINT NOT NULL COMMENT '主贷款申请ID'," +
+                            "    partner_farmer_id BIGINT NOT NULL COMMENT '伙伴农户ID'," +
+                            "    partner_share_ratio DECIMAL(5,2) NOT NULL COMMENT '伙伴份额比例(%)'," +
+                            "    partner_share_amount DECIMAL(15,2) NOT NULL COMMENT '伙伴份额金额'," +
+                            "    status ENUM('pending_invitation', 'accepted', 'rejected') DEFAULT 'pending_invitation' COMMENT '伙伴状态'," +
+                            "    invited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '邀请时间'," +
+                            "    responded_at TIMESTAMP NULL COMMENT '响应时间'," +
+                            "    reject_reason VARCHAR(200) COMMENT '拒绝原因'," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "    FOREIGN KEY (loan_application_id) REFERENCES loan_applications(id) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (partner_farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                            "    INDEX idx_loan_application_id (loan_application_id)," +
+                            "    INDEX idx_partner_farmer_id (partner_farmer_id)," +
+                            "    INDEX idx_status (status)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款申请表';";
+            dbStatement.executeUpdate(createJointLoanApplicationsTable);
+
+// 创建联合贷款表
+            String createJointLoansTable =
+                    "CREATE TABLE IF NOT EXISTS joint_loans (" +
+                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    loan_id BIGINT NOT NULL COMMENT '主贷款ID'," +
+                            "    partner_farmer_id BIGINT NOT NULL COMMENT '伙伴农户ID'," +
+                            "    partner_share_ratio DECIMAL(5,2) NOT NULL COMMENT '伙伴份额比例(%)'," +
+                            "    partner_share_amount DECIMAL(15,2) NOT NULL COMMENT '伙伴份额金额'," +
+                            "    partner_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴承担本金'," +
+                            "    partner_interest DECIMAL(15,2) NOT NULL COMMENT '伙伴承担利息'," +
+                            "    partner_total_repayment DECIMAL(15,2) NOT NULL COMMENT '伙伴总还款额'," +
+                            "    partner_paid_amount DECIMAL(15,2) DEFAULT 0 COMMENT '伙伴已还款金额'," +
+                            "    partner_remaining_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴剩余本金'," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "    FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (partner_farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                            "    INDEX idx_loan_id (loan_id)," +
+                            "    INDEX idx_partner_farmer_id (partner_farmer_id)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款表';";
+            dbStatement.executeUpdate(createJointLoansTable);
+
             // 创建贷款表
             String createLoansTable =
                     "CREATE TABLE IF NOT EXISTS loans (" +
@@ -578,6 +622,68 @@ public class DatabaseManager {
         } finally {
             closeConnection();
         }
+    }
+
+    /**
+     * 保存联合贷款申请的伙伴记录
+     */
+    public void saveJointLoanApplicationPartners(long loanApplicationId, List<Map<String, Object>> partners) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO joint_loan_applications (loan_application_id, partner_farmer_id, partner_share_ratio, partner_share_amount, status) VALUES (?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+
+            for (Map<String, Object> partner : partners) {
+                stmt.setLong(1, loanApplicationId);
+                stmt.setLong(2, (Long) partner.get("partner_farmer_id"));
+                stmt.setBigDecimal(3, (BigDecimal) partner.get("partner_share_ratio"));
+                stmt.setBigDecimal(4, (BigDecimal) partner.get("partner_share_amount"));
+                stmt.setString(5, "pending_invitation");
+                stmt.executeUpdate();
+            }
+
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 根据贷款申请ID获取联合贷款伙伴信息
+     */
+    public List<Map<String, Object>> getJointLoanPartnersByApplicationId(long loanApplicationId) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> partners = new ArrayList<>();
+        try {
+            String sql = "SELECT jla.*, uf.uid, u.phone FROM joint_loan_applications jla " +
+                    "JOIN user_farmers uf ON jla.partner_farmer_id = uf.farmer_id " +
+                    "JOIN users u ON uf.uid = u.uid " +
+                    "WHERE jla.loan_application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, loanApplicationId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                Map<String, Object> partner = new HashMap<>();
+                partner.put("id", rs.getLong("id"));
+                partner.put("loan_application_id", rs.getLong("loan_application_id"));
+                partner.put("partner_farmer_id", rs.getLong("partner_farmer_id"));
+                partner.put("partner_share_ratio", rs.getBigDecimal("partner_share_ratio"));
+                partner.put("partner_share_amount", rs.getBigDecimal("partner_share_amount"));
+                partner.put("status", rs.getString("status"));
+                partner.put("invited_at", rs.getTimestamp("invited_at"));
+                partner.put("responded_at", rs.getTimestamp("responded_at"));
+                partner.put("reject_reason", rs.getString("reject_reason"));
+                partner.put("phone", rs.getString("phone"));
+                partners.add(partner);
+            }
+
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return partners;
     }
 
     /**

@@ -517,6 +517,27 @@ public class FinancingService {
                     request.getRepayment_plan() // 联合贷款使用还款计划作为还款来源
             );
 
+            // 计算每个伙伴的份额（包括发起人，总共人数为伙伴数量+1）
+            int totalParticipants = request.getPartner_phones().size() + 1;
+            BigDecimal partnerShareRatio = BigDecimal.valueOf(100.0).divide(BigDecimal.valueOf(totalParticipants), 2, BigDecimal.ROUND_HALF_UP);
+            BigDecimal partnerShareAmount = request.getApply_amount().divide(BigDecimal.valueOf(totalParticipants), 2, BigDecimal.ROUND_HALF_UP);
+
+            // 保存联合贷款伙伴记录
+            List<Map<String, Object>> partnerRecords = new ArrayList<>();
+            for (String partnerPhone : request.getPartner_phones()) {
+                User partnerUser = findUserByPhone(partnerPhone);
+                Map<String, Object> partnerFarmerInfo = checkUserFarmerRole(partnerUser.getUid());
+
+                Map<String, Object> partnerRecord = new HashMap<>();
+                partnerRecord.put("partner_farmer_id", ((Long) partnerFarmerInfo.get("farmer_id")).longValue());
+                partnerRecord.put("partner_share_ratio", partnerShareRatio);
+                partnerRecord.put("partner_share_amount", partnerShareAmount);
+                partnerRecords.add(partnerRecord);
+            }
+
+            // 保存联合贷款伙伴记录到数据库
+            saveJointLoanApplicationPartners(applicationRecordId, partnerRecords);
+
             // 构造成功响应
             JointLoanApplicationResponseDTO response = new JointLoanApplicationResponseDTO();
             response.setLoan_application_id(loanApplicationId);
@@ -628,6 +649,10 @@ public class FinancingService {
                                        BigDecimal applyAmount, String purpose, String repaymentSource) throws SQLException {
         return dbManager.createLoanApplication(loanApplicationId, farmerId, productId, applicationType,
                 applyAmount, purpose, repaymentSource);
+    }
+
+    private void saveJointLoanApplicationPartners(long loanApplicationId, List<Map<String, Object>> partners) throws SQLException {
+        dbManager.saveJointLoanApplicationPartners(loanApplicationId, partners);
     }
 
     // 私有辅助方法：验证单人贷款申请请求
