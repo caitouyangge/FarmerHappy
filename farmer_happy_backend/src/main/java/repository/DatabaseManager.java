@@ -2,6 +2,8 @@ package repository;
 
 import entity.Comment;
 import entity.Content;
+
+import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -1543,6 +1545,60 @@ public class DatabaseManager {
         return user;
     }
 
+    public List<Map<String, Object>> getQualifiedPartners(BigDecimal minCreditLimit, List<String> excludePhones, int maxPartners) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> partners = new ArrayList<>();
+        try {
+            StringBuilder sql = new StringBuilder();
+            sql.append("SELECT u.phone, u.nickname, cl.available_limit, cl.total_limit ");
+            sql.append("FROM users u ");
+            sql.append("JOIN user_farmers uf ON u.uid = uf.uid ");
+            sql.append("JOIN credit_limits cl ON uf.farmer_id = cl.farmer_id ");
+            sql.append("WHERE uf.enable = TRUE ");
+            sql.append("AND cl.status = 'active' ");
+            sql.append("AND cl.available_limit >= ? ");
+
+            List<Object> params = new ArrayList<>();
+            params.add(minCreditLimit);
+
+            if (excludePhones != null && !excludePhones.isEmpty()) {
+                sql.append("AND u.phone NOT IN (");
+                for (int i = 0; i < excludePhones.size(); i++) {
+                    sql.append("?");
+                    if (i < excludePhones.size() - 1) {
+                        sql.append(",");
+                    }
+                    params.add(excludePhones.get(i));
+                }
+                sql.append(") ");
+            }
+
+            sql.append("ORDER BY cl.available_limit DESC ");
+            sql.append("LIMIT ? ");
+            params.add(maxPartners);
+
+            PreparedStatement stmt = conn.prepareStatement(sql.toString());
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setObject(i + 1, params.get(i));
+            }
+
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> partner = new HashMap<>();
+                partner.put("phone", rs.getString("phone"));
+                partner.put("nickname", rs.getString("nickname"));
+                partner.put("available_limit", rs.getBigDecimal("available_limit"));
+                partner.put("total_limit", rs.getBigDecimal("total_limit"));
+                partners.add(partner);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return partners;
+    }
+
     /**
      * 根据 UID 查找银行用户信息
      */
@@ -1650,6 +1706,43 @@ public class DatabaseManager {
     }
 
     /**
+     * 根据产品ID获取贷款产品
+     */
+    public entity.financing.LoanProduct getLoanProductById(String productId) throws SQLException {
+        Connection conn = getConnection();
+        entity.financing.LoanProduct loanProduct = null;
+        try {
+            String sql = "SELECT * FROM loan_products WHERE product_id = ? AND status = 'active'";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, productId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                loanProduct = new entity.financing.LoanProduct();
+                loanProduct.setId(rs.getLong("id"));
+                loanProduct.setProductId(rs.getString("product_id"));
+                loanProduct.setProductCode(rs.getString("product_code"));
+                loanProduct.setProductName(rs.getString("product_name"));
+                loanProduct.setMinCreditLimit(rs.getBigDecimal("min_credit_limit"));
+                loanProduct.setMaxAmount(rs.getBigDecimal("max_amount"));
+                loanProduct.setInterestRate(rs.getBigDecimal("interest_rate"));
+                loanProduct.setTermMonths(rs.getInt("term_months"));
+                loanProduct.setRepaymentMethod(rs.getString("repayment_method"));
+                loanProduct.setDescription(rs.getString("description"));
+                loanProduct.setStatus(rs.getString("status"));
+                loanProduct.setBankId(rs.getLong("bank_id"));
+                loanProduct.setCreatedAt(rs.getTimestamp("created_at"));
+                loanProduct.setUpdatedAt(rs.getTimestamp("updated_at"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return loanProduct;
+    }
+
+    /**
      * 检查贷款产品名称是否已存在
      */
     public boolean isProductNameExists(String productName) throws SQLException {
@@ -1664,6 +1757,39 @@ public class DatabaseManager {
             rs.close();
             stmt.close();
             return count > 0;
+        } finally {
+            closeConnection();
+        }
+    }
+
+    public long createLoanApplication(String loanApplicationId, Long farmerId, Long productId, String applicationType,
+                                      BigDecimal applyAmount, String purpose, String repaymentSource) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO loan_applications (loan_application_id, farmer_id, product_id, application_type, apply_amount, purpose, repayment_source, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            stmt.setString(1, loanApplicationId);
+            stmt.setLong(2, farmerId);
+            stmt.setLong(3, productId);
+            stmt.setString(4, applicationType);
+            stmt.setBigDecimal(5, applyAmount);
+            stmt.setString(6, purpose);
+            stmt.setString(7, repaymentSource);
+            stmt.setString(8, "pending");
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("创建贷款申请记录失败，没有行受到影响");
+            }
+
+            ResultSet generatedKeys = stmt.getGeneratedKeys();
+            long id = 0;
+            if (generatedKeys.next()) {
+                id = generatedKeys.getLong(1);
+            }
+            generatedKeys.close();
+            stmt.close();
+            return id;
         } finally {
             closeConnection();
         }
