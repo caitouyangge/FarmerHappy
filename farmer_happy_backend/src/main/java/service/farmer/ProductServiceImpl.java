@@ -23,6 +23,11 @@ public class ProductServiceImpl implements ProductService {
         this.authService = new AuthServiceImpl();
     }
 
+    public ProductServiceImpl(DatabaseManager databaseManager, AuthService authService) {
+        this.databaseManager = databaseManager;
+        this.authService = authService;
+    }
+
     @Override
     public ProductResponseDTO createProduct(ProductCreateRequestDTO request, String userId) throws Exception {
         Connection conn = null;

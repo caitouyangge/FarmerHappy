@@ -17,6 +17,10 @@ public class AuthController {
         this.authService = new AuthServiceImpl();
     }
 
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
+
     public Map<String, Object> register(RegisterRequestDTO request) {
         System.out.println("AuthController.register - 开始处理注册请求");
         Map<String, Object> response = new HashMap<>();
