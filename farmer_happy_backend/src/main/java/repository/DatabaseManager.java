@@ -2238,9 +2238,11 @@ public class DatabaseManager {
         Connection conn = getConnection();
         entity.financing.LoanProduct loanProduct = null;
         try {
-            String sql = "SELECT * FROM loan_products WHERE id = ? AND status = 'active'";
+            // 修改SQL查询，同时匹配id和product_id字段
+            String sql = "SELECT * FROM loan_products WHERE (id = ? OR product_id = ?) AND status = 'active'";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setLong(1, productId);
+            stmt.setString(2, String.valueOf(productId));
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
@@ -2267,6 +2269,42 @@ public class DatabaseManager {
         }
         return loanProduct;
     }
+    public entity.financing.LoanProduct getLoanProductById(String productId) throws SQLException {
+        Connection conn = getConnection();
+        entity.financing.LoanProduct loanProduct = null;
+        try {
+            // 修改SQL查询，同时匹配id和product_id字段
+            String sql = "SELECT * FROM loan_products WHERE (id = ? OR product_id = ?) AND status = 'active'";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, productId);
+            stmt.setString(2, String.valueOf(productId));
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                loanProduct = new entity.financing.LoanProduct();
+                loanProduct.setId(rs.getLong("id"));
+                loanProduct.setProductId(rs.getString("product_id"));
+                loanProduct.setProductCode(rs.getString("product_code"));
+                loanProduct.setProductName(rs.getString("product_name"));
+                loanProduct.setMinCreditLimit(rs.getBigDecimal("min_credit_limit"));
+                loanProduct.setMaxAmount(rs.getBigDecimal("max_amount"));
+                loanProduct.setInterestRate(rs.getBigDecimal("interest_rate"));
+                loanProduct.setTermMonths(rs.getInt("term_months"));
+                loanProduct.setRepaymentMethod(rs.getString("repayment_method"));
+                loanProduct.setDescription(rs.getString("description"));
+                loanProduct.setStatus(rs.getString("status"));
+                loanProduct.setBankId(rs.getLong("bank_id"));
+                loanProduct.setCreatedAt(rs.getTimestamp("created_at"));
+                loanProduct.setUpdatedAt(rs.getTimestamp("updated_at"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return loanProduct;
+    }
+
 
 
     /**
@@ -2321,6 +2359,97 @@ public class DatabaseManager {
             closeConnection();
         }
     }
+
+    /**
+     * 预扣农户信用额度
+     */
+    public void preDeductCreditLimit(Long farmerId, BigDecimal amount) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            // 先获取当前信用额度信息
+            String selectSql = "SELECT total_limit, used_limit, available_limit FROM credit_limits WHERE farmer_id = ?";
+            PreparedStatement selectStmt = conn.prepareStatement(selectSql);
+            selectStmt.setLong(1, farmerId);
+            ResultSet rs = selectStmt.executeQuery();
+
+            if (rs.next()) {
+                BigDecimal totalLimit = rs.getBigDecimal("total_limit");
+                BigDecimal currentUsedLimit = rs.getBigDecimal("used_limit");
+                BigDecimal currentAvailableLimit = rs.getBigDecimal("available_limit");
+
+                // 检查可用额度是否足够
+                if (currentAvailableLimit.compareTo(amount) < 0) {
+                    throw new SQLException("可用额度不足");
+                }
+
+                // 更新信用额度：增加已用额度，减少可用额度
+                BigDecimal newUsedLimit = currentUsedLimit.add(amount);
+                BigDecimal newAvailableLimit = currentAvailableLimit.subtract(amount);
+
+                String updateSql = "UPDATE credit_limits SET used_limit = ?, available_limit = ?, last_updated = ? WHERE farmer_id = ?";
+                PreparedStatement updateStmt = conn.prepareStatement(updateSql);
+                updateStmt.setBigDecimal(1, newUsedLimit);
+                updateStmt.setBigDecimal(2, newAvailableLimit);
+                updateStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+                updateStmt.setLong(4, farmerId);
+                updateStmt.executeUpdate();
+                updateStmt.close();
+            } else {
+                throw new SQLException("未找到农户信用额度记录");
+            }
+            rs.close();
+            selectStmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 还原农户信用额度（贷款申请被拒绝时调用）
+     */
+    public void restoreCreditLimit(Long farmerId, BigDecimal amount) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            // 先获取当前信用额度信息
+            String selectSql = "SELECT used_limit, available_limit FROM credit_limits WHERE farmer_id = ?";
+            PreparedStatement selectStmt = conn.prepareStatement(selectSql);
+            selectStmt.setLong(1, farmerId);
+            ResultSet rs = selectStmt.executeQuery();
+
+            if (rs.next()) {
+                BigDecimal currentUsedLimit = rs.getBigDecimal("used_limit");
+                BigDecimal currentAvailableLimit = rs.getBigDecimal("available_limit");
+
+                // 更新信用额度：减少已用额度，增加可用额度
+                BigDecimal newUsedLimit = currentUsedLimit.subtract(amount);
+                BigDecimal newAvailableLimit = currentAvailableLimit.add(amount);
+
+                String updateSql = "UPDATE credit_limits SET used_limit = ?, available_limit = ?, last_updated = ? WHERE farmer_id = ?";
+                PreparedStatement updateStmt = conn.prepareStatement(updateSql);
+                updateStmt.setBigDecimal(1, newUsedLimit);
+                updateStmt.setBigDecimal(2, newAvailableLimit);
+                updateStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+                updateStmt.setLong(4, farmerId);
+                updateStmt.executeUpdate();
+                updateStmt.close();
+            }
+            rs.close();
+            selectStmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+
+    /**
+     * 确认扣除农户信用额度（贷款批准时调用）
+     */
+    public void confirmDeductCreditLimit(Long farmerId, BigDecimal amount) throws SQLException {
+        // 实际上预扣时已经处理了，这里可以留空或做其他处理
+        // 或者可以添加日志记录等操作
+    }
+
+
 
     /**
      * 根据产品名称获取贷款产品

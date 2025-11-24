@@ -388,6 +388,9 @@ public class FinancingService {
                         farmerCreditLimit.getAvailableLimit() + "元，请先申请提高额度或减少申请金额");
             }
 
+            // 预扣额度 - 在创建贷款申请记录前扣除
+            preDeductCreditLimit(((Long) farmerInfo.get("farmer_id")).longValue(), request.getApply_amount());
+
             // 生成贷款申请ID (修改为符合数据库字段长度限制的格式)
             String loanApplicationId = "LOAN" + System.currentTimeMillis() +
                     String.format("%03d", new Random().nextInt(1000));
@@ -425,6 +428,7 @@ public class FinancingService {
         }
     }
 
+
     // 申请联合贷款
     public JointLoanApplicationResponseDTO applyForJointLoan(JointLoanApplicationRequestDTO request) {
         try {
@@ -455,8 +459,6 @@ public class FinancingService {
             if (loanProduct == null || !"active".equals(loanProduct.getStatus())) {
                 throw new IllegalArgumentException("指定的产品" + request.getProduct_id() + "不存在或已下架，请选择其他产品");
             }
-
-
 
             // 检查申请金额是否超过产品最高额度
             if (request.getApply_amount().compareTo(loanProduct.getMaxAmount()) > 0) {
@@ -501,6 +503,9 @@ public class FinancingService {
                 // 检查伙伴是否有待审批的联合贷款申请
                 // 这里需要实现检查逻辑
             }
+
+            // 预扣额度 - 在创建贷款申请记录前扣除
+            preDeductCreditLimit(((Long) farmerInfo.get("farmer_id")).longValue(), shareAmount);
 
             // 生成贷款申请ID (修改为符合数据库字段长度限制的格式)
             String loanApplicationId = "LOAN" + System.currentTimeMillis() +
@@ -569,6 +574,7 @@ public class FinancingService {
             throw new RuntimeException("申请联合贷款失败: " + e.getMessage(), e);
         }
     }
+
 
     // 浏览可联合农户
     public PartnersResponseDTO getJointPartners(PartnersRequestDTO request) {
@@ -660,6 +666,27 @@ public class FinancingService {
     }
 
     /**
+     * 预扣农户信用额度
+     */
+    private void preDeductCreditLimit(Long farmerId, BigDecimal amount) throws SQLException {
+        dbManager.preDeductCreditLimit(farmerId, amount);
+    }
+
+    /**
+     * 恢复农户信用额度（申请失败时调用）
+     */
+    private void restoreCreditLimit(Long farmerId, BigDecimal amount) throws SQLException {
+        dbManager.restoreCreditLimit(farmerId, amount);
+    }
+
+    /**
+     * 确认扣除农户信用额度（贷款批准时调用）
+     */
+    private void confirmDeductCreditLimit(Long farmerId, BigDecimal amount) throws SQLException {
+        dbManager.confirmDeductCreditLimit(farmerId, amount);
+    }
+
+    /**
      * 银行审批贷款申请
      */
     public LoanApprovalResponseDTO approveLoan(LoanApprovalRequestDTO request) {
@@ -726,6 +753,9 @@ public class FinancingService {
                     throw new IllegalArgumentException("拒绝原因不能为空");
                 }
 
+                // 还原预扣的信用额度
+                restoreCreditLimit(loanApplication.getFarmerId(), loanApplication.getApplyAmount());
+
                 // 更新贷款申请状态为已拒绝
                 updateLoanApplicationRejection(
                         request.getApplication_id(),
@@ -748,6 +778,7 @@ public class FinancingService {
             throw new RuntimeException("审批贷款申请失败: " + e.getMessage(), e);
         }
     }
+
 
     /**
      * 银行放款操作
@@ -928,10 +959,39 @@ public class FinancingService {
         // 更新主借款人的信用额度
         updateCreditLimitUsed(loanApplication.getFarmerId(), loan.getLoanAmount());
 
+        // 计算每个参与者的份额（包括主申请人在内）
+        int totalParticipants = partners.size() + 1; // 合作伙伴数量 + 主申请人
+        BigDecimal partnerShareRatio = BigDecimal.valueOf(100.0).divide(BigDecimal.valueOf(totalParticipants), 2, BigDecimal.ROUND_HALF_UP);
+
+        // 主申请人的份额金额基于贷款总金额计算
+        BigDecimal mainShareAmount = loan.getLoanAmount().multiply(partnerShareRatio).divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP);
+
+        // 为主申请人创建联合贷款记录（将主申请人也视为合作伙伴之一）
+        BigDecimal mainPrincipal = mainShareAmount;
+        BigDecimal mainInterest = calculateTotalInterest(mainPrincipal, loan.getInterestRate(), loan.getTermMonths());
+        BigDecimal mainTotalRepayment = mainPrincipal.add(mainInterest);
+
+        entity.financing.JointLoan mainJointLoan = new entity.financing.JointLoan();
+        mainJointLoan.setLoanId(loanRecordId);
+        mainJointLoan.setPartnerFarmerId(loanApplication.getFarmerId()); // 主申请人的农户ID
+        mainJointLoan.setPartnerShareRatio(partnerShareRatio); // 使用平均分配的份额比例
+        mainJointLoan.setPartnerShareAmount(mainPrincipal);
+        mainJointLoan.setPartnerPrincipal(mainPrincipal);
+        mainJointLoan.setPartnerInterest(mainInterest);
+        mainJointLoan.setPartnerTotalRepayment(mainTotalRepayment);
+        mainJointLoan.setPartnerPaidAmount(BigDecimal.ZERO);
+        mainJointLoan.setPartnerRemainingPrincipal(mainPrincipal);
+        mainJointLoan.setCreatedAt(new Timestamp(System.currentTimeMillis()));
+        mainJointLoan.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+
+        saveJointLoan(mainJointLoan);
+
         // 为每个联合贷款伙伴创建记录并处理资金
         for (Map<String, Object> partner : partners) {
             Long partnerFarmerId = (Long) partner.get("partner_farmer_id");
-            BigDecimal partnerShareAmount = (BigDecimal) partner.get("partner_share_amount");
+            // 根据贷款总金额和份额比例计算伙伴的份额金额
+            BigDecimal partnerShareRatioFromDB = (BigDecimal) partner.get("partner_share_ratio");
+            BigDecimal partnerShareAmount = loan.getLoanAmount().multiply(partnerShareRatioFromDB).divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP);
 
             // 获取伙伴用户ID
             String partnerUid = getFarmerUidByFarmerId(partnerFarmerId);
@@ -945,23 +1005,40 @@ public class FinancingService {
             // 更新伙伴的信用额度
             updateCreditLimitUsed(partnerFarmerId, partnerShareAmount);
 
+            // 计算伙伴的利息和总还款金额（与主贷款人使用相同的利率和期限）
+            BigDecimal partnerPrincipal = partnerShareAmount;
+            BigDecimal partnerInterest = calculateTotalInterest(partnerPrincipal, loan.getInterestRate(), loan.getTermMonths());
+            BigDecimal partnerTotalRepayment = partnerPrincipal.add(partnerInterest);
+
             // 创建联合贷款记录
             entity.financing.JointLoan jointLoan = new entity.financing.JointLoan();
             jointLoan.setLoanId(loanRecordId);
             jointLoan.setPartnerFarmerId(partnerFarmerId);
-            jointLoan.setPartnerShareRatio((BigDecimal) partner.get("partner_share_ratio"));
+            jointLoan.setPartnerShareRatio(partnerShareRatioFromDB);
             jointLoan.setPartnerShareAmount(partnerShareAmount);
-            jointLoan.setPartnerPrincipal(partnerShareAmount); // 简化处理，本金等于份额金额
-            jointLoan.setPartnerInterest(BigDecimal.ZERO); // 利息需要根据实际计算
-            jointLoan.setPartnerTotalRepayment(partnerShareAmount); // 总还款额需要根据实际计算
+            jointLoan.setPartnerPrincipal(partnerPrincipal);
+            jointLoan.setPartnerInterest(partnerInterest);
+            jointLoan.setPartnerTotalRepayment(partnerTotalRepayment);
             jointLoan.setPartnerPaidAmount(BigDecimal.ZERO);
-            jointLoan.setPartnerRemainingPrincipal(partnerShareAmount);
+            jointLoan.setPartnerRemainingPrincipal(partnerPrincipal);
             jointLoan.setCreatedAt(new Timestamp(System.currentTimeMillis()));
             jointLoan.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
 
             saveJointLoan(jointLoan);
         }
     }
+
+
+
+    /**
+     * 计算总利息（简化计算）
+     */
+    private BigDecimal calculateTotalInterest(BigDecimal principal, BigDecimal interestRate, int termMonths) {
+        // 总利息 = 本金 * 年利率 * 期限(年)
+        BigDecimal annualInterest = principal.multiply(interestRate).divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP);
+        return annualInterest.multiply(BigDecimal.valueOf(termMonths)).divide(BigDecimal.valueOf(12), 2, BigDecimal.ROUND_HALF_UP);
+    }
+
 
     /**
      * 计算总还款金额（简化计算）
@@ -1176,16 +1253,13 @@ public class FinancingService {
     }
 
 
+
     // 私有辅助方法：根据产品ID获取贷款产品
     private entity.financing.LoanProduct getLoanProductById(String productId) throws SQLException {
-        // 将字符串类型的productId转换为Long类型
-        try {
-            Long productIdLong = Long.parseLong(productId);
-            return dbManager.getLoanProductById(productIdLong);
-        } catch (NumberFormatException e) {
-            throw new SQLException("无效的产品ID格式: " + productId);
-        }
+        // 直接使用字符串ID查询，不需要转换为Long
+        return dbManager.getLoanProductById(productId);
     }
+
     // 私有辅助方法：根据产品ID（Long类型）获取贷款产品
     private entity.financing.LoanProduct getLoanProductById(Long productId) throws SQLException {
         return dbManager.getLoanProductById(productId);
