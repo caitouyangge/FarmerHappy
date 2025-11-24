@@ -23,6 +23,10 @@ public class CommentController {
         this.commentService = new CommentServiceImpl(databaseManager, authService, contentService);
     }
 
+    public CommentController(CommentService commentService) {
+        this.commentService = commentService;
+    }
+
     /**
      * 对帖子发表评论
      * POST /api/v1/content/{content_id}/comments

@@ -19,6 +19,11 @@ public class ProductController {
         this.authService = new AuthServiceImpl();
     }
 
+    public ProductController(ProductService productService, AuthService authService) {
+        this.productService = productService;
+        this.authService = authService;
+    }
+
     public Map<String, Object> createProduct(ProductCreateRequestDTO request) {
         Map<String, Object> response = new HashMap<>();
 

@@ -20,6 +20,10 @@ public class ContentController {
         this.contentService = new ContentServiceImpl(databaseManager, authService);
     }
 
+    public ContentController(ContentService contentService) {
+        this.contentService = contentService;
+    }
+
     /**
      * 发布内容
      * POST /api/v1/content/publish
