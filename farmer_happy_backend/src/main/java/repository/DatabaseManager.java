@@ -527,6 +527,7 @@ public class DatabaseManager {
                             "    repayment_schedule JSON COMMENT '还款计划数据'," +
                             "    purpose VARCHAR(200) NOT NULL COMMENT '贷款用途'," +
                             "    repayment_source VARCHAR(200) NOT NULL COMMENT '还款来源'," +
+                            "    is_joint_loan BOOLEAN DEFAULT FALSE COMMENT '是否为联合贷款'," +
                             "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
                             "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
                             "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
@@ -540,7 +541,7 @@ public class DatabaseManager {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款表';";
             dbStatement.executeUpdate(createLoansTable);
 
-            // 创建联合贷款表
+// 创建联合贷款表
             String createJointLoansTable =
                     "CREATE TABLE IF NOT EXISTS joint_loans (" +
                             "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
@@ -561,6 +562,7 @@ public class DatabaseManager {
                             "    INDEX idx_partner_farmer_id (partner_farmer_id)" +
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款表';";
             dbStatement.executeUpdate(createJointLoansTable);
+
 
             dbStatement.close();
             dbConnection.close();
@@ -621,6 +623,307 @@ public class DatabaseManager {
                 }
                 imgStmt.close();
             }
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 根据贷款申请ID获取贷款申请信息
+     */
+    public entity.financing.LoanApplication getLoanApplicationById(String applicationId) throws SQLException {
+        Connection conn = getConnection();
+        entity.financing.LoanApplication loanApplication = null;
+        try {
+            String sql = "SELECT * FROM loan_applications WHERE loan_application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, applicationId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                loanApplication = new entity.financing.LoanApplication();
+                loanApplication.setId(rs.getLong("id"));
+                loanApplication.setLoanApplicationId(rs.getString("loan_application_id"));
+                loanApplication.setFarmerId(rs.getLong("farmer_id"));
+                loanApplication.setProductId(rs.getLong("product_id"));
+                loanApplication.setApplicationType(rs.getString("application_type"));
+                loanApplication.setApplyAmount(rs.getBigDecimal("apply_amount"));
+                loanApplication.setPurpose(rs.getString("purpose"));
+                loanApplication.setRepaymentSource(rs.getString("repayment_source"));
+                loanApplication.setStatus(rs.getString("status"));
+                loanApplication.setApprovedAmount(rs.getBigDecimal("approved_amount"));
+                loanApplication.setRejectReason(rs.getString("reject_reason"));
+                loanApplication.setApprovedBy(rs.getLong("approved_by"));
+                loanApplication.setApprovedAt(rs.getTimestamp("approved_at"));
+                // 根据 application_type 判断是否为联合贷款
+                loanApplication.setJointAgreement("joint".equals(rs.getString("application_type")));
+                loanApplication.setRepaymentPlan(null);
+                loanApplication.setPartnerPhones(null);
+                loanApplication.setCreatedAt(rs.getTimestamp("created_at"));
+                loanApplication.setUpdatedAt(rs.getTimestamp("updated_at"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return loanApplication;
+    }
+
+
+
+    /**
+     * 根据贷款申请ID获取所有联合贷款伙伴的手机号
+     */
+    public List<String> getJointLoanPartnerPhonesByApplicationId(long loanApplicationId) throws SQLException {
+        Connection conn = getConnection();
+        List<String> partnerPhones = new ArrayList<>();
+        try {
+            String sql = "SELECT u.phone FROM joint_loan_applications jla " +
+                    "JOIN user_farmers uf ON jla.partner_farmer_id = uf.farmer_id " +
+                    "JOIN users u ON uf.uid = u.uid " +
+                    "WHERE jla.loan_application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, loanApplicationId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                partnerPhones.add(rs.getString("phone"));
+            }
+
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return partnerPhones;
+    }
+
+
+    /**
+     * 更新贷款申请状态
+     */
+    public void updateLoanApplicationStatus(String applicationId, String status, Long approvedBy,
+                                            Timestamp approvedAt, BigDecimal approvedAmount) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE loan_applications SET status = ?, approved_by = ?, approved_at = ?, approved_amount = ? WHERE loan_application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, status);
+            if (approvedBy != null) {
+                stmt.setLong(2, approvedBy);
+            } else {
+                stmt.setNull(2, java.sql.Types.BIGINT);
+            }
+            if (approvedAt != null) {
+                stmt.setTimestamp(3, approvedAt);
+            } else {
+                stmt.setNull(3, java.sql.Types.TIMESTAMP);
+            }
+            if (approvedAmount != null) {
+                stmt.setBigDecimal(4, approvedAmount);
+            } else {
+                stmt.setNull(4, java.sql.Types.DECIMAL);
+            }
+            stmt.setString(5, applicationId);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 更新贷款申请拒绝信息
+     */
+    public void updateLoanApplicationRejection(String applicationId, String status, Long approvedBy,
+                                               Timestamp approvedAt, String rejectReason) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE loan_applications SET status = ?, approved_by = ?, approved_at = ?, reject_reason = ? WHERE loan_application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, status);
+            if (approvedBy != null) {
+                stmt.setLong(2, approvedBy);
+            } else {
+                stmt.setNull(2, java.sql.Types.BIGINT);
+            }
+            if (approvedAt != null) {
+                stmt.setTimestamp(3, approvedAt);
+            } else {
+                stmt.setNull(3, java.sql.Types.TIMESTAMP);
+            }
+            stmt.setString(4, rejectReason);
+            stmt.setString(5, applicationId);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 保存贷款记录
+     */
+    public long saveLoan(entity.financing.Loan loan) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO loans (loan_id, farmer_id, product_id, loan_amount, interest_rate, term_months, " +
+                    "repayment_method, disburse_amount, disburse_method, disburse_date, first_repayment_date, " +
+                    "loan_account, disburse_remarks, loan_status, approved_by, approved_at, reject_reason, " +
+                    "closed_date, total_repayment_amount, total_paid_amount, total_paid_principal, " +
+                    "total_paid_interest, remaining_principal, current_period, next_payment_date, " +
+                    "next_payment_amount, overdue_days, overdue_amount, repayment_schedule, purpose, " +
+                    "repayment_source, is_joint_loan, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            stmt.setString(1, loan.getLoanId());
+            stmt.setLong(2, loan.getFarmerId());
+            stmt.setLong(3, loan.getProductId());
+            stmt.setBigDecimal(4, loan.getLoanAmount());
+            stmt.setBigDecimal(5, loan.getInterestRate());
+            stmt.setInt(6, loan.getTermMonths());
+            stmt.setString(7, loan.getRepaymentMethod());
+            stmt.setBigDecimal(8, loan.getDisburseAmount());
+            stmt.setString(9, loan.getDisburseMethod());
+            stmt.setTimestamp(10, loan.getDisburseDate());
+            stmt.setDate(11, loan.getFirstRepaymentDate());
+            stmt.setString(12, loan.getLoanAccount());
+            stmt.setString(13, loan.getDisburseRemarks());
+            stmt.setString(14, loan.getLoanStatus());
+            if (loan.getApprovedBy() != null) {
+                stmt.setLong(15, loan.getApprovedBy());
+            } else {
+                stmt.setNull(15, java.sql.Types.BIGINT);
+            }
+            if (loan.getApprovedAt() != null) {
+                stmt.setTimestamp(16, loan.getApprovedAt());
+            } else {
+                stmt.setNull(16, java.sql.Types.TIMESTAMP);
+            }
+            stmt.setString(17, loan.getRejectReason());
+            if (loan.getClosedDate() != null) {
+                stmt.setTimestamp(18, loan.getClosedDate());
+            } else {
+                stmt.setNull(18, java.sql.Types.TIMESTAMP);
+            }
+            stmt.setBigDecimal(19, loan.getTotalRepaymentAmount());
+            stmt.setBigDecimal(20, loan.getTotalPaidAmount());
+            stmt.setBigDecimal(21, loan.getTotalPaidPrincipal());
+            stmt.setBigDecimal(22, loan.getTotalPaidInterest());
+            stmt.setBigDecimal(23, loan.getRemainingPrincipal());
+            stmt.setInt(24, loan.getCurrentPeriod());
+            if (loan.getNextPaymentDate() != null) {
+                stmt.setDate(25, loan.getNextPaymentDate());
+            } else {
+                stmt.setNull(25, java.sql.Types.DATE);
+            }
+            stmt.setBigDecimal(26, loan.getNextPaymentAmount());
+            stmt.setInt(27, loan.getOverdueDays());
+            stmt.setBigDecimal(28, loan.getOverdueAmount());
+            stmt.setString(29, loan.getRepaymentSchedule());
+            stmt.setString(30, loan.getPurpose());
+            stmt.setString(31, loan.getRepaymentSource());
+            stmt.setBoolean(32, loan.getIsJointLoan());
+            stmt.setTimestamp(33, loan.getCreatedAt());
+            stmt.setTimestamp(34, loan.getUpdatedAt());
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("创建贷款记录失败，没有行受到影响");
+            }
+
+            ResultSet generatedKeys = stmt.getGeneratedKeys();
+            long id = 0;
+            if (generatedKeys.next()) {
+                id = generatedKeys.getLong(1);
+            }
+            generatedKeys.close();
+            stmt.close();
+            return id;
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 保存联合贷款记录
+     */
+    public void saveJointLoan(entity.financing.JointLoan jointLoan) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO joint_loans (loan_id, partner_farmer_id, partner_share_ratio, partner_share_amount, " +
+                    "partner_principal, partner_interest, partner_total_repayment, partner_paid_amount, " +
+                    "partner_remaining_principal, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, jointLoan.getLoanId());
+            stmt.setLong(2, jointLoan.getPartnerFarmerId());
+            stmt.setBigDecimal(3, jointLoan.getPartnerShareRatio());
+            stmt.setBigDecimal(4, jointLoan.getPartnerShareAmount());
+            stmt.setBigDecimal(5, jointLoan.getPartnerPrincipal());
+            stmt.setBigDecimal(6, jointLoan.getPartnerInterest());
+            stmt.setBigDecimal(7, jointLoan.getPartnerTotalRepayment());
+            stmt.setBigDecimal(8, jointLoan.getPartnerPaidAmount());
+            stmt.setBigDecimal(9, jointLoan.getPartnerRemainingPrincipal());
+            stmt.setTimestamp(10, jointLoan.getCreatedAt());
+            stmt.setTimestamp(11, jointLoan.getUpdatedAt());
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+
+
+    /**
+     * 更新用户余额
+     */
+    public void updateUserBalance(String uid, BigDecimal amount) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE users SET money = money + ? WHERE uid = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setBigDecimal(1, amount);
+            stmt.setString(2, uid);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 更新信用额度
+     */
+    public void updateCreditLimitUsed(Long farmerId, BigDecimal usedAmount) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            // 先获取当前信用额度信息
+            String selectSql = "SELECT total_limit, used_limit FROM credit_limits WHERE farmer_id = ?";
+            PreparedStatement selectStmt = conn.prepareStatement(selectSql);
+            selectStmt.setLong(1, farmerId);
+            ResultSet rs = selectStmt.executeQuery();
+
+            if (rs.next()) {
+                BigDecimal totalLimit = rs.getBigDecimal("total_limit");
+                BigDecimal currentUsedLimit = rs.getBigDecimal("used_limit");
+                BigDecimal newUsedLimit = currentUsedLimit.add(usedAmount);
+                BigDecimal newAvailableLimit = totalLimit.subtract(newUsedLimit);
+
+                // 更新信用额度
+                String updateSql = "UPDATE credit_limits SET used_limit = ?, available_limit = ?, last_updated = ? WHERE farmer_id = ?";
+                PreparedStatement updateStmt = conn.prepareStatement(updateSql);
+                updateStmt.setBigDecimal(1, newUsedLimit);
+                updateStmt.setBigDecimal(2, newAvailableLimit);
+                updateStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+                updateStmt.setLong(4, farmerId);
+                updateStmt.executeUpdate();
+                updateStmt.close();
+            }
+            rs.close();
+            selectStmt.close();
         } finally {
             closeConnection();
         }
@@ -1738,6 +2041,120 @@ public class DatabaseManager {
     }
 
     /**
+     * 根据贷款申请ID获取贷款申请详情（包括联合贷款伙伴信息）
+     */
+    public Map<String, Object> getLoanApplicationDetails(String applicationId) throws SQLException {
+        Connection conn = getConnection();
+        Map<String, Object> result = new HashMap<>();
+        List<Map<String, Object>> partners = new ArrayList<>();
+
+        try {
+            // 获取贷款申请基本信息
+            String sql = "SELECT la.*, lp.product_name, lp.interest_rate, lp.term_months, lp.repayment_method " +
+                    "FROM loan_applications la " +
+                    "JOIN loan_products lp ON la.product_id = lp.id " +
+                    "WHERE la.loan_application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, applicationId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                result.put("id", rs.getLong("id"));
+                result.put("loan_application_id", rs.getString("loan_application_id"));
+                result.put("farmer_id", rs.getLong("farmer_id"));
+                result.put("product_id", rs.getLong("product_id"));
+                result.put("application_type", rs.getString("application_type"));
+                result.put("apply_amount", rs.getBigDecimal("apply_amount"));
+                result.put("purpose", rs.getString("purpose"));
+                result.put("repayment_source", rs.getString("repayment_source"));
+                result.put("status", rs.getString("status"));
+                result.put("approved_amount", rs.getBigDecimal("approved_amount"));
+                result.put("approved_by", rs.getLong("approved_by"));
+                result.put("approved_at", rs.getTimestamp("approved_at"));
+                result.put("product_name", rs.getString("product_name"));
+                result.put("interest_rate", rs.getBigDecimal("interest_rate"));
+                result.put("term_months", rs.getInt("term_months"));
+                result.put("repayment_method", rs.getString("repayment_method"));
+            }
+            rs.close();
+            stmt.close();
+
+            // 如果是联合贷款，获取合作伙伴信息
+            if ("joint".equals(result.get("application_type"))) {
+                String partnerSql = "SELECT jla.*, uf.uid, u.phone " +
+                        "FROM joint_loan_applications jla " +
+                        "JOIN user_farmers uf ON jla.partner_farmer_id = uf.farmer_id " +
+                        "JOIN users u ON uf.uid = u.uid " +
+                        "WHERE jla.loan_application_id = ?";
+                PreparedStatement partnerStmt = conn.prepareStatement(partnerSql);
+                partnerStmt.setLong(1, (Long) result.get("id"));
+                ResultSet partnerRs = partnerStmt.executeQuery();
+
+                while (partnerRs.next()) {
+                    Map<String, Object> partner = new HashMap<>();
+                    partner.put("id", partnerRs.getLong("id"));
+                    partner.put("partner_farmer_id", partnerRs.getLong("partner_farmer_id"));
+                    partner.put("partner_share_ratio", partnerRs.getBigDecimal("partner_share_ratio"));
+                    partner.put("partner_share_amount", partnerRs.getBigDecimal("partner_share_amount"));
+                    partner.put("uid", partnerRs.getString("uid"));
+                    partner.put("phone", partnerRs.getString("phone"));
+                    partners.add(partner);
+                }
+                partnerRs.close();
+                partnerStmt.close();
+            }
+
+            result.put("partners", partners);
+        } finally {
+            closeConnection();
+        }
+
+        return result;
+    }
+
+    /**
+     * 检查贷款申请是否已批准
+     */
+    public boolean isLoanApplicationApproved(String applicationId) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "SELECT status FROM loan_applications WHERE loan_application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, applicationId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                return "approved".equals(rs.getString("status"));
+            }
+            return false;
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 根据贷款申请ID获取产品ID
+     */
+    public Long getProductIdByApplicationId(String applicationId) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "SELECT product_id FROM loan_applications WHERE loan_application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, applicationId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getLong("product_id");
+            }
+            return null;
+        } finally {
+            closeConnection();
+        }
+    }
+
+
+
+    /**
      * 更新信用额度记录
      */
     public void updateCreditLimit(entity.financing.CreditLimit creditLimit) throws SQLException {
@@ -1813,16 +2230,17 @@ public class DatabaseManager {
         return farmerInfo;
     }
 
+
     /**
      * 根据产品ID获取贷款产品
      */
-    public entity.financing.LoanProduct getLoanProductById(String productId) throws SQLException {
+    public entity.financing.LoanProduct getLoanProductById(Long productId) throws SQLException {
         Connection conn = getConnection();
         entity.financing.LoanProduct loanProduct = null;
         try {
-            String sql = "SELECT * FROM loan_products WHERE product_id = ? AND status = 'active'";
+            String sql = "SELECT * FROM loan_products WHERE id = ? AND status = 'active'";
             PreparedStatement stmt = conn.prepareStatement(sql);
-            stmt.setString(1, productId);
+            stmt.setLong(1, productId);
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
@@ -1849,6 +2267,7 @@ public class DatabaseManager {
         }
         return loanProduct;
     }
+
 
     /**
      * 检查贷款产品名称是否已存在

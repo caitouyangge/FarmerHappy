@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 import config.RouterConfig;
 import dto.auth.AuthResponseDTO;
+import dto.bank.LoanApprovalResponseDTO;
+import dto.bank.LoanDisbursementResponseDTO;
 import dto.farmer.ProductListResponseDTO;
 import dto.farmer.ProductResponseDTO;
 import dto.farmer.ProductStatusUpdateResponseDTO;
@@ -558,6 +560,11 @@ public class application {
                         return serializePartnersResponseDTO((PartnersResponseDTO) value);
                     }else if (value instanceof PartnerItemDTO) {
                         return serializePartnerItemDTO((PartnerItemDTO) value);
+                    }else if (value instanceof LoanApprovalResponseDTO) {
+                        return serializeLoanApprovalResponseDTO((LoanApprovalResponseDTO) value);
+                    }
+                    else if (value instanceof LoanDisbursementResponseDTO) {
+                        return serializeLoanDisbursementResponseDTO((LoanDisbursementResponseDTO) value);
                     }
 
                     else {
@@ -581,6 +588,86 @@ public class application {
                         }
                     }
                     json.append("]");
+                    return json.toString();
+                }
+
+                // 添加序列化 LoanApprovalResponseDTO
+                private String serializeLoanApprovalResponseDTO(LoanApprovalResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getApplication_id() != null) {
+                        json.append("\"application_id\":\"").append(escapeJsonString(dto.getApplication_id())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (dto.getApproved_amount() != null) {
+                        json.append("\"approved_amount\":").append(dto.getApproved_amount()).append(",");
+                    }
+                    if (dto.getApproved_by() != null) {
+                        json.append("\"approved_by\":\"").append(escapeJsonString(dto.getApproved_by())).append("\",");
+                    }
+                    if (dto.getApproved_at() != null) {
+                        json.append("\"approved_at\":\"").append(escapeJsonString(dto.getApproved_at().toString())).append("\",");
+                    }
+                    if (dto.getNext_step() != null) {
+                        json.append("\"next_step\":\"").append(escapeJsonString(dto.getNext_step())).append("\",");
+                    }
+                    if (dto.getReject_reason() != null) {
+                        json.append("\"reject_reason\":\"").append(escapeJsonString(dto.getReject_reason())).append("\",");
+                    }
+                    if (dto.getRejected_by() != null) {
+                        json.append("\"rejected_by\":\"").append(escapeJsonString(dto.getRejected_by())).append("\",");
+                    }
+                    if (dto.getRejected_at() != null) {
+                        json.append("\"rejected_at\":\"").append(escapeJsonString(dto.getRejected_at().toString())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 添加序列化 LoanDisbursementResponseDTO
+                private String serializeLoanDisbursementResponseDTO(LoanDisbursementResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getLoan_id() != null) {
+                        json.append("\"loan_id\":\"").append(escapeJsonString(dto.getLoan_id())).append("\",");
+                    }
+                    if (dto.getDisbursement_id() != null) {
+                        json.append("\"disbursement_id\":\"").append(escapeJsonString(dto.getDisbursement_id())).append("\",");
+                    }
+                    if (dto.getApplication_id() != null) {
+                        json.append("\"application_id\":\"").append(escapeJsonString(dto.getApplication_id())).append("\",");
+                    }
+                    if (dto.getDisburse_amount() != null) {
+                        json.append("\"disburse_amount\":").append(dto.getDisburse_amount()).append(",");
+                    }
+                    if (dto.getDisburse_method() != null) {
+                        json.append("\"disburse_method\":\"").append(escapeJsonString(dto.getDisburse_method())).append("\",");
+                    }
+                    if (dto.getDisburse_date() != null) {
+                        json.append("\"disburse_date\":\"").append(escapeJsonString(dto.getDisburse_date().toString())).append("\",");
+                    }
+                    if (dto.getFirst_repayment_date() != null) {
+                        json.append("\"first_repayment_date\":\"").append(escapeJsonString(dto.getFirst_repayment_date().toString())).append("\",");
+                    }
+                    if (dto.getLoan_status() != null) {
+                        json.append("\"loan_status\":\"").append(escapeJsonString(dto.getLoan_status())).append("\",");
+                    }
+                    if (dto.getTotal_repayment_amount() != null) {
+                        json.append("\"total_repayment_amount\":").append(dto.getTotal_repayment_amount()).append(",");
+                    }
+                    if (dto.getMonthly_payment() != null) {
+                        json.append("\"monthly_payment\":").append(dto.getMonthly_payment()).append(",");
+                    }
+                    if (dto.getNext_payment_date() != null) {
+                        json.append("\"next_payment_date\":\"").append(escapeJsonString(dto.getNext_payment_date().toString())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
                     return json.toString();
                 }
 
