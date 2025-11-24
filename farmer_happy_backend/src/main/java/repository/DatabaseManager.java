@@ -490,27 +490,7 @@ public class DatabaseManager {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款申请表';";
             dbStatement.executeUpdate(createJointLoanApplicationsTable);
 
-// 创建联合贷款表
-            String createJointLoansTable =
-                    "CREATE TABLE IF NOT EXISTS joint_loans (" +
-                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    loan_id BIGINT NOT NULL COMMENT '主贷款ID'," +
-                            "    partner_farmer_id BIGINT NOT NULL COMMENT '伙伴农户ID'," +
-                            "    partner_share_ratio DECIMAL(5,2) NOT NULL COMMENT '伙伴份额比例(%)'," +
-                            "    partner_share_amount DECIMAL(15,2) NOT NULL COMMENT '伙伴份额金额'," +
-                            "    partner_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴承担本金'," +
-                            "    partner_interest DECIMAL(15,2) NOT NULL COMMENT '伙伴承担利息'," +
-                            "    partner_total_repayment DECIMAL(15,2) NOT NULL COMMENT '伙伴总还款额'," +
-                            "    partner_paid_amount DECIMAL(15,2) DEFAULT 0 COMMENT '伙伴已还款金额'," +
-                            "    partner_remaining_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴剩余本金'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
-                            "    FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (partner_farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
-                            "    INDEX idx_loan_id (loan_id)," +
-                            "    INDEX idx_partner_farmer_id (partner_farmer_id)" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款表';";
-            dbStatement.executeUpdate(createJointLoansTable);
+
 
             // 创建贷款表
             String createLoansTable =
@@ -559,6 +539,28 @@ public class DatabaseManager {
                             "    INDEX idx_created_at (created_at)" +
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款表';";
             dbStatement.executeUpdate(createLoansTable);
+
+            // 创建联合贷款表
+            String createJointLoansTable =
+                    "CREATE TABLE IF NOT EXISTS joint_loans (" +
+                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    loan_id BIGINT NOT NULL COMMENT '主贷款ID'," +
+                            "    partner_farmer_id BIGINT NOT NULL COMMENT '伙伴农户ID'," +
+                            "    partner_share_ratio DECIMAL(5,2) NOT NULL COMMENT '伙伴份额比例(%)'," +
+                            "    partner_share_amount DECIMAL(15,2) NOT NULL COMMENT '伙伴份额金额'," +
+                            "    partner_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴承担本金'," +
+                            "    partner_interest DECIMAL(15,2) NOT NULL COMMENT '伙伴承担利息'," +
+                            "    partner_total_repayment DECIMAL(15,2) NOT NULL COMMENT '伙伴总还款额'," +
+                            "    partner_paid_amount DECIMAL(15,2) DEFAULT 0 COMMENT '伙伴已还款金额'," +
+                            "    partner_remaining_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴剩余本金'," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "    FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (partner_farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                            "    INDEX idx_loan_id (loan_id)," +
+                            "    INDEX idx_partner_farmer_id (partner_farmer_id)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款表';";
+            dbStatement.executeUpdate(createJointLoansTable);
 
             dbStatement.close();
             dbConnection.close();
