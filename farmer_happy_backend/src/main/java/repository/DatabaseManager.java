@@ -2,9 +2,13 @@ package repository;
 
 import entity.Comment;
 import entity.Content;
+
+import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class DatabaseManager {
     private static final String URL = "jdbc:mysql://localhost:3306/";
@@ -78,7 +82,7 @@ public class DatabaseManager {
                 String checkMoneyColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
                         "WHERE TABLE_SCHEMA = '" + DB_NAME + "' AND TABLE_NAME = 'users' AND COLUMN_NAME = 'money'";
                 ResultSet rsCheckMoney = dbStatement.executeQuery(checkMoneyColumnSql);
-                
+
                 if (!rsCheckMoney.next()) {
                     // money 列不存在，添加它
                     String addMoneyColumnSql = "ALTER TABLE users ADD COLUMN money DECIMAL(10,2) DEFAULT 1000 COMMENT '账户余额（元）' AFTER is_active";
@@ -246,7 +250,7 @@ public class DatabaseManager {
                 String checkColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
                         "WHERE TABLE_SCHEMA = '" + DB_NAME + "' AND TABLE_NAME = 'products' AND COLUMN_NAME = 'specification'";
                 ResultSet rsCheck = dbStatement.executeQuery(checkColumnSql);
-                
+
                 if (rsCheck.next()) {
                     // specification 列存在，需要改名
                     String alterTableSql = "ALTER TABLE products CHANGE COLUMN specification detailed_description VARCHAR(200) NOT NULL COMMENT '商品详细介绍'";
@@ -257,7 +261,7 @@ public class DatabaseManager {
                     String checkNewColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
                             "WHERE TABLE_SCHEMA = '" + DB_NAME + "' AND TABLE_NAME = 'products' AND COLUMN_NAME = 'detailed_description'";
                     ResultSet rsCheckNew = dbStatement.executeQuery(checkNewColumnSql);
-                    
+
                     if (!rsCheckNew.next()) {
                         // detailed_description 列也不存在，添加它
                         String addColumnSql = "ALTER TABLE products ADD COLUMN detailed_description VARCHAR(200) NOT NULL COMMENT '商品详细介绍' AFTER title";
@@ -369,6 +373,195 @@ public class DatabaseManager {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单表';";
             dbStatement.executeUpdate(createOrdersTable);
 
+            // 创建信用额度表
+            String createCreditLimitsTable =
+                    "CREATE TABLE IF NOT EXISTS credit_limits (" +
+                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
+                            "    total_limit DECIMAL(15,2) DEFAULT 0 COMMENT '总额度'," +
+                            "    used_limit DECIMAL(15,2) DEFAULT 0 COMMENT '已用额度'," +
+                            "    available_limit DECIMAL(15,2) DEFAULT 0 COMMENT '可用额度'," +
+                            "    currency VARCHAR(10) DEFAULT 'CNY'," +
+                            "    status ENUM('active', 'no_limit', 'frozen') DEFAULT 'active'," +
+                            "    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                            "    INDEX idx_farmer_id (farmer_id)," +
+                            "    INDEX idx_status (status)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='信用额度表';";
+            dbStatement.executeUpdate(createCreditLimitsTable);
+
+            // 创建额度申请表
+            String createCreditApplicationsTable =
+                    "CREATE TABLE IF NOT EXISTS credit_applications (" +
+                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    application_id VARCHAR(20) UNIQUE NOT NULL COMMENT '申请ID'," +
+                            "    farmer_id BIGINT NOT NULL COMMENT '申请人农户ID'," +
+                            "    proof_type ENUM('land_certificate', 'property_certificate', 'income_proof', 'business_license', 'other') NOT NULL," +
+                            "    proof_images JSON COMMENT '证明材料图片URL数组'," +
+                            "    apply_amount DECIMAL(15,2) NOT NULL," +
+                            "    description VARCHAR(500)," +
+                            "    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending'," +
+                            "    approved_amount DECIMAL(15,2) COMMENT '批准的额度'," +
+                            "    reject_reason VARCHAR(200)," +
+                            "    approved_by BIGINT COMMENT '审批人银行ID'," +
+                            "    approved_at TIMESTAMP NULL," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (approved_by) REFERENCES user_banks(bank_id) ON DELETE SET NULL," +
+                            "    INDEX idx_farmer_id (farmer_id)," +
+                            "    INDEX idx_status (status)," +
+                            "    INDEX idx_application_id (application_id)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='信用额度申请表';";
+            dbStatement.executeUpdate(createCreditApplicationsTable);
+
+            // 创建贷款产品表
+            String createLoanProductsTable =
+                    "CREATE TABLE IF NOT EXISTS loan_products (" +
+                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    product_id VARCHAR(20) UNIQUE NOT NULL COMMENT '产品ID'," +
+                            "    product_code VARCHAR(50) UNIQUE COMMENT '产品编号'," +
+                            "    product_name VARCHAR(50) NOT NULL," +
+                            "    min_credit_limit DECIMAL(15,2) NOT NULL COMMENT '最低贷款额度要求'," +
+                            "    max_amount DECIMAL(15,2) NOT NULL COMMENT '最高贷款额度'," +
+                            "    interest_rate DECIMAL(5,2) NOT NULL COMMENT '年利率'," +
+                            "    term_months INT NOT NULL COMMENT '贷款期限(月)'," +
+                            "    repayment_method ENUM('equal_installment', 'interest_first', 'bullet_repayment') NOT NULL," +
+                            "    description VARCHAR(500) NOT NULL," +
+                            "    status ENUM('active', 'inactive') DEFAULT 'active'," +
+                            "    bank_id BIGINT NOT NULL COMMENT '发布银行ID'," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "    FOREIGN KEY (bank_id) REFERENCES user_banks(bank_id) ON DELETE CASCADE," +
+                            "    INDEX idx_product_id (product_id)," +
+                            "    INDEX idx_status (status)," +
+                            "    INDEX idx_bank_id (bank_id)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款产品表';";
+            dbStatement.executeUpdate(createLoanProductsTable);
+
+            // 创建贷款申请表
+            String createLoanApplicationsTable =
+                    "CREATE TABLE IF NOT EXISTS loan_applications (" +
+                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    loan_application_id VARCHAR(20) UNIQUE NOT NULL COMMENT '贷款申请ID'," +
+                            "    farmer_id BIGINT NOT NULL COMMENT '申请人农户ID'," +
+                            "    product_id BIGINT NOT NULL," +
+                            "    application_type ENUM('single', 'joint') NOT NULL COMMENT '申请类型：单人、联合'," +
+                            "    apply_amount DECIMAL(15,2) NOT NULL," +
+                            "    purpose VARCHAR(200) NOT NULL COMMENT '贷款用途'," +
+                            "    repayment_source VARCHAR(200) NOT NULL COMMENT '还款来源'," +
+                            "    status ENUM('pending', 'pending_partners', 'approved', 'rejected', 'disbursed') DEFAULT 'pending'," +
+                            "    approved_amount DECIMAL(15,2) COMMENT '批准的金额'," +
+                            "    reject_reason VARCHAR(200) COMMENT '拒绝原因'," +
+                            "    approved_by BIGINT COMMENT '审批人银行ID'," +
+                            "    approved_at TIMESTAMP NULL," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (product_id) REFERENCES loan_products(id) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (approved_by) REFERENCES user_banks(bank_id) ON DELETE SET NULL," +
+                            "    INDEX idx_loan_application_id (loan_application_id)," +
+                            "    INDEX idx_farmer_id (farmer_id)," +
+                            "    INDEX idx_status (status)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款申请表';";
+            dbStatement.executeUpdate(createLoanApplicationsTable);
+
+            // 创建联合贷款申请表
+            String createJointLoanApplicationsTable =
+                    "CREATE TABLE IF NOT EXISTS joint_loan_applications (" +
+                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    loan_application_id BIGINT NOT NULL COMMENT '主贷款申请ID'," +
+                            "    partner_farmer_id BIGINT NOT NULL COMMENT '伙伴农户ID'," +
+                            "    partner_share_ratio DECIMAL(5,2) NOT NULL COMMENT '伙伴份额比例(%)'," +
+                            "    partner_share_amount DECIMAL(15,2) NOT NULL COMMENT '伙伴份额金额'," +
+                            "    status ENUM('pending_invitation', 'accepted', 'rejected') DEFAULT 'pending_invitation' COMMENT '伙伴状态'," +
+                            "    invited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '邀请时间'," +
+                            "    responded_at TIMESTAMP NULL COMMENT '响应时间'," +
+                            "    reject_reason VARCHAR(200) COMMENT '拒绝原因'," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "    FOREIGN KEY (loan_application_id) REFERENCES loan_applications(id) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (partner_farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                            "    INDEX idx_loan_application_id (loan_application_id)," +
+                            "    INDEX idx_partner_farmer_id (partner_farmer_id)," +
+                            "    INDEX idx_status (status)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款申请表';";
+            dbStatement.executeUpdate(createJointLoanApplicationsTable);
+
+
+
+            // 创建贷款表
+            String createLoansTable =
+                    "CREATE TABLE IF NOT EXISTS loans (" +
+                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    loan_id VARCHAR(20) UNIQUE NOT NULL COMMENT '贷款ID，如LOAN202511140001'," +
+                            "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
+                            "    product_id BIGINT NOT NULL COMMENT '贷款产品ID'," +
+                            "    loan_amount DECIMAL(15,2) NOT NULL COMMENT '贷款金额'," +
+                            "    interest_rate DECIMAL(5,2) NOT NULL COMMENT '年利率'," +
+                            "    term_months INT NOT NULL COMMENT '贷款期限(月)'," +
+                            "    repayment_method ENUM('equal_installment', 'interest_first', 'bullet_repayment') NOT NULL COMMENT '还款方式'," +
+                            "    disburse_amount DECIMAL(15,2) NOT NULL COMMENT '实际放款金额'," +
+                            "    disburse_method ENUM('bank_transfer', 'cash', 'check') NOT NULL COMMENT '放款方式'," +
+                            "    disburse_date TIMESTAMP NOT NULL COMMENT '放款日期'," +
+                            "    first_repayment_date DATE NOT NULL COMMENT '首次还款日期'," +
+                            "    loan_account VARCHAR(50) COMMENT '贷款发放账户'," +
+                            "    disburse_remarks VARCHAR(200) COMMENT '放款备注'," +
+                            "    loan_status ENUM('pending', 'approved', 'rejected', 'active', 'closed', 'frozen', 'overdue') DEFAULT 'pending' COMMENT '贷款状态'," +
+                            "    approved_by BIGINT COMMENT '审批人银行ID'," +
+                            "    approved_at TIMESTAMP NULL COMMENT '审批时间'," +
+                            "    reject_reason VARCHAR(200) COMMENT '拒绝原因'," +
+                            "    closed_date TIMESTAMP NULL COMMENT '结清日期'," +
+                            "    total_repayment_amount DECIMAL(15,2) COMMENT '总应还款金额'," +
+                            "    total_paid_amount DECIMAL(15,2) DEFAULT 0 COMMENT '累计已还款金额'," +
+                            "    total_paid_principal DECIMAL(15,2) DEFAULT 0 COMMENT '累计已还本金'," +
+                            "    total_paid_interest DECIMAL(15,2) DEFAULT 0 COMMENT '累计已还利息'," +
+                            "    remaining_principal DECIMAL(15,2) NOT NULL COMMENT '剩余本金'," +
+                            "    current_period INT DEFAULT 1 COMMENT '当前期数'," +
+                            "    next_payment_date DATE COMMENT '下次还款日期'," +
+                            "    next_payment_amount DECIMAL(15,2) COMMENT '下次应还金额'," +
+                            "    overdue_days INT DEFAULT 0 COMMENT '当前逾期天数'," +
+                            "    overdue_amount DECIMAL(15,2) DEFAULT 0 COMMENT '当前逾期金额'," +
+                            "    repayment_schedule JSON COMMENT '还款计划数据'," +
+                            "    purpose VARCHAR(200) NOT NULL COMMENT '贷款用途'," +
+                            "    repayment_source VARCHAR(200) NOT NULL COMMENT '还款来源'," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (product_id) REFERENCES loan_products(id) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (approved_by) REFERENCES user_banks(bank_id) ON DELETE SET NULL," +
+                            "    INDEX idx_loan_id (loan_id)," +
+                            "    INDEX idx_farmer_id (farmer_id)," +
+                            "    INDEX idx_loan_status (loan_status)," +
+                            "    INDEX idx_next_payment_date (next_payment_date)," +
+                            "    INDEX idx_created_at (created_at)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款表';";
+            dbStatement.executeUpdate(createLoansTable);
+
+            // 创建联合贷款表
+            String createJointLoansTable =
+                    "CREATE TABLE IF NOT EXISTS joint_loans (" +
+                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                            "    loan_id BIGINT NOT NULL COMMENT '主贷款ID'," +
+                            "    partner_farmer_id BIGINT NOT NULL COMMENT '伙伴农户ID'," +
+                            "    partner_share_ratio DECIMAL(5,2) NOT NULL COMMENT '伙伴份额比例(%)'," +
+                            "    partner_share_amount DECIMAL(15,2) NOT NULL COMMENT '伙伴份额金额'," +
+                            "    partner_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴承担本金'," +
+                            "    partner_interest DECIMAL(15,2) NOT NULL COMMENT '伙伴承担利息'," +
+                            "    partner_total_repayment DECIMAL(15,2) NOT NULL COMMENT '伙伴总还款额'," +
+                            "    partner_paid_amount DECIMAL(15,2) DEFAULT 0 COMMENT '伙伴已还款金额'," +
+                            "    partner_remaining_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴剩余本金'," +
+                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "    FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE," +
+                            "    FOREIGN KEY (partner_farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                            "    INDEX idx_loan_id (loan_id)," +
+                            "    INDEX idx_partner_farmer_id (partner_farmer_id)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款表';";
+            dbStatement.executeUpdate(createJointLoansTable);
+
             dbStatement.close();
             dbConnection.close();
 
@@ -431,6 +624,68 @@ public class DatabaseManager {
         } finally {
             closeConnection();
         }
+    }
+
+    /**
+     * 保存联合贷款申请的伙伴记录
+     */
+    public void saveJointLoanApplicationPartners(long loanApplicationId, List<Map<String, Object>> partners) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO joint_loan_applications (loan_application_id, partner_farmer_id, partner_share_ratio, partner_share_amount, status) VALUES (?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+
+            for (Map<String, Object> partner : partners) {
+                stmt.setLong(1, loanApplicationId);
+                stmt.setLong(2, (Long) partner.get("partner_farmer_id"));
+                stmt.setBigDecimal(3, (BigDecimal) partner.get("partner_share_ratio"));
+                stmt.setBigDecimal(4, (BigDecimal) partner.get("partner_share_amount"));
+                stmt.setString(5, "pending_invitation");
+                stmt.executeUpdate();
+            }
+
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 根据贷款申请ID获取联合贷款伙伴信息
+     */
+    public List<Map<String, Object>> getJointLoanPartnersByApplicationId(long loanApplicationId) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> partners = new ArrayList<>();
+        try {
+            String sql = "SELECT jla.*, uf.uid, u.phone FROM joint_loan_applications jla " +
+                    "JOIN user_farmers uf ON jla.partner_farmer_id = uf.farmer_id " +
+                    "JOIN users u ON uf.uid = u.uid " +
+                    "WHERE jla.loan_application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, loanApplicationId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                Map<String, Object> partner = new HashMap<>();
+                partner.put("id", rs.getLong("id"));
+                partner.put("loan_application_id", rs.getLong("loan_application_id"));
+                partner.put("partner_farmer_id", rs.getLong("partner_farmer_id"));
+                partner.put("partner_share_ratio", rs.getBigDecimal("partner_share_ratio"));
+                partner.put("partner_share_amount", rs.getBigDecimal("partner_share_amount"));
+                partner.put("status", rs.getString("status"));
+                partner.put("invited_at", rs.getTimestamp("invited_at"));
+                partner.put("responded_at", rs.getTimestamp("responded_at"));
+                partner.put("reject_reason", rs.getString("reject_reason"));
+                partner.put("phone", rs.getString("phone"));
+                partners.add(partner);
+            }
+
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return partners;
     }
 
     /**
@@ -733,6 +988,19 @@ public class DatabaseManager {
                 buyerRs.close();
                 buyerStmt.close();
             }
+
+            if (role == null) {
+                // 检查是否是银行用户
+                String bankSql = "SELECT 1 FROM user_banks WHERE uid = ? AND enable = TRUE";
+                PreparedStatement bankStmt = conn.prepareStatement(bankSql);
+                bankStmt.setString(1, uid);
+                ResultSet bankRs = bankStmt.executeQuery();
+                if (bankRs.next()) {
+                    role = "bank";
+                }
+                bankRs.close();
+                bankStmt.close();
+            }
         } finally {
             closeConnection();
         }
@@ -840,7 +1108,7 @@ public class DatabaseManager {
         try {
             StringBuilder sql = new StringBuilder("UPDATE orders SET ");
             List<Object> params = new ArrayList<>();
-            
+
             if (buyerName != null && !buyerName.trim().isEmpty()) {
                 sql.append("buyer_name = ?, ");
                 params.add(buyerName);
@@ -853,12 +1121,12 @@ public class DatabaseManager {
                 sql.append("remark = ?, ");
                 params.add(remark);
             }
-            
+
             // 移除最后的逗号和空格
             sql.setLength(sql.length() - 2);
             sql.append(" WHERE order_id = ?");
             params.add(orderId);
-            
+
             PreparedStatement stmt = conn.prepareStatement(sql.toString());
             for (int i = 0; i < params.size(); i++) {
                 stmt.setObject(i + 1, params.get(i));
@@ -891,14 +1159,14 @@ public class DatabaseManager {
                     timestampField = "refunded_at";
                     break;
             }
-            
+
             String sql;
             if (timestampField != null) {
                 sql = "UPDATE orders SET status = ?, " + timestampField + " = ? WHERE order_id = ?";
             } else {
                 sql = "UPDATE orders SET status = ? WHERE order_id = ?";
             }
-            
+
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, status);
             if (timestampField != null) {
@@ -922,18 +1190,18 @@ public class DatabaseManager {
         try {
             // 关闭自动提交以使用事务
             conn.setAutoCommit(false);
-            
+
             String sql = "UPDATE orders SET refund_reason = ?, refund_type = ? WHERE order_id = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, refundReason);
             stmt.setString(2, refundType);
             stmt.setString(3, orderId);
-            
+
             int rowsAffected = stmt.executeUpdate();
             System.out.println("updateOrderRefund - 更新行数: " + rowsAffected + ", orderId: " + orderId + ", refundReason: " + refundReason + ", refundType: " + refundType);
-            
+
             stmt.close();
-            
+
             // 提交事务
             conn.commit();
         } catch (SQLException e) {
@@ -965,7 +1233,7 @@ public class DatabaseManager {
             StringBuilder sql = new StringBuilder("SELECT * FROM orders WHERE buyer_uid = ?");
             List<Object> params = new ArrayList<>();
             params.add(buyerUid);
-            
+
             if (status != null && !status.trim().isEmpty()) {
                 sql.append(" AND status = ?");
                 params.add(status);
@@ -974,9 +1242,9 @@ public class DatabaseManager {
                 sql.append(" AND product_title LIKE ?");
                 params.add("%" + title + "%");
             }
-            
+
             sql.append(" ORDER BY created_at DESC");
-            
+
             PreparedStatement stmt = conn.prepareStatement(sql.toString());
             for (int i = 0; i < params.size(); i++) {
                 stmt.setObject(i + 1, params.get(i));
@@ -1000,7 +1268,7 @@ public class DatabaseManager {
                 order.setRemark(rs.getString("remark"));
                 order.setStatus(rs.getString("status"));
                 order.setCreatedAt(rs.getTimestamp("created_at"));
-                
+
                 // 查询商品主图
                 String imgSql = "SELECT image_url FROM product_images WHERE product_id = ? AND is_main = TRUE LIMIT 1";
                 PreparedStatement imgStmt = conn.prepareStatement(imgSql);
@@ -1013,7 +1281,7 @@ public class DatabaseManager {
                 order.setImages(images);
                 imgRs.close();
                 imgStmt.close();
-                
+
                 orders.add(order);
             }
             rs.close();
@@ -1199,7 +1467,7 @@ public class DatabaseManager {
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setLong(1, productId);
             ResultSet rs = stmt.executeQuery();
-            
+
             if (rs.next()) {
                 product = new entity.Product();
                 product.setProductId(rs.getLong("product_id"));
@@ -1216,7 +1484,7 @@ public class DatabaseManager {
                 product.setSalesCount(rs.getInt("sales_count"));
                 product.setEnable(rs.getBoolean("enable"));
                 product.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
-                
+
                 // 查询商品图片
                 String imgSql = "SELECT image_url FROM product_images WHERE product_id = ? ORDER BY sort_order";
                 PreparedStatement imgStmt = conn.prepareStatement(imgSql);
@@ -1294,7 +1562,7 @@ public class DatabaseManager {
             StringBuilder sql = new StringBuilder("SELECT * FROM orders WHERE farmer_uid = ?");
             List<Object> params = new ArrayList<>();
             params.add(farmerUid);
-            
+
             if (status != null && !status.trim().isEmpty()) {
                 sql.append(" AND status = ?");
                 params.add(status);
@@ -1303,9 +1571,9 @@ public class DatabaseManager {
                 sql.append(" AND product_title LIKE ?");
                 params.add("%" + title + "%");
             }
-            
+
             sql.append(" ORDER BY created_at DESC");
-            
+
             PreparedStatement stmt = conn.prepareStatement(sql.toString());
             for (int i = 0; i < params.size(); i++) {
                 stmt.setObject(i + 1, params.get(i));
@@ -1329,7 +1597,7 @@ public class DatabaseManager {
                 order.setRemark(rs.getString("remark"));
                 order.setStatus(rs.getString("status"));
                 order.setCreatedAt(rs.getTimestamp("created_at"));
-                
+
                 // 查询商品主图
                 String imgSql = "SELECT image_url FROM product_images WHERE product_id = ? AND is_main = TRUE LIMIT 1";
                 PreparedStatement imgStmt = conn.prepareStatement(imgSql);
@@ -1342,7 +1610,7 @@ public class DatabaseManager {
                 order.setImages(images);
                 imgRs.close();
                 imgStmt.close();
-                
+
                 orders.add(order);
             }
             rs.close();
@@ -1352,4 +1620,487 @@ public class DatabaseManager {
         }
         return orders;
     }
+
+    // 在 DatabaseManager 类中添加以下方法
+
+    /**
+     * 根据手机号查找用户
+     */
+    public entity.User findUserByPhone(String phone) throws SQLException {
+        Connection conn = getConnection();
+        entity.User user = null;
+        try {
+            String sql = "SELECT * FROM users WHERE phone = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, phone);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                user = new entity.User();
+                user.setUid(rs.getString("uid"));
+                user.setPhone(rs.getString("phone"));
+                user.setPassword(rs.getString("password"));
+                user.setNickname(rs.getString("nickname"));
+                user.setMoney(rs.getBigDecimal("money"));
+                user.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+                user.setUpdatedAt(rs.getTimestamp("updated_at").toLocalDateTime());
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return user;
+    }
+
+    public List<Map<String, Object>> getQualifiedPartners(BigDecimal minCreditLimit, List<String> excludePhones, int maxPartners) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> partners = new ArrayList<>();
+        try {
+            StringBuilder sql = new StringBuilder();
+            sql.append("SELECT u.phone, u.nickname, cl.available_limit, cl.total_limit ");
+            sql.append("FROM users u ");
+            sql.append("JOIN user_farmers uf ON u.uid = uf.uid ");
+            sql.append("JOIN credit_limits cl ON uf.farmer_id = cl.farmer_id ");
+            sql.append("WHERE uf.enable = TRUE ");
+            sql.append("AND cl.status = 'active' ");
+            sql.append("AND cl.available_limit >= ? ");
+
+            List<Object> params = new ArrayList<>();
+            params.add(minCreditLimit);
+
+            if (excludePhones != null && !excludePhones.isEmpty()) {
+                sql.append("AND u.phone NOT IN (");
+                for (int i = 0; i < excludePhones.size(); i++) {
+                    sql.append("?");
+                    if (i < excludePhones.size() - 1) {
+                        sql.append(",");
+                    }
+                    params.add(excludePhones.get(i));
+                }
+                sql.append(") ");
+            }
+
+            sql.append("ORDER BY cl.available_limit DESC ");
+            sql.append("LIMIT ? ");
+            params.add(maxPartners);
+
+            PreparedStatement stmt = conn.prepareStatement(sql.toString());
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setObject(i + 1, params.get(i));
+            }
+
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> partner = new HashMap<>();
+                partner.put("phone", rs.getString("phone"));
+                partner.put("nickname", rs.getString("nickname"));
+                partner.put("available_limit", rs.getBigDecimal("available_limit"));
+                partner.put("total_limit", rs.getBigDecimal("total_limit"));
+                partners.add(partner);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return partners;
+    }
+
+    /**
+     * 根据 UID 查找银行用户信息
+     */
+    public Map<String, Object> getBankInfoByUid(String uid) throws SQLException {
+        Connection conn = getConnection();
+        Map<String, Object> bankInfo = null;
+        try {
+            String sql = "SELECT * FROM user_banks WHERE uid = ? AND enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, uid);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                bankInfo = new HashMap<>();
+                bankInfo.put("bank_id", rs.getLong("bank_id"));
+                bankInfo.put("uid", rs.getString("uid"));
+                bankInfo.put("bank_name", rs.getString("bank_name"));
+                bankInfo.put("branch_name", rs.getString("branch_name"));
+                bankInfo.put("contact_person", rs.getString("contact_person"));
+                bankInfo.put("contact_phone", rs.getString("contact_phone"));
+                bankInfo.put("enable", rs.getBoolean("enable"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return bankInfo;
+    }
+
+    /**
+     * 更新信用额度记录
+     */
+    public void updateCreditLimit(entity.financing.CreditLimit creditLimit) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE credit_limits SET total_limit = ?, available_limit = ?, last_updated = ?, updated_at = ? " +
+                    "WHERE farmer_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setBigDecimal(1, creditLimit.getTotalLimit());
+            stmt.setBigDecimal(2, creditLimit.getAvailableLimit());
+            stmt.setTimestamp(3, creditLimit.getLastUpdated());
+            stmt.setTimestamp(4, creditLimit.getUpdatedAt());
+            stmt.setLong(5, creditLimit.getFarmerId());
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 保存新的信用额度记录
+     */
+    public void saveCreditLimit(entity.financing.CreditLimit creditLimit) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO credit_limits (farmer_id, total_limit, used_limit, available_limit, currency, status, last_updated, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, creditLimit.getFarmerId());
+            stmt.setBigDecimal(2, creditLimit.getTotalLimit());
+            stmt.setBigDecimal(3, creditLimit.getUsedLimit());
+            stmt.setBigDecimal(4, creditLimit.getAvailableLimit());
+            stmt.setString(5, creditLimit.getCurrency());
+            stmt.setString(6, creditLimit.getStatus());
+            stmt.setTimestamp(7, creditLimit.getLastUpdated());
+            stmt.setTimestamp(8, creditLimit.getCreatedAt());
+            stmt.setTimestamp(9, creditLimit.getUpdatedAt());
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+
+    /**
+     * 根据 UID 查找农户用户信息
+     */
+    public Map<String, Object> getFarmerInfoByUid(String uid) throws SQLException {
+        Connection conn = getConnection();
+        Map<String, Object> farmerInfo = null;
+        try {
+            String sql = "SELECT * FROM user_farmers WHERE uid = ? AND enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, uid);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                farmerInfo = new HashMap<>();
+                farmerInfo.put("farmer_id", rs.getLong("farmer_id"));
+                farmerInfo.put("uid", rs.getString("uid"));
+                farmerInfo.put("farm_name", rs.getString("farm_name"));
+                farmerInfo.put("farm_address", rs.getString("farm_address"));
+                farmerInfo.put("farm_size", rs.getBigDecimal("farm_size"));
+                farmerInfo.put("enable", rs.getBoolean("enable"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return farmerInfo;
+    }
+
+    /**
+     * 根据产品ID获取贷款产品
+     */
+    public entity.financing.LoanProduct getLoanProductById(String productId) throws SQLException {
+        Connection conn = getConnection();
+        entity.financing.LoanProduct loanProduct = null;
+        try {
+            String sql = "SELECT * FROM loan_products WHERE product_id = ? AND status = 'active'";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, productId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                loanProduct = new entity.financing.LoanProduct();
+                loanProduct.setId(rs.getLong("id"));
+                loanProduct.setProductId(rs.getString("product_id"));
+                loanProduct.setProductCode(rs.getString("product_code"));
+                loanProduct.setProductName(rs.getString("product_name"));
+                loanProduct.setMinCreditLimit(rs.getBigDecimal("min_credit_limit"));
+                loanProduct.setMaxAmount(rs.getBigDecimal("max_amount"));
+                loanProduct.setInterestRate(rs.getBigDecimal("interest_rate"));
+                loanProduct.setTermMonths(rs.getInt("term_months"));
+                loanProduct.setRepaymentMethod(rs.getString("repayment_method"));
+                loanProduct.setDescription(rs.getString("description"));
+                loanProduct.setStatus(rs.getString("status"));
+                loanProduct.setBankId(rs.getLong("bank_id"));
+                loanProduct.setCreatedAt(rs.getTimestamp("created_at"));
+                loanProduct.setUpdatedAt(rs.getTimestamp("updated_at"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return loanProduct;
+    }
+
+    /**
+     * 检查贷款产品名称是否已存在
+     */
+    public boolean isProductNameExists(String productName) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "SELECT COUNT(*) FROM loan_products WHERE product_name = ? AND status = 'active'";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, productName);
+            ResultSet rs = stmt.executeQuery();
+            rs.next();
+            int count = rs.getInt(1);
+            rs.close();
+            stmt.close();
+            return count > 0;
+        } finally {
+            closeConnection();
+        }
+    }
+
+    public long createLoanApplication(String loanApplicationId, Long farmerId, Long productId, String applicationType,
+                                      BigDecimal applyAmount, String purpose, String repaymentSource) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO loan_applications (loan_application_id, farmer_id, product_id, application_type, apply_amount, purpose, repayment_source, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            stmt.setString(1, loanApplicationId);
+            stmt.setLong(2, farmerId);
+            stmt.setLong(3, productId);
+            stmt.setString(4, applicationType);
+            stmt.setBigDecimal(5, applyAmount);
+            stmt.setString(6, purpose);
+            stmt.setString(7, repaymentSource);
+            stmt.setString(8, "pending");
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("创建贷款申请记录失败，没有行受到影响");
+            }
+
+            ResultSet generatedKeys = stmt.getGeneratedKeys();
+            long id = 0;
+            if (generatedKeys.next()) {
+                id = generatedKeys.getLong(1);
+            }
+            generatedKeys.close();
+            stmt.close();
+            return id;
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 根据产品名称获取贷款产品
+     */
+    public entity.financing.LoanProduct getLoanProductByName(String productName) throws SQLException {
+        Connection conn = getConnection();
+        entity.financing.LoanProduct loanProduct = null;
+        try {
+            String sql = "SELECT * FROM loan_products WHERE product_name = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, productName);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                loanProduct = new entity.financing.LoanProduct();
+                loanProduct.setId(rs.getLong("id"));
+                loanProduct.setProductId(rs.getString("product_id"));
+                loanProduct.setProductCode(rs.getString("product_code"));
+                loanProduct.setProductName(rs.getString("product_name"));
+                loanProduct.setMinCreditLimit(rs.getBigDecimal("min_credit_limit"));
+                loanProduct.setMaxAmount(rs.getBigDecimal("max_amount"));
+                loanProduct.setInterestRate(rs.getBigDecimal("interest_rate"));
+                loanProduct.setTermMonths(rs.getInt("term_months"));
+                loanProduct.setRepaymentMethod(rs.getString("repayment_method"));
+                loanProduct.setDescription(rs.getString("description"));
+                loanProduct.setStatus(rs.getString("status"));
+                loanProduct.setBankId(rs.getLong("bank_id"));
+                loanProduct.setCreatedAt(rs.getTimestamp("created_at"));
+                loanProduct.setUpdatedAt(rs.getTimestamp("updated_at"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return loanProduct;
+    }
+
+    /**
+     * 保存贷款产品到数据库
+     */
+    public void saveLoanProduct(entity.financing.LoanProduct loanProduct) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO loan_products (product_id, product_code, product_name, min_credit_limit, " +
+                    "max_amount, interest_rate, term_months, repayment_method, description, status, bank_id, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, loanProduct.getProductId());
+            stmt.setString(2, loanProduct.getProductCode());
+            stmt.setString(3, loanProduct.getProductName());
+            stmt.setBigDecimal(4, loanProduct.getMinCreditLimit());
+            stmt.setBigDecimal(5, loanProduct.getMaxAmount());
+            stmt.setBigDecimal(6, loanProduct.getInterestRate());
+            stmt.setInt(7, loanProduct.getTermMonths());
+            stmt.setString(8, loanProduct.getRepaymentMethod());
+            stmt.setString(9, loanProduct.getDescription());
+            stmt.setString(10, loanProduct.getStatus());
+            stmt.setLong(11, loanProduct.getBankId());
+            stmt.setTimestamp(12, loanProduct.getCreatedAt());
+            stmt.setTimestamp(13, loanProduct.getUpdatedAt());
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 获取所有激活的贷款产品
+     */
+    public List<entity.financing.LoanProduct> getAllActiveLoanProducts() throws SQLException {
+        Connection conn = getConnection();
+        List<entity.financing.LoanProduct> products = new ArrayList<>();
+        try {
+            String sql = "SELECT * FROM loan_products WHERE status = 'active' ORDER BY created_at DESC";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                entity.financing.LoanProduct loanProduct = new entity.financing.LoanProduct();
+                loanProduct.setId(rs.getLong("id"));
+                loanProduct.setProductId(rs.getString("product_id"));
+                loanProduct.setProductCode(rs.getString("product_code"));
+                loanProduct.setProductName(rs.getString("product_name"));
+                loanProduct.setMinCreditLimit(rs.getBigDecimal("min_credit_limit"));
+                loanProduct.setMaxAmount(rs.getBigDecimal("max_amount"));
+                loanProduct.setInterestRate(rs.getBigDecimal("interest_rate"));
+                loanProduct.setTermMonths(rs.getInt("term_months"));
+                loanProduct.setRepaymentMethod(rs.getString("repayment_method"));
+                loanProduct.setDescription(rs.getString("description"));
+                loanProduct.setStatus(rs.getString("status"));
+                loanProduct.setBankId(rs.getLong("bank_id"));
+                loanProduct.setCreatedAt(rs.getTimestamp("created_at"));
+                loanProduct.setUpdatedAt(rs.getTimestamp("updated_at"));
+                products.add(loanProduct);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return products;
+    }
+
+    /**
+     * 根据农户ID获取信用额度
+     */
+    public entity.financing.CreditLimit getCreditLimitByFarmerId(Long farmerId) throws SQLException {
+        Connection conn = getConnection();
+        entity.financing.CreditLimit creditLimit = null;
+        try {
+            String sql = "SELECT * FROM credit_limits WHERE farmer_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, farmerId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                creditLimit = new entity.financing.CreditLimit();
+                creditLimit.setId(rs.getLong("id"));
+                creditLimit.setFarmerId(rs.getLong("farmer_id"));
+                creditLimit.setTotalLimit(rs.getBigDecimal("total_limit"));
+                creditLimit.setUsedLimit(rs.getBigDecimal("used_limit"));
+                creditLimit.setAvailableLimit(rs.getBigDecimal("available_limit"));
+                creditLimit.setCurrency(rs.getString("currency"));
+                creditLimit.setStatus(rs.getString("status"));
+                creditLimit.setLastUpdated(rs.getTimestamp("last_updated"));
+                creditLimit.setCreatedAt(rs.getTimestamp("created_at"));
+                creditLimit.setUpdatedAt(rs.getTimestamp("updated_at"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return creditLimit;
+    }
+
+    /**
+     * 根据农户ID获取待审批的额度申请
+     */
+    public entity.financing.CreditApplication getPendingApplicationByFarmerId(Long farmerId) throws SQLException {
+        Connection conn = getConnection();
+        entity.financing.CreditApplication application = null;
+        try {
+            String sql = "SELECT * FROM credit_applications WHERE farmer_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, farmerId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                application = new entity.financing.CreditApplication();
+                application.setId(rs.getLong("id"));
+                application.setApplicationId(rs.getString("application_id"));
+                application.setFarmerId(rs.getLong("farmer_id"));
+                application.setProofType(rs.getString("proof_type"));
+                application.setProofImages(rs.getString("proof_images"));
+                application.setApplyAmount(rs.getBigDecimal("apply_amount"));
+                application.setDescription(rs.getString("description"));
+                application.setStatus(rs.getString("status"));
+                application.setApprovedAmount(rs.getBigDecimal("approved_amount"));
+                application.setRejectReason(rs.getString("reject_reason"));
+                application.setApprovedBy(rs.getLong("approved_by"));
+                application.setApprovedAt(rs.getTimestamp("approved_at"));
+                application.setCreatedAt(rs.getTimestamp("created_at"));
+                application.setUpdatedAt(rs.getTimestamp("updated_at"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return application;
+    }
+
+    /**
+     * 保存额度申请到数据库
+     */
+    public void saveCreditApplication(entity.financing.CreditApplication application) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO credit_applications (application_id, farmer_id, proof_type, proof_images, " +
+                    "apply_amount, description, status, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, application.getApplicationId());
+            stmt.setLong(2, application.getFarmerId());
+            stmt.setString(3, application.getProofType());
+            stmt.setString(4, application.getProofImages());
+            stmt.setBigDecimal(5, application.getApplyAmount());
+            stmt.setString(6, application.getDescription());
+            stmt.setString(7, application.getStatus());
+            stmt.setTimestamp(8, application.getCreatedAt());
+            stmt.setTimestamp(9, application.getUpdatedAt());
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
 }

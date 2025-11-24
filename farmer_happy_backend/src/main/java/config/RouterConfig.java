@@ -6,6 +6,7 @@ import controller.ProductController;
 import controller.ContentController;
 import controller.CommentController;
 import controller.OrderController;
+import controller.FinancingController;
 import dto.auth.*;
 import dto.farmer.FarmerRegisterRequestDTO;
 import dto.farmer.ProductBatchActionRequestDTO;
@@ -14,7 +15,9 @@ import dto.farmer.ProductStatusUpdateRequestDTO;
 import dto.farmer.ProductUpdateRequestDTO;
 import dto.community.*;
 import dto.buyer.*;
+import dto.financing.*;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +31,7 @@ public class RouterConfig {
     private ContentController contentController;
     private CommentController commentController;
     private OrderController orderController;
+    private FinancingController financingController;
 
     public RouterConfig() {
         this.authController = new AuthController();
@@ -35,17 +39,62 @@ public class RouterConfig {
         this.contentController = new ContentController();
         this.commentController = new CommentController();
         this.orderController = new OrderController();
+        this.financingController = new FinancingController();
     }
 
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, Map<String, String> queryParams) {
+        // ============= 融资相关路由 =============
+
+        // 查询可用贷款额度
+        if ("/api/v1/financing/credit/limit".equals(path) && "POST".equals(method)) {
+            CreditLimitRequestDTO request = parseCreditLimitRequest(requestBody);
+            return financingController.getCreditLimit(request);
+        }
+
+        // 申请贷款额度
+        if ("/api/v1/financing/credit/apply".equals(path) && "POST".equals(method)) {
+            CreditApplicationRequestDTO request = parseCreditApplicationRequest(requestBody);
+            return financingController.applyForCreditLimit(request);
+        }
+
+        // 查询可申请的贷款产品
+        if ("/api/v1/financing/loans/products".equals(path) && "POST".equals(method)) {
+            LoanProductsRequestDTO request = parseLoanProductsRequest(requestBody);
+            return financingController.getAvailableLoanProducts(request);
+        }
+
+        // 银行发布贷款产品
+        if ("/api/v1/bank/loans/products".equals(path) && "POST".equals(method)) {
+            BankLoanProductRequestDTO request = parseBankLoanProductRequest(requestBody);
+            return financingController.publishLoanProduct(request);
+        }
+
+        // 申请单人贷款
+        if ("/api/v1/financing/loans/single".equals(path) && "POST".equals(method)) {
+            SingleLoanApplicationRequestDTO request = parseSingleLoanApplicationRequest(requestBody);
+            return financingController.applyForSingleLoan(request);
+        }
+
+        // 申请联合贷款
+        if ("/api/v1/financing/loans/joint".equals(path) && "POST".equals(method)) {
+            JointLoanApplicationRequestDTO request = parseJointLoanApplicationRequest(requestBody);
+            return financingController.applyForJointLoan(request);
+        }
+
+        // 浏览可联合农户
+        if ("/api/v1/financing/partners".equals(path) && "POST".equals(method)) {
+            PartnersRequestDTO request = parsePartnersRequest(requestBody);
+            return financingController.getJointPartners(request);
+        }
+
         // ============= 买家订单相关路由 =============
-        
+
         // 创建订单 - /api/v1/buyer/orders
         if ("/api/v1/buyer/orders".equals(path) && "POST".equals(method)) {
             CreateOrderRequestDTO request = parseCreateOrderRequest(requestBody);
             return orderController.createOrder(request);
         }
-        
+
         // 更新订单信息 - /api/v1/buyer/orders/{order_id}
         Pattern updateOrderPattern = Pattern.compile("/api/v1/buyer/orders/([^/]+)");
         Matcher updateOrderMatcher = updateOrderPattern.matcher(path);
@@ -54,7 +103,7 @@ public class RouterConfig {
             UpdateOrderRequestDTO request = parseUpdateOrderRequest(requestBody);
             return orderController.updateOrder(orderId, request);
         }
-        
+
         // 获取订单详情 - /api/v1/buyer/orders/query/{order_id}
         Pattern getOrderDetailPattern = Pattern.compile("/api/v1/buyer/orders/query/([^/]+)");
         Matcher getOrderDetailMatcher = getOrderDetailPattern.matcher(path);
@@ -63,7 +112,7 @@ public class RouterConfig {
             QueryOrderRequestDTO request = parseQueryOrderRequest(requestBody);
             return orderController.getOrderDetail(orderId, request);
         }
-        
+
         // 获取订单列表 - /api/v1/buyer/orders/list_query
         if ("/api/v1/buyer/orders/list_query".equals(path) && "POST".equals(method)) {
             String buyerPhone = queryParams.get("buyer_phone");
@@ -71,9 +120,9 @@ public class RouterConfig {
             String title = queryParams.get("title");
             return orderController.getOrderList(buyerPhone, status, title);
         }
-        
+
         // ============= 农户订单相关路由 =============
-        
+
         // 获取农户订单列表 - /api/v1/farmer/orders/list_query
         if ("/api/v1/farmer/orders/list_query".equals(path) && "POST".equals(method)) {
             String farmerPhone = queryParams.get("farmer_phone");
@@ -81,7 +130,7 @@ public class RouterConfig {
             String title = queryParams.get("title");
             return orderController.getFarmerOrderList(farmerPhone, status, title);
         }
-        
+
         // 获取农户订单详情 - /api/v1/farmer/orders/query/{order_id}
         Pattern getFarmerOrderDetailPattern = Pattern.compile("/api/v1/farmer/orders/query/([^/]+)");
         Matcher getFarmerOrderDetailMatcher = getFarmerOrderDetailPattern.matcher(path);
@@ -97,7 +146,7 @@ public class RouterConfig {
             }
             return orderController.getFarmerOrderDetail(orderId, farmerPhone);
         }
-        
+
         // 申请退货退款 - /api/v1/buyer/orders/{order_id}/refund
         Pattern refundOrderPattern = Pattern.compile("/api/v1/buyer/orders/([^/]+)/refund");
         Matcher refundOrderMatcher = refundOrderPattern.matcher(path);
@@ -106,7 +155,7 @@ public class RouterConfig {
             RefundRequestDTO request = parseRefundRequest(requestBody);
             return orderController.applyRefund(orderId, request);
         }
-        
+
         // 确认收货 - /api/v1/buyer/orders/{order_id}/confirm_receipt
         Pattern confirmReceiptPattern = Pattern.compile("/api/v1/buyer/orders/([^/]+)/confirm_receipt");
         Matcher confirmReceiptMatcher = confirmReceiptPattern.matcher(path);
@@ -115,14 +164,14 @@ public class RouterConfig {
             ConfirmReceiptRequestDTO request = parseConfirmReceiptRequest(requestBody);
             return orderController.confirmReceipt(orderId, request);
         }
-        
+
         // ============= 社区相关路由 =============
-        
+
         // 处理发布内容请求
         if ("/api/v1/content/publish".equals(path) && "POST".equals(method)) {
             return contentController.publishContent(parsePublishContentRequest(requestBody));
         }
-        
+
         // 处理获取内容列表请求
         if ("/api/v1/content/list".equals(path) && "GET".equals(method)) {
             // 从查询参数中获取筛选条件
@@ -131,7 +180,7 @@ public class RouterConfig {
             String sort = queryParams != null ? queryParams.get("sort") : null;
             return contentController.getContentList(contentType, keyword, sort);
         }
-        
+
         // 处理获取内容详情请求 - /api/v1/content/{content_id}
         Pattern contentDetailPattern = Pattern.compile("/api/v1/content/([^/]+)");
         Matcher contentDetailMatcher = contentDetailPattern.matcher(path);
@@ -142,7 +191,7 @@ public class RouterConfig {
                 return contentController.getContentDetail(contentId);
             }
         }
-        
+
         // 处理发表评论请求 - /api/v1/content/{content_id}/comments
         Pattern postCommentPattern = Pattern.compile("/api/v1/content/([^/]+)/comments");
         Matcher postCommentMatcher = postCommentPattern.matcher(path);
@@ -150,7 +199,7 @@ public class RouterConfig {
             String contentId = postCommentMatcher.group(1);
             return commentController.postComment(contentId, parsePostCommentRequest(requestBody));
         }
-        
+
         // 处理获取评论列表请求 - /api/v1/content/{content_id}/comments
         if (postCommentPattern.matcher(path).matches() && "GET".equals(method)) {
             Matcher matcher = postCommentPattern.matcher(path);
@@ -159,7 +208,7 @@ public class RouterConfig {
                 return commentController.getCommentList(contentId);
             }
         }
-        
+
         // 处理回复评论请求 - /api/v1/comment/{comment_id}/replies
         Pattern postReplyPattern = Pattern.compile("/api/v1/comment/([^/]+)/replies");
         Matcher postReplyMatcher = postReplyPattern.matcher(path);
@@ -167,9 +216,9 @@ public class RouterConfig {
             String commentId = postReplyMatcher.group(1);
             return commentController.postReply(commentId, parsePostReplyRequest(requestBody));
         }
-        
+
         // ============= 商品相关路由 =============
-        
+
         // 处理商品上架请求
         Pattern onShelfPattern = Pattern.compile("/api/v1/farmer/products/([^/]+)/on-shelf");
         Matcher onShelfMatcher = onShelfPattern.matcher(path);
@@ -295,7 +344,7 @@ public class RouterConfig {
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers) {
         return handleRequest(path, method, requestBody, headers, new HashMap<>());
     }
-    
+
     // 旧的sessionId版本兼容
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, String sessionId) {
         return handleRequest(path, method, requestBody, headers, new HashMap<>());
@@ -522,14 +571,14 @@ public class RouterConfig {
     }
 
     // ============= 社区相关DTO解析方法 =============
-    
+
     private PublishContentRequestDTO parsePublishContentRequest(Map<String, Object> requestBody) {
         PublishContentRequestDTO request = new PublishContentRequestDTO();
         request.setTitle((String) requestBody.get("title"));
         request.setContent((String) requestBody.get("content"));
         request.setContentType((String) requestBody.get("content_type"));
         request.setPhone((String) requestBody.get("phone"));
-        
+
         // 处理图片数组
         if (requestBody.get("images") instanceof List) {
             List<?> imagesObj = (List<?>) requestBody.get("images");
@@ -541,43 +590,43 @@ public class RouterConfig {
             }
             request.setImages(images);
         }
-        
+
         return request;
     }
-    
+
     private PostCommentRequestDTO parsePostCommentRequest(Map<String, Object> requestBody) {
         PostCommentRequestDTO request = new PostCommentRequestDTO();
         request.setComment((String) requestBody.get("comment"));
         request.setPhone((String) requestBody.get("phone"));
         return request;
     }
-    
+
     private PostReplyRequestDTO parsePostReplyRequest(Map<String, Object> requestBody) {
         PostReplyRequestDTO request = new PostReplyRequestDTO();
         request.setComment((String) requestBody.get("comment"));
         request.setPhone((String) requestBody.get("phone"));
         return request;
     }
-    
+
     // ============= 订单相关DTO解析方法 =============
-    
+
     private CreateOrderRequestDTO parseCreateOrderRequest(Map<String, Object> requestBody) {
         CreateOrderRequestDTO request = new CreateOrderRequestDTO();
         request.setProductId((String) requestBody.get("product_id"));
-        
+
         Object quantityObj = requestBody.get("quantity");
         if (quantityObj instanceof Number) {
             request.setQuantity(((Number) quantityObj).intValue());
         }
-        
+
         request.setBuyerName((String) requestBody.get("buyer_name"));
         request.setBuyerAddress((String) requestBody.get("buyer_address"));
         request.setBuyerPhone((String) requestBody.get("buyer_phone"));
         request.setRemark((String) requestBody.get("remark"));
-        
+
         return request;
     }
-    
+
     private UpdateOrderRequestDTO parseUpdateOrderRequest(Map<String, Object> requestBody) {
         UpdateOrderRequestDTO request = new UpdateOrderRequestDTO();
         request.setBuyerName((String) requestBody.get("buyer_name"));
@@ -586,13 +635,13 @@ public class RouterConfig {
         request.setRemark((String) requestBody.get("remark"));
         return request;
     }
-    
+
     private QueryOrderRequestDTO parseQueryOrderRequest(Map<String, Object> requestBody) {
         QueryOrderRequestDTO request = new QueryOrderRequestDTO();
         request.setBuyerPhone((String) requestBody.get("buyer_phone"));
         return request;
     }
-    
+
     private RefundRequestDTO parseRefundRequest(Map<String, Object> requestBody) {
         RefundRequestDTO request = new RefundRequestDTO();
         request.setRefundReason((String) requestBody.get("refund_reason"));
@@ -600,10 +649,155 @@ public class RouterConfig {
         request.setBuyerPhone((String) requestBody.get("buyer_phone"));
         return request;
     }
-    
+
     private ConfirmReceiptRequestDTO parseConfirmReceiptRequest(Map<String, Object> requestBody) {
         ConfirmReceiptRequestDTO request = new ConfirmReceiptRequestDTO();
         request.setBuyerPhone((String) requestBody.get("buyer_phone"));
+        return request;
+    }
+
+    // ============= 融资相关DTO解析方法 =============
+
+    private BankLoanProductRequestDTO parseBankLoanProductRequest(Map<String, Object> requestBody) {
+        BankLoanProductRequestDTO request = new BankLoanProductRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        request.setProduct_name((String) requestBody.get("product_name"));
+        request.setProduct_code((String) requestBody.get("product_code"));
+        request.setDescription((String) requestBody.get("description"));
+        request.setRepayment_method((String) requestBody.get("repayment_method"));
+
+        // 处理数值类型字段，使用BigDecimal.valueOf()进行转换
+        if (requestBody.get("min_credit_limit") instanceof Number) {
+            request.setMin_credit_limit(BigDecimal.valueOf(((Number) requestBody.get("min_credit_limit")).doubleValue()));
+        }
+
+        if (requestBody.get("max_amount") instanceof Number) {
+            request.setMax_amount(BigDecimal.valueOf(((Number) requestBody.get("max_amount")).doubleValue()));
+        }
+
+        if (requestBody.get("interest_rate") instanceof Number) {
+            request.setInterest_rate(BigDecimal.valueOf(((Number) requestBody.get("interest_rate")).doubleValue()));
+        }
+
+        if (requestBody.get("term_months") instanceof Number) {
+            request.setTerm_months(((Number) requestBody.get("term_months")).intValue());
+        }
+
+        return request;
+    }
+
+    private LoanProductsRequestDTO parseLoanProductsRequest(Map<String, Object> requestBody) {
+        LoanProductsRequestDTO request = new LoanProductsRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+
+        // 处理数值类型字段，使用BigDecimal.valueOf()进行转换
+        if (requestBody.get("credit_limit") instanceof Number) {
+            request.setCredit_limit(BigDecimal.valueOf(((Number) requestBody.get("credit_limit")).doubleValue()));
+        }
+
+        return request;
+    }
+
+    private CreditLimitRequestDTO parseCreditLimitRequest(Map<String, Object> requestBody) {
+        CreditLimitRequestDTO request = new CreditLimitRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        return request;
+    }
+
+    private CreditApplicationRequestDTO parseCreditApplicationRequest(Map<String, Object> requestBody) {
+        CreditApplicationRequestDTO request = new CreditApplicationRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        request.setProof_type((String) requestBody.get("proof_type"));
+        request.setDescription((String) requestBody.get("description"));
+
+        // 处理数值类型字段，使用BigDecimal.valueOf()进行转换
+        if (requestBody.get("apply_amount") instanceof Number) {
+            request.setApply_amount(BigDecimal.valueOf(((Number) requestBody.get("apply_amount")).doubleValue()));
+        }
+
+        // 处理图片数组
+        if (requestBody.get("proof_images") instanceof List) {
+            List<?> imagesObj = (List<?>) requestBody.get("proof_images");
+            List<String> images = new ArrayList<>();
+            for (Object img : imagesObj) {
+                if (img instanceof String) {
+                    images.add((String) img);
+                }
+            }
+            request.setProof_images(images);
+        }
+
+        return request;
+    }
+
+    private SingleLoanApplicationRequestDTO parseSingleLoanApplicationRequest(Map<String, Object> requestBody) {
+        SingleLoanApplicationRequestDTO request = new SingleLoanApplicationRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        request.setProduct_id((String) requestBody.get("product_id"));
+        request.setPurpose((String) requestBody.get("purpose"));
+        request.setRepayment_source((String) requestBody.get("repayment_source"));
+
+        // 处理数值类型字段
+        if (requestBody.get("apply_amount") instanceof Number) {
+            request.setApply_amount(BigDecimal.valueOf(((Number) requestBody.get("apply_amount")).doubleValue()));
+        }
+
+        return request;
+    }
+
+    private JointLoanApplicationRequestDTO parseJointLoanApplicationRequest(Map<String, Object> requestBody) {
+        JointLoanApplicationRequestDTO request = new JointLoanApplicationRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        request.setProduct_id((String) requestBody.get("product_id"));
+        request.setPurpose((String) requestBody.get("purpose"));
+        request.setRepayment_plan((String) requestBody.get("repayment_plan"));
+        request.setJoint_agreement((Boolean) requestBody.get("joint_agreement"));
+
+        // 处理数值类型字段
+        if (requestBody.get("apply_amount") instanceof Number) {
+            request.setApply_amount(BigDecimal.valueOf(((Number) requestBody.get("apply_amount")).doubleValue()));
+        }
+
+        // 处理伙伴手机号数组
+        if (requestBody.get("partner_phones") instanceof List) {
+            List<?> phonesObj = (List<?>) requestBody.get("partner_phones");
+            List<String> phones = new ArrayList<>();
+            for (Object phone : phonesObj) {
+                if (phone instanceof String) {
+                    phones.add((String) phone);
+                }
+            }
+            request.setPartner_phones(phones);
+        }
+
+        return request;
+    }
+
+    private PartnersRequestDTO parsePartnersRequest(Map<String, Object> requestBody) {
+        PartnersRequestDTO request = new PartnersRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+
+        // 处理数值类型字段
+        if (requestBody.get("min_credit_limit") instanceof Number) {
+            request.setMin_credit_limit(BigDecimal.valueOf(((Number) requestBody.get("min_credit_limit")).doubleValue()));
+        }
+
+        if (requestBody.get("max_partners") instanceof Number) {
+            request.setMax_partners(((Number) requestBody.get("max_partners")).intValue());
+        }
+
+        // 处理排除手机号数组
+        if (requestBody.get("exclude_phones") instanceof List) {
+            List<?> phonesObj = (List<?>) requestBody.get("exclude_phones");
+            List<String> phones = new ArrayList<>();
+            for (Object phone : phonesObj) {
+                if (phone instanceof String) {
+                    phones.add((String) phone);
+                }
+            }
+            request.setExclude_phones(phones);
+        }
+
         return request;
     }
 
