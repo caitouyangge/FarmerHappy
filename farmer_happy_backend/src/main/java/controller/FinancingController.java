@@ -1,6 +1,10 @@
 // src/controller/FinancingController.java
 package controller;
 
+import dto.bank.LoanApprovalRequestDTO;
+import dto.bank.LoanApprovalResponseDTO;
+import dto.bank.LoanDisbursementRequestDTO;
+import dto.bank.LoanDisbursementResponseDTO;
 import service.financing.FinancingService;
 import dto.financing.*;
 
@@ -50,6 +54,60 @@ public class FinancingController {
         }
     }
 
+    public Map<String, Object> approveLoan(LoanApprovalRequestDTO request) {
+        try {
+            LoanApprovalResponseDTO response = financingService.approveLoan(request);
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 200);
+            result.put("message", "贷款申请已批准");
+            result.put("data", response);
+            return result;
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            if (e.getMessage().contains("用户认证失败")) {
+                result.put("code", 401);
+                result.put("message", "用户认证失败，请检查手机号或重新登录");
+            } else if (e.getMessage().contains("无银行审批权限")) {
+                result.put("code", 403);
+                result.put("message", "无审批权限");
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "phone");
+                error.put("message", "该用户无银行审批权限");
+                errors.add(error);
+                result.put("errors", errors);
+            } else if (e.getMessage().contains("指定的申请ID不存在")) {
+                result.put("code", 404);
+                result.put("message", "贷款申请不存在");
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "application_id");
+                error.put("message", "指定的申请ID不存在");
+                errors.add(error);
+                result.put("errors", errors);
+            } else if (e.getMessage().contains("不能重复审批")) {
+                result.put("code", 400);
+                result.put("message", "申请状态不允许审批");
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "application_id");
+                error.put("message", "该申请已批准，不能重复审批");
+                errors.add(error);
+                result.put("errors", errors);
+            } else {
+                result.put("code", 400);
+                result.put("message", "参数验证失败");
+                // 可以进一步解析错误信息并构造errors数组
+            }
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 500);
+            result.put("message", e.getMessage());
+            return result;
+        }
+    }
+
     public Map<String, Object> getAvailableLoanProducts(LoanProductsRequestDTO request) {
         try {
             LoanProductsResponseDTO response = financingService.getAvailableLoanProducts(request);
@@ -71,6 +129,60 @@ public class FinancingController {
             return result;
         }
     }
+
+    public Map<String, Object> disburseLoan(LoanDisbursementRequestDTO request) {
+        try {
+            LoanDisbursementResponseDTO response = financingService.disburseLoan(request);
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 200);
+            result.put("message", "贷款已放款");
+            result.put("data", response);
+            return result;
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            if (e.getMessage().contains("用户认证失败")) {
+                result.put("code", 401);
+                result.put("message", "用户认证失败，请检查手机号或重新登录");
+            } else if (e.getMessage().contains("无银行放款权限")) {
+                result.put("code", 403);
+                result.put("message", "无放款权限");
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "phone");
+                error.put("message", "该用户无银行放款权限");
+                errors.add(error);
+                result.put("errors", errors);
+            } else if (e.getMessage().contains("指定的申请ID不存在")) {
+                result.put("code", 404);
+                result.put("message", "贷款申请不存在");
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "application_id");
+                error.put("message", "指定的申请ID不存在");
+                errors.add(error);
+                result.put("errors", errors);
+            } else if (e.getMessage().contains("不能重复放款")) {
+                result.put("code", 400);
+                result.put("message", "申请状态不允许放款");
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "application_id");
+                error.put("message", "该申请已放款，不能重复放款");
+                errors.add(error);
+                result.put("errors", errors);
+            } else {
+                result.put("code", 400);
+                result.put("message", "参数验证失败");
+            }
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 500);
+            result.put("message", e.getMessage());
+            return result;
+        }
+    }
+
 
     public Map<String, Object> getCreditLimit(CreditLimitRequestDTO request) {
         try {

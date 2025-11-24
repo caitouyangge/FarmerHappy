@@ -8,11 +8,8 @@ import controller.CommentController;
 import controller.OrderController;
 import controller.FinancingController;
 import dto.auth.*;
-import dto.farmer.FarmerRegisterRequestDTO;
-import dto.farmer.ProductBatchActionRequestDTO;
-import dto.farmer.ProductCreateRequestDTO;
-import dto.farmer.ProductStatusUpdateRequestDTO;
-import dto.farmer.ProductUpdateRequestDTO;
+import dto.farmer.*;
+import dto.bank.*;
 import dto.community.*;
 import dto.buyer.*;
 import dto.financing.*;
@@ -44,6 +41,19 @@ public class RouterConfig {
 
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, Map<String, String> queryParams) {
         // ============= 融资相关路由 =============
+
+
+        // 银行审批贷款申请
+        if ("/api/v1/bank/loans/approve".equals(path) && "POST".equals(method)) {
+            LoanApprovalRequestDTO request = parseLoanApprovalRequest(requestBody);
+            return financingController.approveLoan(request);
+        }
+
+        // 银行放款操作
+        if ("/api/v1/bank/loans/disburse".equals(path) && "POST".equals(method)) {
+            LoanDisbursementRequestDTO request = parseLoanDisbursementRequest(requestBody);
+            return financingController.disburseLoan(request);
+        }
 
         // 查询可用贷款额度
         if ("/api/v1/financing/credit/limit".equals(path) && "POST".equals(method)) {
@@ -443,6 +453,55 @@ public class RouterConfig {
         return loginResult;
     }
 
+
+    /**
+     * 解析贷款审批请求
+     */
+    private LoanApprovalRequestDTO parseLoanApprovalRequest(Map<String, Object> requestBody) {
+        LoanApprovalRequestDTO request = new LoanApprovalRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        request.setApplication_id((String) requestBody.get("application_id"));
+        request.setAction((String) requestBody.get("action"));
+        request.setReject_reason((String) requestBody.get("reject_reason"));
+
+        // 处理数值类型字段
+        if (requestBody.get("approved_amount") instanceof Number) {
+            request.setApproved_amount(BigDecimal.valueOf(((Number) requestBody.get("approved_amount")).doubleValue()));
+        }
+
+        return request;
+    }
+
+    /**
+     * 解析贷款放款请求
+     */
+    private LoanDisbursementRequestDTO parseLoanDisbursementRequest(Map<String, Object> requestBody) {
+        LoanDisbursementRequestDTO request = new LoanDisbursementRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        request.setApplication_id((String) requestBody.get("application_id"));
+        request.setDisburse_method((String) requestBody.get("disburse_method"));
+        request.setLoan_account((String) requestBody.get("loan_account"));
+        request.setRemarks((String) requestBody.get("remarks"));
+
+        // 处理数值类型字段
+        if (requestBody.get("disburse_amount") instanceof Number) {
+            request.setDisburse_amount(BigDecimal.valueOf(((Number) requestBody.get("disburse_amount")).doubleValue()));
+        }
+
+        // 处理日期字段
+        if (requestBody.get("first_repayment_date") instanceof String) {
+            try {
+                // 将字符串转换为Date对象
+                String dateStr = (String) requestBody.get("first_repayment_date");
+                // 简化处理，实际项目中应使用适当的日期格式化
+                request.setFirst_repayment_date(java.sql.Date.valueOf(dateStr));
+            } catch (Exception e) {
+                // 日期格式不正确时保持为null
+            }
+        }
+
+        return request;
+    }
 
     private ProductCreateRequestDTO parseProductRequest(Map<String, Object> requestBody) {
         ProductCreateRequestDTO request = new ProductCreateRequestDTO();
