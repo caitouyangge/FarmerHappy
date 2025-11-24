@@ -565,6 +565,8 @@ public class application {
                     }
                     else if (value instanceof LoanDisbursementResponseDTO) {
                         return serializeLoanDisbursementResponseDTO((LoanDisbursementResponseDTO) value);
+                    }else if (value instanceof RepaymentScheduleResponseDTO) {
+                        return serializeRepaymentScheduleResponseDTO((RepaymentScheduleResponseDTO) value);
                     }
 
                     else {
@@ -590,6 +592,185 @@ public class application {
                     json.append("]");
                     return json.toString();
                 }
+
+                // 序列化 RepaymentScheduleResponseDTO
+                private String serializeRepaymentScheduleResponseDTO(RepaymentScheduleResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+
+                    if (dto.getLoan_id() != null) {
+                        json.append("\"loan_id\":\"").append(escapeJsonString(dto.getLoan_id())).append("\",");
+                    }
+
+                    if (dto.getLoan_status() != null) {
+                        json.append("\"loan_status\":\"").append(escapeJsonString(dto.getLoan_status())).append("\",");
+                    }
+
+                    if (dto.getLoan_amount() != null) {
+                        json.append("\"loan_amount\":").append(dto.getLoan_amount()).append(",");
+                    }
+
+                    if (dto.getInterest_rate() != null) {
+                        json.append("\"interest_rate\":").append(dto.getInterest_rate()).append(",");
+                    }
+
+                    json.append("\"term_months\":").append(dto.getTerm_months()).append(",");
+
+                    if (dto.getRepayment_method() != null) {
+                        json.append("\"repayment_method\":\"").append(escapeJsonString(dto.getRepayment_method())).append("\",");
+                    }
+
+                    if (dto.getDisburse_date() != null) {
+                        json.append("\"disburse_date\":\"").append(dto.getDisburse_date().toString()).append("\",");
+                    } else {
+                        json.append("\"disburse_date\":null,");
+                    }
+
+                    if (dto.getMaturity_date() != null) {
+                        json.append("\"maturity_date\":\"").append(dto.getMaturity_date().toString()).append("\",");
+                    } else {
+                        json.append("\"maturity_date\":null,");
+                    }
+
+                    if (dto.getClosed_date() != null) {
+                        json.append("\"closed_date\":\"").append(dto.getClosed_date().toString()).append("\",");
+                    } else {
+                        json.append("\"closed_date\":null,");
+                    }
+
+                    json.append("\"current_period\":").append(dto.getCurrent_period()).append(",");
+                    json.append("\"total_periods\":").append(dto.getTotal_periods()).append(",");
+
+                    if (dto.getRemaining_principal() != null) {
+                        json.append("\"remaining_principal\":").append(dto.getRemaining_principal()).append(",");
+                    }
+
+                    // 序列化 current_due 对象
+                    if (dto.getCurrent_due() != null) {
+                        json.append("\"current_due\":").append(serializeDueInfo(dto.getCurrent_due())).append(",");
+                    } else {
+                        json.append("\"current_due\":null,");
+                    }
+
+                    // 序列化 next_payment 对象
+                    if (dto.getNext_payment() != null) {
+                        json.append("\"next_payment\":").append(serializePaymentInfo(dto.getNext_payment())).append(",");
+                    } else {
+                        json.append("\"next_payment\":null,");
+                    }
+
+                    // 序列化 summary 对象
+                    if (dto.getSummary() != null) {
+                        json.append("\"summary\":").append(serializeSummaryInfo(dto.getSummary())).append(",");
+                    }
+
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 DueInfo 对象
+                private String serializeDueInfo(RepaymentScheduleResponseDTO.DueInfo dueInfo) {
+                    if (dueInfo == null) return "null";
+
+                    StringBuilder json = new StringBuilder("{");
+
+                    if (dueInfo.getDue_date() != null) {
+                        json.append("\"due_date\":\"").append(dueInfo.getDue_date().toString()).append("\",");
+                    }
+
+                    if (dueInfo.getDue_amount() != null) {
+                        json.append("\"due_amount\":").append(dueInfo.getDue_amount()).append(",");
+                    }
+
+                    if (dueInfo.getPrincipal_amount() != null) {
+                        json.append("\"principal_amount\":").append(dueInfo.getPrincipal_amount()).append(",");
+                    }
+
+                    if (dueInfo.getInterest_amount() != null) {
+                        json.append("\"interest_amount\":").append(dueInfo.getInterest_amount()).append(",");
+                    }
+
+                    json.append("\"days_overdue\":").append(dueInfo.getDays_overdue()).append(",");
+
+                    if (dueInfo.getOverdue_interest() != null) {
+                        json.append("\"overdue_interest\":").append(dueInfo.getOverdue_interest()).append(",");
+                    }
+
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 PaymentInfo 对象
+                private String serializePaymentInfo(RepaymentScheduleResponseDTO.PaymentInfo paymentInfo) {
+                    if (paymentInfo == null) return "null";
+
+                    StringBuilder json = new StringBuilder("{");
+
+                    if (paymentInfo.getPayment_date() != null) {
+                        json.append("\"payment_date\":\"").append(paymentInfo.getPayment_date().toString()).append("\",");
+                    }
+
+                    if (paymentInfo.getPayment_amount() != null) {
+                        json.append("\"payment_amount\":").append(paymentInfo.getPayment_amount()).append(",");
+                    }
+
+                    if (paymentInfo.getPrincipal_amount() != null) {
+                        json.append("\"principal_amount\":").append(paymentInfo.getPrincipal_amount()).append(",");
+                    }
+
+                    if (paymentInfo.getInterest_amount() != null) {
+                        json.append("\"interest_amount\":").append(paymentInfo.getInterest_amount()).append(",");
+                    }
+
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 SummaryInfo 对象
+                private String serializeSummaryInfo(RepaymentScheduleResponseDTO.SummaryInfo summaryInfo) {
+                    if (summaryInfo == null) return "null";
+
+                    StringBuilder json = new StringBuilder("{");
+
+                    if (summaryInfo.getTotal_paid() != null) {
+                        json.append("\"total_paid\":").append(summaryInfo.getTotal_paid()).append(",");
+                    }
+
+                    if (summaryInfo.getPrincipal_paid() != null) {
+                        json.append("\"principal_paid\":").append(summaryInfo.getPrincipal_paid()).append(",");
+                    }
+
+                    if (summaryInfo.getInterest_paid() != null) {
+                        json.append("\"interest_paid\":").append(summaryInfo.getInterest_paid()).append(",");
+                    }
+
+                    if (summaryInfo.getRemaining_total() != null) {
+                        json.append("\"remaining_total\":").append(summaryInfo.getRemaining_total()).append(",");
+                    }
+
+                    if (summaryInfo.getRemaining_principal() != null) {
+                        json.append("\"remaining_principal\":").append(summaryInfo.getRemaining_principal()).append(",");
+                    }
+
+                    if (summaryInfo.getRemaining_interest() != null) {
+                        json.append("\"remaining_interest\":").append(summaryInfo.getRemaining_interest()).append(",");
+                    }
+
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
 
                 // 添加序列化 LoanApprovalResponseDTO
                 private String serializeLoanApprovalResponseDTO(LoanApprovalResponseDTO dto) {

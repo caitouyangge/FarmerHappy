@@ -2449,6 +2449,98 @@ public class DatabaseManager {
         // 或者可以添加日志记录等操作
     }
 
+    /**
+     * 根据贷款ID获取贷款信息
+     */
+    public entity.financing.Loan getLoanById(String loanId) throws SQLException {
+        Connection conn = getConnection();
+        entity.financing.Loan loan = null;
+        try {
+            String sql = "SELECT * FROM loans WHERE loan_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, loanId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                loan = new entity.financing.Loan();
+                loan.setId(rs.getLong("id"));
+                loan.setLoanId(rs.getString("loan_id"));
+                loan.setFarmerId(rs.getLong("farmer_id"));
+                loan.setProductId(rs.getLong("product_id"));
+                loan.setLoanAmount(rs.getBigDecimal("loan_amount"));
+                loan.setInterestRate(rs.getBigDecimal("interest_rate"));
+                loan.setTermMonths(rs.getInt("term_months"));
+                loan.setRepaymentMethod(rs.getString("repayment_method"));
+                loan.setDisburseAmount(rs.getBigDecimal("disburse_amount"));
+                loan.setDisburseMethod(rs.getString("disburse_method"));
+                loan.setDisburseDate(rs.getTimestamp("disburse_date"));
+                loan.setFirstRepaymentDate(rs.getDate("first_repayment_date"));
+                loan.setLoanAccount(rs.getString("loan_account"));
+                loan.setDisburseRemarks(rs.getString("disburse_remarks"));
+                loan.setLoanStatus(rs.getString("loan_status"));
+                loan.setApprovedBy(rs.getLong("approved_by"));
+                loan.setApprovedAt(rs.getTimestamp("approved_at"));
+                loan.setRejectReason(rs.getString("reject_reason"));
+                loan.setClosedDate(rs.getTimestamp("closed_date"));
+                loan.setTotalRepaymentAmount(rs.getBigDecimal("total_repayment_amount"));
+                loan.setTotalPaidAmount(rs.getBigDecimal("total_paid_amount"));
+                loan.setTotalPaidPrincipal(rs.getBigDecimal("total_paid_principal"));
+                loan.setTotalPaidInterest(rs.getBigDecimal("total_paid_interest"));
+                loan.setRemainingPrincipal(rs.getBigDecimal("remaining_principal"));
+                loan.setCurrentPeriod(rs.getInt("current_period"));
+                loan.setNextPaymentDate(rs.getDate("next_payment_date"));
+                loan.setNextPaymentAmount(rs.getBigDecimal("next_payment_amount"));
+                loan.setOverdueDays(rs.getInt("overdue_days"));
+                loan.setOverdueAmount(rs.getBigDecimal("overdue_amount"));
+                loan.setRepaymentSchedule(rs.getString("repayment_schedule"));
+                loan.setPurpose(rs.getString("purpose"));
+                loan.setRepaymentSource(rs.getString("repayment_source"));
+                loan.setIsJointLoan(rs.getBoolean("is_joint_loan"));
+                loan.setCreatedAt(rs.getTimestamp("created_at"));
+                loan.setUpdatedAt(rs.getTimestamp("updated_at"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return loan;
+    }
+
+    /**
+     * 根据贷款ID获取联合贷款伙伴信息
+     */
+    public List<Map<String, Object>> getJointLoanPartnersByLoanId(long loanId) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> partners = new ArrayList<>();
+        try {
+            String sql = "SELECT * FROM joint_loans WHERE loan_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, loanId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                Map<String, Object> partner = new HashMap<>();
+                partner.put("id", rs.getLong("id"));
+                partner.put("loan_id", rs.getLong("loan_id"));
+                partner.put("partner_farmer_id", rs.getLong("partner_farmer_id"));
+                partner.put("partner_share_ratio", rs.getBigDecimal("partner_share_ratio"));
+                partner.put("partner_share_amount", rs.getBigDecimal("partner_share_amount"));
+                partner.put("partner_principal", rs.getBigDecimal("partner_principal"));
+                partner.put("partner_interest", rs.getBigDecimal("partner_interest"));
+                partner.put("partner_total_repayment", rs.getBigDecimal("partner_total_repayment"));
+                partner.put("partner_paid_amount", rs.getBigDecimal("partner_paid_amount"));
+                partner.put("partner_remaining_principal", rs.getBigDecimal("partner_remaining_principal"));
+                partners.add(partner);
+            }
+
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return partners;
+    }
 
 
     /**
