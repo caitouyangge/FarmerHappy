@@ -42,7 +42,10 @@ public class RouterConfig {
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, Map<String, String> queryParams) {
         // ============= 融资相关路由 =============
 
-
+        // 获取还款列表
+        if ("/api/v1/financing/repayment/schedule".equals(path) && "POST".equals(method)) {
+            return financingController.getRepaymentSchedule(requestBody, headers);
+        }
         // 银行审批贷款申请
         if ("/api/v1/bank/loans/approve".equals(path) && "POST".equals(method)) {
             LoanApprovalRequestDTO request = parseLoanApprovalRequest(requestBody);

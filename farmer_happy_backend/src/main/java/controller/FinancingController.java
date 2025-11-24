@@ -8,6 +8,7 @@ import dto.bank.LoanDisbursementResponseDTO;
 import service.financing.FinancingService;
 import dto.financing.*;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -106,6 +107,53 @@ public class FinancingController {
             result.put("message", e.getMessage());
             return result;
         }
+    }
+
+    public Map<String, Object> getRepaymentSchedule(Map<String, Object> requestBody, Map<String, String> headers) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 获取请求参数
+            String phone = (String) requestBody.get("phone");
+            String loanId = (String) requestBody.get("loan_id");
+
+            // 调用服务方法
+            RepaymentScheduleResponseDTO result = financingService.getRepaymentSchedule(phone, loanId);
+
+            response.put("code", 200);
+            response.put("message", "获取成功");
+            response.put("data", result);
+
+        } catch (IllegalArgumentException e) {
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+            List<Map<String, String>> errors = new ArrayList<>();
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "parameter");
+            error.put("message", e.getMessage());
+            errors.add(error);
+            response.put("errors", errors);
+        } catch (SQLException e) {
+            response.put("code", 500);
+            response.put("message", "数据库查询失败: " + e.getMessage());
+            List<Map<String, String>> errors = new ArrayList<>();
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "database");
+            error.put("message", e.getMessage());
+            errors.add(error);
+            response.put("errors", errors);
+        } catch (Exception e) {
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            List<Map<String, String>> errors = new ArrayList<>();
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "server");
+            error.put("message", e.getMessage());
+            errors.add(error);
+            response.put("errors", errors);
+        }
+
+        return response;
     }
 
     public Map<String, Object> getAvailableLoanProducts(LoanProductsRequestDTO request) {
