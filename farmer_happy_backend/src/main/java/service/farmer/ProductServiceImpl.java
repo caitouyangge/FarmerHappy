@@ -317,7 +317,8 @@ public class ProductServiceImpl implements ProductService {
 
             // 构建查询语句
             StringBuilder sqlBuilder = new StringBuilder();
-            sqlBuilder.append("SELECT p.product_id, p.title, p.price, p.stock, p.status, pi.image_url as main_image_url ")
+            sqlBuilder
+                    .append("SELECT p.product_id, p.title, p.price, p.stock, p.status, pi.image_url as main_image_url ")
                     .append("FROM products p ")
                     .append("LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.sort_order = 0 ")
                     .append("WHERE p.farmer_id = ? ");
@@ -404,10 +405,12 @@ public class ProductServiceImpl implements ProductService {
             product.setFarmerId(farmerId);
             product.setCategory(request.getCategory() != null ? request.getCategory() : existingProduct.getCategory());
             product.setTitle(request.getTitle() != null ? request.getTitle() : existingProduct.getTitle());
-            product.setDetailedDescription(request.getDetailedDescription() != null ? request.getDetailedDescription() : existingProduct.getDetailedDescription());
+            product.setDetailedDescription(request.getDetailedDescription() != null ? request.getDetailedDescription()
+                    : existingProduct.getDetailedDescription());
             product.setPrice(request.getPrice() != null ? request.getPrice() : existingProduct.getPrice());
             product.setStock(request.getStock() != null ? request.getStock() : existingProduct.getStock());
-            product.setDescription(request.getDescription() != null ? request.getDescription() : existingProduct.getDescription());
+            product.setDescription(
+                    request.getDescription() != null ? request.getDescription() : existingProduct.getDescription());
             product.setOrigin(request.getOrigin() != null ? request.getOrigin() : existingProduct.getOrigin());
             product.setStatus(existingProduct.getStatus()); // 状态不通过此接口修改
             product.setEnable(existingProduct.isEnable());
@@ -485,12 +488,14 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("一次最多只能操作100个商品");
             }
 
-            if (request.getAction() == null ||
-                    (!"on-shelf".equals(request.getAction()) &&
-                            !"off-shelf".equals(request.getAction()) &&
-                            !"delete".equals(request.getAction()))) {
+            String normalizedAction = request.getAction() == null ? null : request.getAction().replace('-', '_');
+            if (normalizedAction == null ||
+                    (!"on_shelf".equals(normalizedAction) &&
+                            !"off_shelf".equals(normalizedAction) &&
+                            !"delete".equals(normalizedAction))) {
                 throw new IllegalArgumentException("无效的操作类型");
             }
+            request.setAction(normalizedAction);
 
             ProductBatchActionResultDTO result = new ProductBatchActionResultDTO();
             List<ProductBatchActionResultDTO.BatchActionResultItem> items = new ArrayList<>();
@@ -513,11 +518,11 @@ public class ProductServiceImpl implements ProductService {
 
                     // 根据操作类型执行不同操作
                     switch (request.getAction()) {
-                        case "on-shelf":
+                        case "on_shelf":
                             onShelfProductInternal(conn, prodId);
                             item.setMessage("上架成功");
                             break;
-                        case "off-shelf":
+                        case "off_shelf":
                             offShelfProductInternal(conn, prodId);
                             item.setMessage("下架成功");
                             break;
@@ -671,10 +676,12 @@ public class ProductServiceImpl implements ProductService {
             // 只有当请求中的字段不为null时才更新
             product.setCategory(request.getCategory() != null ? request.getCategory() : existingProduct.getCategory());
             product.setTitle(request.getTitle() != null ? request.getTitle() : existingProduct.getTitle());
-            product.setDetailedDescription(request.getDetailedDescription() != null ? request.getDetailedDescription() : existingProduct.getDetailedDescription());
+            product.setDetailedDescription(request.getDetailedDescription() != null ? request.getDetailedDescription()
+                    : existingProduct.getDetailedDescription());
             product.setPrice(request.getPrice() != null ? request.getPrice() : existingProduct.getPrice());
             product.setStock(request.getStock() != null ? request.getStock() : existingProduct.getStock());
-            product.setDescription(request.getDescription() != null ? request.getDescription() : existingProduct.getDescription());
+            product.setDescription(
+                    request.getDescription() != null ? request.getDescription() : existingProduct.getDescription());
             product.setOrigin(request.getOrigin() != null ? request.getOrigin() : existingProduct.getOrigin());
             product.setStatus(existingProduct.getStatus()); // 状态不通过此接口修改
             product.setEnable(existingProduct.isEnable());
@@ -743,7 +750,8 @@ public class ProductServiceImpl implements ProductService {
 
     // 插入产品信息
     private long insertProduct(Connection conn, Product product) throws SQLException {
-        String sql = "INSERT INTO products (farmer_id, category, title, detailed_description, price, stock, description, origin, status, enable, created_at) " +
+        String sql = "INSERT INTO products (farmer_id, category, title, detailed_description, price, stock, description, origin, status, enable, created_at) "
+                +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
         stmt.setLong(1, product.getFarmerId());
@@ -800,7 +808,8 @@ public class ProductServiceImpl implements ProductService {
     }
 
     // 更新商品状态
-    private void updateProductStatus(Connection conn, long productId, Long farmerId, String status) throws SQLException {
+    private void updateProductStatus(Connection conn, long productId, Long farmerId, String status)
+            throws SQLException {
         String sql = "UPDATE products SET status = ? WHERE product_id = ? AND farmer_id = ?";
         PreparedStatement stmt = conn.prepareStatement(sql);
         stmt.setString(1, status);
@@ -827,7 +836,8 @@ public class ProductServiceImpl implements ProductService {
     }
 
     // 获取商品详情
-    private ProductDetailResponseDTO getProductDetailById(Connection conn, long productId, Long farmerId) throws SQLException {
+    private ProductDetailResponseDTO getProductDetailById(Connection conn, long productId, Long farmerId)
+            throws SQLException {
         String sql = "SELECT p.*, pi.image_url FROM products p " +
                 "LEFT JOIN product_images pi ON p.product_id = pi.product_id " +
                 "WHERE p.product_id = ? AND p.farmer_id = ? " +
