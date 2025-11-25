@@ -42,6 +42,12 @@ public class RouterConfig {
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, Map<String, String> queryParams) {
         // ============= 融资相关路由 =============
 
+        // 在处理请求的方法中添加
+        if ("/api/v1/financing/repayment".equals(path) && "POST".equals(method)) {
+            return financingController.makeRepayment(requestBody, headers);
+        }
+
+
         // 获取还款列表
         if ("/api/v1/financing/repayment/schedule".equals(path) && "POST".equals(method)) {
             return financingController.getRepaymentSchedule(requestBody, headers);

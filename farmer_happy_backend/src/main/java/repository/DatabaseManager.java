@@ -14,7 +14,7 @@ public class DatabaseManager {
     private static final String URL = "jdbc:mysql://localhost:3306/";
     private static final String DB_NAME = "farmer_happy";
     private static final String USERNAME = "root";
-    private static final String PASSWORD = "root";
+    private static final String PASSWORD = "123456";
     private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
 
     private static DatabaseManager instance;
@@ -2507,6 +2507,30 @@ public class DatabaseManager {
         return loan;
     }
 
+
+
+    /**
+     * 更新联合贷款合作伙伴的已还款金额
+     */
+    public void updateJointLoanPartnerRepayment(Long loanId, Long partnerFarmerId, BigDecimal repaymentAmount) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE joint_loans SET partner_paid_amount = partner_paid_amount + ? " +
+                    "WHERE loan_id = ? AND partner_farmer_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setBigDecimal(1, repaymentAmount);
+            stmt.setLong(2, loanId);
+            stmt.setLong(3, partnerFarmerId);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+
+
+
     /**
      * 根据贷款ID获取联合贷款伙伴信息
      */
@@ -2541,6 +2565,80 @@ public class DatabaseManager {
         }
         return partners;
     }
+
+    /**
+     * 保存还款记录
+     */
+    public void saveRepayment(entity.financing.Repayment repayment) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO repayments (repayment_id, loan_id, farmer_id, repayment_amount, " +
+                    "principal_amount, interest_amount, repayment_method, payment_account, remarks, " +
+                    "repayment_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, repayment.getRepaymentId());
+            stmt.setLong(2, repayment.getLoanId());
+            stmt.setLong(3, repayment.getFarmerId());
+            stmt.setBigDecimal(4, repayment.getRepaymentAmount());
+            stmt.setBigDecimal(5, repayment.getPrincipalAmount());
+            stmt.setBigDecimal(6, repayment.getInterestAmount());
+            stmt.setString(7, repayment.getRepaymentMethod());
+            stmt.setString(8, repayment.getPaymentAccount());
+            stmt.setString(9, repayment.getRemarks());
+            stmt.setTimestamp(10, repayment.getRepaymentDate());
+            stmt.setTimestamp(11, repayment.getCreatedAt());
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 还款后更新贷款状态
+     */
+    public void updateLoanAfterRepayment(entity.financing.Loan loan) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE loans SET loan_status = ?, total_paid_amount = ?, " +
+                    "overdue_days = ?, overdue_amount = ?, total_repayment_amount = ?, " +
+                    "next_payment_date = ?, current_period = ?, closed_date = ?, updated_at = ? " +
+                    "WHERE id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, loan.getLoanStatus());
+            stmt.setBigDecimal(2, loan.getTotalPaidAmount() != null ? loan.getTotalPaidAmount() : BigDecimal.ZERO);
+            // 修复：正确处理 Integer 对象类型的 null 值检查
+            Integer currentOverdueDaysObj = loan.getOverdueDays();
+            stmt.setInt(3, currentOverdueDaysObj != null ? loan.getOverdueDays() : 0);
+            stmt.setBigDecimal(4, loan.getOverdueAmount() != null ? loan.getOverdueAmount() : BigDecimal.ZERO);
+            stmt.setBigDecimal(5, loan.getTotalRepaymentAmount() != null ? loan.getTotalRepaymentAmount() : BigDecimal.ZERO);
+
+            if (loan.getNextPaymentDate() != null) {
+                stmt.setDate(6, loan.getNextPaymentDate());
+            } else {
+                stmt.setNull(6, java.sql.Types.DATE);
+            }
+            Integer currentOverdueDaysObj1 = loan.getOverdueDays();
+            // 修复：正确处理 Integer 对象类型的 null 值检查
+            stmt.setInt(7, currentOverdueDaysObj1 != null ? loan.getCurrentPeriod() : 0);
+
+            if (loan.getClosedDate() != null) {
+                stmt.setTimestamp(8, loan.getClosedDate());
+            } else {
+                stmt.setNull(8, java.sql.Types.TIMESTAMP);
+            }
+
+            stmt.setTimestamp(9, loan.getUpdatedAt());
+            stmt.setLong(10, loan.getId());
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+
+
 
 
     /**

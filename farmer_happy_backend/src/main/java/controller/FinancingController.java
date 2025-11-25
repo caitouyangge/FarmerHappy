@@ -8,6 +8,7 @@ import dto.bank.LoanDisbursementResponseDTO;
 import service.financing.FinancingService;
 import dto.financing.*;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -155,6 +156,74 @@ public class FinancingController {
 
         return response;
     }
+
+    public Map<String, Object> makeRepayment(Map<String, Object> requestBody, Map<String, String> headers) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 构造请求DTO
+            RepaymentRequestDTO request = new RepaymentRequestDTO();
+            request.setPhone((String) requestBody.get("phone"));
+            request.setLoan_id((String) requestBody.get("loan_id"));
+
+            // 处理还款金额
+            Object repaymentAmountObj = requestBody.get("repayment_amount");
+            if (repaymentAmountObj != null) {
+                if (repaymentAmountObj instanceof Number) {
+                    request.setRepayment_amount(new BigDecimal(repaymentAmountObj.toString()));
+                } else if (repaymentAmountObj instanceof String) {
+                    request.setRepayment_amount(new BigDecimal((String) repaymentAmountObj));
+                }
+            }
+
+            request.setRepayment_method((String) requestBody.get("repayment_method"));
+            request.setPayment_account((String) requestBody.get("payment_account"));
+            request.setRemarks((String) requestBody.get("remarks"));
+
+            // 调用服务方法
+            RepaymentResponseDTO result = financingService.makeRepayment(request);
+
+            response.put("code", 200);
+            if ("closed".equals(result.getLoan_status())) {
+                response.put("message", "提前还款成功，贷款已结清");
+            } else {
+                response.put("message", "还款成功");
+            }
+            response.put("data", result);
+
+        } catch (IllegalArgumentException e) {
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+            List<Map<String, String>> errors = new ArrayList<>();
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "parameter");
+            error.put("message", e.getMessage());
+            errors.add(error);
+            response.put("errors", errors);
+        } catch (SQLException e) {
+            response.put("code", 500);
+            response.put("message", "数据库操作失败: " + e.getMessage());
+            List<Map<String, String>> errors = new ArrayList<>();
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "database");
+            error.put("message", e.getMessage());
+            errors.add(error);
+            response.put("errors", errors);
+        } catch (Exception e) {
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            List<Map<String, String>> errors = new ArrayList<>();
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "server");
+            error.put("message", e.getMessage());
+            errors.add(error);
+            response.put("errors", errors);
+        }
+
+        return response;
+    }
+
+
 
     public Map<String, Object> getAvailableLoanProducts(LoanProductsRequestDTO request) {
         try {
