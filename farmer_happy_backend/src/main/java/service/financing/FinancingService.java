@@ -1304,6 +1304,243 @@ public class FinancingService {
         }
     }
 
+    // 私有辅助方法：验证还款请求
+    private void validateRepaymentRequest(RepaymentRequestDTO request, List<Map<String, String>> errors) {
+        if (request.getPhone() == null || request.getPhone().trim().isEmpty()) {
+            errors.add(createError("phone", "农户手机号不能为空"));
+        }
+
+        if (request.getLoan_id() == null || request.getLoan_id().trim().isEmpty()) {
+            errors.add(createError("loan_id", "贷款ID不能为空"));
+        }
+
+        if (request.getRepayment_method() == null || request.getRepayment_method().trim().isEmpty()) {
+            errors.add(createError("repayment_method", "还款方式不能为空"));
+        } else if (!Arrays.asList("normal", "partial", "advance").contains(request.getRepayment_method())) {
+            errors.add(createError("repayment_method", "还款方式必须是 normal、partial 或 advance"));
+        }
+
+        if (request.getRepayment_amount() != null && request.getRepayment_amount().compareTo(BigDecimal.ZERO) <= 0) {
+            errors.add(createError("repayment_amount", "还款金额必须大于0"));
+        }
+
+        if (request.getRemarks() != null && request.getRemarks().length() > 100) {
+            errors.add(createError("remarks", "还款备注不能超过100个字符"));
+        }
+    }
+
+    /**
+     * 农户发起还款
+     */
+    public RepaymentResponseDTO makeRepayment(RepaymentRequestDTO request) throws SQLException {
+        // 参数验证
+        List<Map<String, String>> errors = new ArrayList<>();
+        validateRepaymentRequest(request, errors);
+        if (!errors.isEmpty()) {
+            throw new IllegalArgumentException("参数验证失败: " + formatErrors(errors));
+        }
+
+        // 检查用户是否存在
+        User user = findUserByPhone(request.getPhone());
+        if (user == null) {
+            throw new IllegalArgumentException("该手机号未注册");
+        }
+
+        // 检查用户是否具有农户身份
+        Map<String, Object> farmerInfo = checkUserFarmerRole(user.getUid());
+        if (farmerInfo == null) {
+            throw new IllegalArgumentException("该用户不是农户");
+        }
+
+        // 获取贷款信息
+        entity.financing.Loan loan = getLoanById(request.getLoan_id());
+        if (loan == null) {
+            throw new IllegalArgumentException("指定的贷款" + request.getLoan_id() + "不存在或已被删除");
+        }
+
+        // 检查是否有权限还款该贷款（支持联合贷款）
+        boolean hasPermission = false;
+        boolean isJointPartner = false;
+        Long partnerFarmerId = null;
+
+        // 检查是否为主借款人
+        if (loan.getFarmerId().equals(((Long) farmerInfo.get("farmer_id")).longValue())) {
+            hasPermission = true;
+        }
+        // 如果是联合贷款，检查是否为联合贷款人
+        else if (loan.getIsJointLoan()) {
+            List<Map<String, Object>> jointLoanPartners = getJointLoanPartnersByLoanId(loan.getId());
+            for (Map<String, Object> partner : jointLoanPartners) {
+                if (partner.get("partner_farmer_id").equals(((Long) farmerInfo.get("farmer_id")).longValue())) {
+                    hasPermission = true;
+                    isJointPartner = true;
+                    partnerFarmerId = ((Long) farmerInfo.get("farmer_id")).longValue();
+                    break;
+                }
+            }
+        }
+
+        if (!hasPermission) {
+            throw new IllegalArgumentException("只能还款自己的贷款，不能操作他人的贷款");
+        }
+
+        // 检查贷款状态是否允许还款
+        if ("closed".equals(loan.getLoanStatus())) {
+            throw new IllegalArgumentException("该贷款状态为closed，已结清，无需还款");
+        } else if ("frozen".equals(loan.getLoanStatus())) {
+            throw new IllegalArgumentException("该贷款状态为frozen，因严重逾期被冻结，请联系银行处理");
+        } else if (!"active".equals(loan.getLoanStatus())) {
+            throw new IllegalArgumentException("该贷款状态为" + loan.getLoanStatus() + "，不允许还款");
+        }
+
+        // 验证还款金额
+        if (request.getRepayment_amount() == null) {
+            // 如果未指定还款金额，默认为应还总额
+            request.setRepayment_amount(loan.getNextPaymentAmount());
+        }
+
+        // 创建虚拟还款记录（不保存到数据库）
+        entity.financing.Repayment repayment = new entity.financing.Repayment();
+        repayment.setRepaymentAmount(request.getRepayment_amount());
+        repayment.setRepaymentMethod(request.getRepayment_method());
+        repayment.setRepaymentDate(new Timestamp(System.currentTimeMillis()));
+
+        // 更新贷款状态
+        updateLoanAfterRepayment(loan, repayment, isJointPartner, partnerFarmerId);
+
+        // 构造响应
+        RepaymentResponseDTO response = new RepaymentResponseDTO();
+        response.setRepayment_id("REP" + System.currentTimeMillis()); // 生成虚拟ID
+        response.setLoan_id(loan.getLoanId());
+        response.setRepayment_amount(request.getRepayment_amount());
+        response.setPrincipal_amount(BigDecimal.ZERO);
+        response.setInterest_amount(BigDecimal.ZERO);
+        response.setRemaining_principal(loan.getRemainingPrincipal());
+        response.setRepayment_method(request.getRepayment_method());
+        response.setRepayment_date(repayment.getRepaymentDate());
+        response.setLoan_status(loan.getLoanStatus());
+
+        if ("closed".equals(loan.getLoanStatus())) {
+            response.setClosed_date(loan.getClosedDate());
+        } else {
+            response.setNext_payment_date(loan.getNextPaymentDate());
+            response.setNext_payment_amount(loan.getNextPaymentAmount());
+        }
+
+        return response;
+    }
+
+
+    // 私有辅助方法：计算应还金额（按日计息）
+    private BigDecimal calculateDueAmount(entity.financing.Loan loan) {
+        // 简化计算：假设等额本息
+        return loan.getNextPaymentAmount() != null ? loan.getNextPaymentAmount() : BigDecimal.ZERO;
+    }
+
+    // 私有辅助方法：计算应还本金
+    private BigDecimal calculatePrincipalAmount(entity.financing.Loan loan, BigDecimal dueAmount) {
+        // 简化计算：假设等额本息
+        BigDecimal interest = loan.getRemainingPrincipal()
+                .multiply(loan.getInterestRate())
+                .divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP)
+                .divide(BigDecimal.valueOf(12), 2, BigDecimal.ROUND_HALF_UP);
+        return dueAmount.subtract(interest);
+    }
+
+    // 私有辅助方法：保存还款记录
+    private void saveRepayment(entity.financing.Repayment repayment) throws SQLException {
+        dbManager.saveRepayment(repayment);
+    }
+
+    // 私有辅助方法：还款后更新贷款状态
+    private void updateLoanAfterRepayment(entity.financing.Loan loan, entity.financing.Repayment repayment,
+                                          boolean isJointPartner, Long partnerFarmerId) throws SQLException {
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+
+        // 安全处理 null 值，确保 totalPaidAmount 不为 null
+        BigDecimal currentPaidAmount = loan.getTotalPaidAmount() != null ? loan.getTotalPaidAmount() : BigDecimal.ZERO;
+
+        // 更新总还款金额
+        BigDecimal newTotalPaidAmount = currentPaidAmount.add(repayment.getRepaymentAmount());
+        loan.setTotalPaidAmount(newTotalPaidAmount);
+
+        // 检查是否逾期
+        if (loan.getNextPaymentDate() != null) {
+            java.sql.Date nextPaymentDate = loan.getNextPaymentDate();
+            java.sql.Date currentDate = new java.sql.Date(now.getTime());
+
+            if (currentDate.after(nextPaymentDate)) {
+                // 计算逾期天数
+                long diffInMillis = currentDate.getTime() - nextPaymentDate.getTime();
+                int overdueDays = (int) (diffInMillis / (24 * 60 * 60 * 1000));
+
+                // 更新逾期天数和逾期金额
+                // 修复：Integer 是对象类型，可以为 null，所以可以进行 != null 比较
+                Integer currentOverdueDaysObj = loan.getOverdueDays();
+                int currentOverdueDays = (currentOverdueDaysObj != null) ? currentOverdueDaysObj : 0;
+                int newOverdueDays = currentOverdueDays + overdueDays;
+                loan.setOverdueDays(newOverdueDays);
+
+                // 逾期费用：每天100元
+                BigDecimal currentOverdueAmount = loan.getOverdueAmount() != null ? loan.getOverdueAmount() : BigDecimal.ZERO;
+                BigDecimal newOverdueAmount = currentOverdueAmount.add(BigDecimal.valueOf(overdueDays * 100));
+                loan.setOverdueAmount(newOverdueAmount);
+
+                // 将逾期费用加入总应还金额
+                BigDecimal currentTotalRepaymentAmount = loan.getTotalRepaymentAmount() != null ? loan.getTotalRepaymentAmount() : BigDecimal.ZERO;
+                loan.setTotalRepaymentAmount(currentTotalRepaymentAmount.add(BigDecimal.valueOf(overdueDays * 100)));
+            }
+        }
+
+        // 检查是否还清
+        BigDecimal totalRepaymentAmount = loan.getTotalRepaymentAmount() != null ? loan.getTotalRepaymentAmount() : BigDecimal.ZERO;
+        if (newTotalPaidAmount.compareTo(totalRepaymentAmount) >= 0) {
+            // 贷款已还清
+            loan.setLoanStatus("closed");
+            loan.setClosedDate(now);
+        } else {
+            // 贷款未还清，更新下次还款日期和期数
+            if (loan.getNextPaymentDate() != null) {
+                // 下次还款日期加30天
+                Calendar calendar = Calendar.getInstance();
+                calendar.setTime(loan.getNextPaymentDate());
+                calendar.add(Calendar.DAY_OF_MONTH, 30);
+                loan.setNextPaymentDate(new java.sql.Date(calendar.getTimeInMillis()));
+            }
+
+            // 期数加1
+            // 修复：Integer 是对象类型，可以为 null，所以可以进行 != null 比较
+            Integer currentPeriod = loan.getCurrentPeriod();
+            int newPeriod = (currentPeriod != null ? currentPeriod : 0) + 1;
+            loan.setCurrentPeriod(newPeriod);
+        }
+
+        loan.setUpdatedAt(now);
+
+        // 更新数据库中的贷款信息
+        dbManager.updateLoanAfterRepayment(loan);
+
+
+        // 如果是联合贷款且还款人是合作伙伴，还需要更新joint_loans表
+        if (loan.getIsJointLoan() && isJointPartner && partnerFarmerId != null) {
+            dbManager.updateJointLoanPartnerRepayment(loan.getId(), partnerFarmerId, repayment.getRepaymentAmount());
+        }
+
+    }
+
+
+
+
+
+
+
+    // 私有辅助方法：更新联合贷款合作伙伴的还款信息
+    private void updateJointLoanPartnerRepayment(Long loanId, Long partnerFarmerId, BigDecimal repaymentAmount) throws SQLException {
+        dbManager.updateJointLoanPartnerRepayment(loanId, partnerFarmerId, repaymentAmount);
+    }
+
+
+
     // 添加辅助方法
     private entity.financing.LoanApplication getLoanApplicationById(String applicationId) throws SQLException {
         return dbManager.getLoanApplicationById(applicationId);
