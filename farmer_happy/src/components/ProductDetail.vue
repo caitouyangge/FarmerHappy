@@ -27,8 +27,26 @@
           <!-- 产品图片和基本信息 -->
           <div class="product-header">
             <div class="product-image">
-              <div class="image-placeholder">
+              <div v-if="product.images && product.images.length > 0" class="image-carousel">
+                <img :src="currentImage" :alt="product.title" class="detail-image-cover" />
+                <button class="carousel-btn prev" @click="prevImage">‹</button>
+                <button class="carousel-btn next" @click="nextImage">›</button>
+              </div>
+              <div v-else class="image-placeholder">
                 <span class="image-icon">🌾</span>
+              </div>
+            </div>
+            <div v-if="product.images && product.images.length > 1" class="image-thumbs">
+              <div class="thumb-list">
+                <div
+                  v-for="(img, idx) in product.images"
+                  :key="idx"
+                  class="thumb-item"
+                  :class="{ active: idx === currentIndex }"
+                  @click="setImage(idx)"
+                >
+                  <img :src="img" :alt="product.title" class="thumb-image" />
+                </div>
               </div>
             </div>
 
@@ -186,6 +204,7 @@ export default {
     const error = ref('');
     const userInfo = ref({});
     const showOrderForm = ref(false);
+    const currentIndex = ref(0);
 
     // 获取用户信息
     onMounted(() => {
@@ -254,6 +273,7 @@ export default {
         
         const response = await productService.getProductDetail(props.productId, userInfo.value.phone);
         product.value = response;
+        currentIndex.value = 0;
         
         logger.info('PRODUCT_DETAIL', '产品详情加载成功', { productId: props.productId });
       } catch (err) {
@@ -265,6 +285,27 @@ export default {
       } finally {
         loading.value = false;
       }
+    };
+
+    const currentImage = computed(() => {
+      if (!product.value || !product.value.images || product.value.images.length === 0) return '';
+      return product.value.images[currentIndex.value] || product.value.images[0];
+    });
+
+    const setImage = (idx) => {
+      if (!product.value || !product.value.images) return;
+      if (idx < 0 || idx >= product.value.images.length) return;
+      currentIndex.value = idx;
+    };
+
+    const nextImage = () => {
+      if (!product.value || !product.value.images || product.value.images.length === 0) return;
+      currentIndex.value = (currentIndex.value + 1) % product.value.images.length;
+    };
+
+    const prevImage = () => {
+      if (!product.value || !product.value.images || product.value.images.length === 0) return;
+      currentIndex.value = (currentIndex.value - 1 + product.value.images.length) % product.value.images.length;
     };
 
     // 格式化日期
@@ -394,7 +435,12 @@ export default {
       handleOffShelf,
       handlePurchase,
       showOrderForm,
-      handleOrderSuccess
+      handleOrderSuccess,
+      currentIndex,
+      currentImage,
+      setImage,
+      nextImage,
+      prevImage
     };
   }
 };
@@ -549,6 +595,26 @@ export default {
   align-items: center;
   justify-content: center;
 }
+
+.image-carousel { position: relative; width: 100%; height: 100%; }
+
+.detail-image-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.carousel-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: none; border-radius: 50%; background: rgba(0,0,0,0.5); color: #fff; font-size: 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.carousel-btn:hover { background: rgba(0,0,0,0.7); }
+.carousel-btn.prev { left: 8px; }
+.carousel-btn.next { right: 8px; }
+
+.image-thumbs { margin-top: 0.75rem; }
+.thumb-list { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 2px; }
+.thumb-item { width: 48px; height: 48px; border-radius: 6px; overflow: hidden; border: 2px solid var(--gray-300); cursor: pointer; flex: 0 0 auto; }
+.thumb-item.active { border-color: var(--primary); }
+.thumb-image { width: 100%; height: 100%; object-fit: cover; }
 
 .image-placeholder {
   display: flex;
@@ -843,6 +909,7 @@ export default {
   .product-image {
     height: 150px;
   }
+  .thumb-item { width: 40px; height: 40px; }
 
   .detail-grid {
     grid-template-columns: 1fr;

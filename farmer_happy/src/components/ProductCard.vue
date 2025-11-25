@@ -12,7 +12,8 @@
 
     <!-- 产品图片 -->
     <div class="product-image">
-      <div class="image-placeholder">
+      <img v-if="product.main_image_url" :src="product.main_image_url" :alt="product.title" class="image-cover" />
+      <div v-else class="image-placeholder">
         <span class="image-icon">🌾</span>
       </div>
     </div>
@@ -282,6 +283,13 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.image-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
 }
 
 .image-placeholder {
