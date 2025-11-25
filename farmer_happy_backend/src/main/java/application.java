@@ -57,6 +57,28 @@ public class application {
 
                         System.out.println("处理请求: " + method + " " + path + (query != null ? "?" + query : ""));
 
+                        if ("GET".equals(method) && path.startsWith("/uploads/")) {
+                            java.nio.file.Path filePath = java.nio.file.Paths.get("uploads").resolve(path.substring("/uploads/".length()));
+                            if (java.nio.file.Files.exists(filePath)) {
+                                String contentType;
+                                String p = path.toLowerCase();
+                                if (p.endsWith(".png")) contentType = "image/png";
+                                else if (p.endsWith(".jpg") || p.endsWith(".jpeg")) contentType = "image/jpeg";
+                                else if (p.endsWith(".gif")) contentType = "image/gif";
+                                else contentType = "application/octet-stream";
+                                exchange.getResponseHeaders().set("Content-Type", contentType);
+                                byte[] bytes = java.nio.file.Files.readAllBytes(filePath);
+                                exchange.sendResponseHeaders(200, bytes.length);
+                                OutputStream os = exchange.getResponseBody();
+                                os.write(bytes);
+                                os.close();
+                                return;
+                            } else {
+                                exchange.sendResponseHeaders(404, -1);
+                                return;
+                            }
+                        }
+
                         // 解析请求体
                         Map<String, Object> requestBody = parseRequestBody(exchange);
 

@@ -2,6 +2,7 @@ import axios from 'axios';
 import logger from '../utils/logger';
 
 const API_URL = '/api/v1/content';
+const STORAGE_API_URL = '/api/v1/storage';
 const COMMENT_API_URL = '/api/v1/comment';
 
 export const communityService = {
@@ -75,6 +76,43 @@ export const communityService = {
             throw {
                 code: 500,
                 message: error.message || '发布内容失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    async uploadImages(images) {
+        try {
+            logger.apiRequest('POST', `${STORAGE_API_URL}/upload`);
+            const response = await axios.post(`${STORAGE_API_URL}/upload`, { images });
+            logger.apiResponse('POST', `${STORAGE_API_URL}/upload`, response.status, {
+                code: response.data.code
+            });
+            if (response.data.code !== 201) {
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+                throw errorObj;
+            }
+            const urls = response.data.data?.urls || [];
+            return urls;
+        } catch (error) {
+            logger.apiError('POST', `${STORAGE_API_URL}/upload`, error);
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+            if (error.code && error.message) {
+                throw error;
+            }
+            throw {
+                code: 500,
+                message: error.message || '图片上传失败，请稍后重试',
                 errors: []
             };
         }
