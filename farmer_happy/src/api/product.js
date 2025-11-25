@@ -207,21 +207,35 @@ export const productService = {
 
             const response = await axios.delete(url, { data: { phone } });
 
-            logger.apiResponse('DELETE', url, response.status, {
-                code: response.data.code
+            // 处理204 No Content响应：HTTP状态码204或响应体中的code为204都表示成功
+            // 将code转换为数字进行比较，以处理字符串"204"的情况
+            const responseCode = response.status === 204 ? 204 : (response.data?.code ? Number(response.data.code) : null);
+            
+                            logger.apiResponse('DELETE', url, response.status, {
+                code: responseCode || response.data?.code
             });
 
-            if (response.data.code != 204 && response.data.code != 200) {
+            // 204或200都表示删除成功（支持HTTP状态码和响应体中的code）
+            if (response.status === 204 || responseCode === 204 || responseCode === 200) {
+                logger.info('PRODUCT', '产品删除成功', { productId });
+                return response.data || { code: 204, message: '删除成功' };
+            }
+
+            // 如果响应体存在但code不是204或200，则视为失败
+            if (response.data && response.data.code !== undefined) {
                 logger.error('PRODUCT', '删除产品失败1', {
                     code: response.data.code,
                     message: response.data.message
                 });
-                throw new Error(response.data.message || '删除产品失败0');
+                throw new Error(response.data.message || '删除产品失败');
             }
 
-            logger.info('PRODUCT', '产品删除成功', { productId });
-
-            return response.data;
+            // 如果既不是204状态码，也没有响应体，视为失败
+            logger.error('PRODUCT', '删除产品失败', {
+                status: response.status,
+                data: response.data
+            });
+            throw new Error('删除产品失败：未知错误');
         } catch (error) {
             logger.apiError('DELETE', `${API_URL}/${productId}`, error);
             logger.error('PRODUCT', '删除产品失败2', {

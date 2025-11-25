@@ -1,6 +1,7 @@
 // src/main/java/service/financing/FinancingService.java
 package service.financing;
 
+import dto.bank.*;
 import entity.financing.LoanProduct;
 import entity.financing.CreditLimit;
 import entity.financing.CreditApplication;
@@ -11,6 +12,7 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class FinancingService {
@@ -386,6 +388,9 @@ public class FinancingService {
                         farmerCreditLimit.getAvailableLimit() + "元，请先申请提高额度或减少申请金额");
             }
 
+            // 预扣额度 - 在创建贷款申请记录前扣除
+            preDeductCreditLimit(((Long) farmerInfo.get("farmer_id")).longValue(), request.getApply_amount());
+
             // 生成贷款申请ID (修改为符合数据库字段长度限制的格式)
             String loanApplicationId = "LOAN" + System.currentTimeMillis() +
                     String.format("%03d", new Random().nextInt(1000));
@@ -422,6 +427,7 @@ public class FinancingService {
             throw new RuntimeException("申请单人贷款失败: " + e.getMessage(), e);
         }
     }
+
 
     // 申请联合贷款
     public JointLoanApplicationResponseDTO applyForJointLoan(JointLoanApplicationRequestDTO request) {
@@ -498,6 +504,9 @@ public class FinancingService {
                 // 这里需要实现检查逻辑
             }
 
+            // 预扣额度 - 在创建贷款申请记录前扣除
+            preDeductCreditLimit(((Long) farmerInfo.get("farmer_id")).longValue(), shareAmount);
+
             // 生成贷款申请ID (修改为符合数据库字段长度限制的格式)
             String loanApplicationId = "LOAN" + System.currentTimeMillis() +
                     String.format("%03d", new Random().nextInt(1000));
@@ -565,6 +574,7 @@ public class FinancingService {
             throw new RuntimeException("申请联合贷款失败: " + e.getMessage(), e);
         }
     }
+
 
     // 浏览可联合农户
     public PartnersResponseDTO getJointPartners(PartnersRequestDTO request) {
@@ -653,6 +663,684 @@ public class FinancingService {
 
     private void saveJointLoanApplicationPartners(long loanApplicationId, List<Map<String, Object>> partners) throws SQLException {
         dbManager.saveJointLoanApplicationPartners(loanApplicationId, partners);
+    }
+
+    /**
+     * 预扣农户信用额度
+     */
+    private void preDeductCreditLimit(Long farmerId, BigDecimal amount) throws SQLException {
+        dbManager.preDeductCreditLimit(farmerId, amount);
+    }
+
+    /**
+     * 恢复农户信用额度（申请失败时调用）
+     */
+    private void restoreCreditLimit(Long farmerId, BigDecimal amount) throws SQLException {
+        dbManager.restoreCreditLimit(farmerId, amount);
+    }
+
+    /**
+     * 确认扣除农户信用额度（贷款批准时调用）
+     */
+    private void confirmDeductCreditLimit(Long farmerId, BigDecimal amount) throws SQLException {
+        dbManager.confirmDeductCreditLimit(farmerId, amount);
+    }
+
+    /**
+     * 银行审批贷款申请
+     */
+    public LoanApprovalResponseDTO approveLoan(LoanApprovalRequestDTO request) {
+        try {
+            // 参数验证
+            List<Map<String, String>> errors = new ArrayList<>();
+            validateLoanApprovalRequest(request, errors);
+            if (!errors.isEmpty()) {
+                throw new IllegalArgumentException("参数验证失败: " + formatErrors(errors));
+            }
+
+            // 检查用户是否存在且为银行用户
+            User user = findUserByPhone(request.getPhone());
+            if (user == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 检查用户是否具有银行身份
+            Map<String, Object> bankInfo = checkUserBankRole(user.getUid());
+            if (bankInfo == null) {
+                throw new IllegalArgumentException("该用户无银行审批权限");
+            }
+
+            // 获取贷款申请信息
+            entity.financing.LoanApplication loanApplication = getLoanApplicationById(request.getApplication_id());
+            if (loanApplication == null) {
+                throw new IllegalArgumentException("指定的申请ID不存在");
+            }
+
+            // 检查申请状态
+            if (!"pending".equals(loanApplication.getStatus()) &&
+                    !"pending_partners".equals(loanApplication.getStatus())) {
+                throw new IllegalArgumentException("该申请状态为" + loanApplication.getStatus() + "，不能重复审批");
+            }
+
+            // 构造响应
+            LoanApprovalResponseDTO response = new LoanApprovalResponseDTO();
+            response.setApplication_id(loanApplication.getLoanApplicationId());
+
+            // 根据审批动作处理
+            if ("approve".equals(request.getAction())) {
+                // 批准申请
+                if (request.getApproved_amount() == null) {
+                    throw new IllegalArgumentException("批准金额不能为空");
+                }
+
+                // 更新贷款申请状态为已批准
+                updateLoanApplicationStatus(
+                        request.getApplication_id(),
+                        "approved",
+                        ((Long) bankInfo.get("bank_id")).longValue(),
+                        new Timestamp(System.currentTimeMillis()),
+                        request.getApproved_amount()
+                );
+
+                response.setStatus("approved");
+                response.setApproved_amount(request.getApproved_amount());
+                response.setApproved_by((String) bankInfo.get("bank_name"));
+                response.setApproved_at(new Timestamp(System.currentTimeMillis()));
+                response.setNext_step("等待放款");
+            } else if ("reject".equals(request.getAction())) {
+                // 拒绝申请
+                if (request.getReject_reason() == null || request.getReject_reason().trim().isEmpty()) {
+                    throw new IllegalArgumentException("拒绝原因不能为空");
+                }
+
+                // 还原预扣的信用额度
+                restoreCreditLimit(loanApplication.getFarmerId(), loanApplication.getApplyAmount());
+
+                // 更新贷款申请状态为已拒绝
+                updateLoanApplicationRejection(
+                        request.getApplication_id(),
+                        "rejected",
+                        ((Long) bankInfo.get("bank_id")).longValue(),
+                        new Timestamp(System.currentTimeMillis()),
+                        request.getReject_reason()
+                );
+
+                response.setStatus("rejected");
+                response.setReject_reason(request.getReject_reason());
+                response.setRejected_by((String) bankInfo.get("bank_name"));
+                response.setRejected_at(new Timestamp(System.currentTimeMillis()));
+            } else {
+                throw new IllegalArgumentException("审批动作必须是approve或reject");
+            }
+
+            return response;
+        } catch (Exception e) {
+            throw new RuntimeException("审批贷款申请失败: " + e.getMessage(), e);
+        }
+    }
+
+
+    /**
+     * 银行放款操作
+     */
+    public LoanDisbursementResponseDTO disburseLoan(LoanDisbursementRequestDTO request) {
+        try {
+            // 参数验证
+            List<Map<String, String>> errors = new ArrayList<>();
+            validateLoanDisbursementRequest(request, errors);
+            if (!errors.isEmpty()) {
+                throw new IllegalArgumentException("参数验证失败: " + formatErrors(errors));
+            }
+
+            // 检查用户是否存在且为银行用户
+            User user = findUserByPhone(request.getPhone());
+            if (user == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 检查用户是否具有银行身份
+            Map<String, Object> bankInfo = checkUserBankRole(user.getUid());
+            if (bankInfo == null) {
+                throw new IllegalArgumentException("该用户无银行放款权限，请联系管理员开通权限");
+            }
+
+            // 获取贷款申请信息
+            entity.financing.LoanApplication loanApplication = getLoanApplicationById(request.getApplication_id());
+            if (loanApplication == null) {
+                throw new IllegalArgumentException("指定的申请ID不存在");
+            }
+
+            // 检查申请状态
+            if (!"approved".equals(loanApplication.getStatus())) {
+                throw new IllegalArgumentException("该申请状态为" + loanApplication.getStatus() + "，必须先审批通过才能放款");
+            }
+
+            // 检查放款金额是否等于批准金额
+            if (request.getDisburse_amount().compareTo(loanApplication.getApprovedAmount()) != 0) {
+                if (request.getDisburse_amount().compareTo(loanApplication.getApprovedAmount()) > 0) {
+                    throw new IllegalArgumentException("放款金额" + request.getDisburse_amount() + "元不能大于批准的金额" + loanApplication.getApprovedAmount() + "元");
+                } else {
+                    throw new IllegalArgumentException("放款金额" + request.getDisburse_amount() + "元必须等于批准的金额" + loanApplication.getApprovedAmount() + "元，不支持分批放款");
+                }
+            }
+
+            // 获取贷款产品信息 (修改点：通过productId获取贷款产品)
+            entity.financing.LoanProduct loanProduct = getLoanProductById(loanApplication.getProductId());
+            if (loanProduct == null) {
+                throw new IllegalArgumentException("贷款产品不存在");
+            }
+
+            // 生成贷款ID
+            String loanId = "LOAN" + System.currentTimeMillis() + String.format("%03d", new Random().nextInt(1000));
+            if (loanId.length() > 20) {
+                loanId = loanId.substring(0, 20);
+            }
+
+            // 计算还款计划（简化计算）
+            BigDecimal totalRepaymentAmount = calculateTotalRepaymentAmount(
+                    request.getDisburse_amount(),
+                    loanProduct.getInterestRate(),
+                    loanProduct.getTermMonths()
+            );
+
+            BigDecimal monthlyPayment = totalRepaymentAmount.divide(
+                    BigDecimal.valueOf(loanProduct.getTermMonths()),
+                    2,
+                    BigDecimal.ROUND_HALF_UP
+            );
+
+            // 创建贷款记录
+            entity.financing.Loan loan = new entity.financing.Loan();
+            loan.setLoanId(loanId);
+            loan.setFarmerId(loanApplication.getFarmerId());
+            loan.setProductId(loanProduct.getId());
+            loan.setLoanAmount(request.getDisburse_amount());
+            loan.setInterestRate(loanProduct.getInterestRate());
+            loan.setTermMonths(loanProduct.getTermMonths());
+            loan.setRepaymentMethod(loanProduct.getRepaymentMethod());
+            loan.setDisburseAmount(request.getDisburse_amount());
+            loan.setDisburseMethod(request.getDisburse_method());
+            loan.setDisburseDate(new Timestamp(System.currentTimeMillis()));
+            loan.setFirstRepaymentDate(request.getFirst_repayment_date());
+            loan.setLoanAccount(request.getLoan_account());
+            loan.setDisburseRemarks(request.getRemarks());
+            loan.setLoanStatus("active");
+            loan.setApprovedBy(((Long) bankInfo.get("bank_id")).longValue());
+            loan.setApprovedAt(new Timestamp(System.currentTimeMillis()));
+            loan.setTotalRepaymentAmount(totalRepaymentAmount);
+            loan.setRemainingPrincipal(request.getDisburse_amount());
+            loan.setNextPaymentDate(request.getFirst_repayment_date());
+            loan.setNextPaymentAmount(monthlyPayment);
+            loan.setPurpose(loanApplication.getPurpose());
+            loan.setRepaymentSource(loanApplication.getRepaymentSource());
+            loan.setIsJointLoan("joint".equals(loanApplication.getApplicationType()));
+            loan.setCreatedAt(new Timestamp(System.currentTimeMillis()));
+            loan.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+
+            // 保存贷款记录
+            long loanRecordId = saveLoan(loan);
+
+            // 处理资金发放
+            if ("joint".equals(loanApplication.getApplicationType())) {
+                // 联合贷款处理
+                handleJointLoanDisbursement(loanApplication, loan, loanRecordId);
+            } else {
+                // 单人贷款处理
+                handleSingleLoanDisbursement(loanApplication, loan);
+            }
+
+            // 更新贷款申请状态为已放款
+            updateLoanApplicationStatus(
+                    request.getApplication_id(),
+                    "disbursed",
+                    ((Long) bankInfo.get("bank_id")).longValue(),
+                    new Timestamp(System.currentTimeMillis()),
+                    request.getDisburse_amount()
+            );
+
+            // 构造响应
+            LoanDisbursementResponseDTO response = new LoanDisbursementResponseDTO();
+            response.setLoan_id(loanId);
+            response.setDisbursement_id("DIS" + System.currentTimeMillis());
+            response.setApplication_id(request.getApplication_id());
+            response.setDisburse_amount(request.getDisburse_amount());
+            response.setDisburse_method(request.getDisburse_method());
+            response.setDisburse_date(new Timestamp(System.currentTimeMillis()));
+            response.setFirst_repayment_date(request.getFirst_repayment_date());
+            response.setLoan_status("active");
+            response.setTotal_repayment_amount(totalRepaymentAmount);
+            response.setMonthly_payment(monthlyPayment);
+            response.setNext_payment_date(request.getFirst_repayment_date());
+
+            return response;
+        } catch (Exception e) {
+            throw new RuntimeException("放款操作失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 查询还款计划
+     */
+    public RepaymentScheduleResponseDTO getRepaymentSchedule(String phone, String loanId) throws SQLException {
+        // 参数验证
+        if (phone == null || phone.trim().isEmpty()) {
+            throw new IllegalArgumentException("手机号不能为空");
+        }
+
+        if (loanId == null || loanId.trim().isEmpty()) {
+            throw new IllegalArgumentException("贷款ID不能为空");
+        }
+
+        // 检查用户是否存在
+        User user = findUserByPhone(phone);
+        if (user == null) {
+            throw new IllegalArgumentException("该手机号未注册");
+        }
+
+        // 检查用户是否具有农户身份
+        Map<String, Object> farmerInfo = checkUserFarmerRole(user.getUid());
+        if (farmerInfo == null) {
+            throw new IllegalArgumentException("该用户不是农户");
+        }
+
+        // 获取贷款信息
+        entity.financing.Loan loan = getLoanById(loanId);
+        if (loan == null) {
+            throw new IllegalArgumentException("指定的贷款ID不存在");
+        }
+
+        // 检查是否有权限查看该贷款信息（支持联合贷款）
+        boolean hasPermission = false;
+
+        // 检查是否为主借款人
+        if (loan.getFarmerId().equals(((Long) farmerInfo.get("farmer_id")).longValue())) {
+            hasPermission = true;
+        }
+        // 如果是联合贷款，检查是否为联合贷款人
+        else if (loan.getIsJointLoan()) {
+            List<Map<String, Object>> jointLoanPartners = getJointLoanPartnersByLoanId(loan.getId());
+            for (Map<String, Object> partner : jointLoanPartners) {
+                if (partner.get("partner_farmer_id").equals(((Long) farmerInfo.get("farmer_id")).longValue())) {
+                    hasPermission = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasPermission) {
+            throw new IllegalArgumentException("只能查看自己的贷款信息");
+        }
+
+        // 构造响应
+        RepaymentScheduleResponseDTO response = new RepaymentScheduleResponseDTO();
+        response.setLoan_id(loan.getLoanId());
+        response.setLoan_status(loan.getLoanStatus());
+        response.setLoan_amount(safeBigDecimal(loan.getLoanAmount()));
+        response.setInterest_rate(safeBigDecimal(loan.getInterestRate()));
+        response.setTerm_months(loan.getTermMonths());
+        response.setRepayment_method(loan.getRepaymentMethod());
+
+        // 处理日期字段，如果为null则设为null（显示时可表示为"暂无"）
+        if (loan.getDisburseDate() != null) {
+            response.setDisburse_date(new java.sql.Date(loan.getDisburseDate().getTime()));
+        } else {
+            response.setDisburse_date(null);
+        }
+
+        response.setTotal_periods(loan.getTermMonths());
+        response.setCurrent_period(loan.getCurrentPeriod());
+        response.setRemaining_principal(safeBigDecimal(loan.getRemainingPrincipal()));
+
+        // 计算到期日期
+        if (loan.getDisburseDate() != null) {
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(loan.getDisburseDate());
+            calendar.add(Calendar.MONTH, loan.getTermMonths());
+            response.setMaturity_date(new java.sql.Date(calendar.getTimeInMillis()));
+        } else {
+            response.setMaturity_date(null);
+        }
+
+        // 如果贷款已结清，设置结清日期
+        if ("closed".equals(loan.getLoanStatus()) && loan.getClosedDate() != null) {
+            response.setClosed_date(new java.sql.Date(loan.getClosedDate().getTime()));
+        } else if ("closed".equals(loan.getLoanStatus())) {
+            response.setClosed_date(null); // closed状态但无closed_date时设为null
+        }
+
+        // 设置当前应还信息
+        if (!"closed".equals(loan.getLoanStatus()) && loan.getNextPaymentDate() != null &&
+                loan.getNextPaymentAmount() != null) {
+
+            RepaymentScheduleResponseDTO.DueInfo dueInfo = new RepaymentScheduleResponseDTO.DueInfo();
+            dueInfo.setDue_date(loan.getNextPaymentDate());
+            dueInfo.setDue_amount(safeBigDecimal(loan.getNextPaymentAmount()));
+
+            // 安全计算本金和利息
+            BigDecimal nextPaymentAmount = safeBigDecimal(loan.getNextPaymentAmount());
+            BigDecimal remainingPrincipal = safeBigDecimal(loan.getRemainingPrincipal());
+            BigDecimal interestRate = safeBigDecimal(loan.getInterestRate());
+
+            // 计算月利息
+            BigDecimal monthlyInterest = BigDecimal.ZERO;
+            if (interestRate.compareTo(BigDecimal.ZERO) > 0 && remainingPrincipal.compareTo(BigDecimal.ZERO) > 0) {
+                monthlyInterest = remainingPrincipal.multiply(interestRate)
+                        .divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP)
+                        .divide(BigDecimal.valueOf(12), 2, BigDecimal.ROUND_HALF_UP);
+            }
+
+            dueInfo.setPrincipal_amount(nextPaymentAmount.subtract(monthlyInterest));
+            dueInfo.setInterest_amount(monthlyInterest);
+            dueInfo.setDays_overdue(loan.getOverdueDays());
+            dueInfo.setOverdue_interest(safeBigDecimal(loan.getOverdueAmount()));
+            response.setCurrent_due(dueInfo);
+        }
+
+        // 设置下次还款信息
+        if (!"closed".equals(loan.getLoanStatus()) && loan.getNextPaymentDate() != null &&
+                loan.getNextPaymentAmount() != null) {
+
+            RepaymentScheduleResponseDTO.PaymentInfo paymentInfo = new RepaymentScheduleResponseDTO.PaymentInfo();
+            paymentInfo.setPayment_date(loan.getNextPaymentDate());
+            paymentInfo.setPayment_amount(safeBigDecimal(loan.getNextPaymentAmount()));
+
+            // 安全计算本金和利息
+            BigDecimal nextPaymentAmount = safeBigDecimal(loan.getNextPaymentAmount());
+            BigDecimal remainingPrincipal = safeBigDecimal(loan.getRemainingPrincipal());
+            BigDecimal interestRate = safeBigDecimal(loan.getInterestRate());
+
+            // 计算月利息
+            BigDecimal monthlyInterest = BigDecimal.ZERO;
+            if (interestRate.compareTo(BigDecimal.ZERO) > 0 && remainingPrincipal.compareTo(BigDecimal.ZERO) > 0) {
+                monthlyInterest = remainingPrincipal.multiply(interestRate)
+                        .divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP)
+                        .divide(BigDecimal.valueOf(12), 2, BigDecimal.ROUND_HALF_UP);
+            }
+
+            paymentInfo.setPrincipal_amount(nextPaymentAmount.subtract(monthlyInterest));
+            paymentInfo.setInterest_amount(monthlyInterest);
+            response.setNext_payment(paymentInfo);
+        }
+
+        // 设置汇总信息
+        RepaymentScheduleResponseDTO.SummaryInfo summaryInfo = new RepaymentScheduleResponseDTO.SummaryInfo();
+        summaryInfo.setTotal_paid(safeBigDecimal(loan.getTotalPaidAmount()));
+        summaryInfo.setPrincipal_paid(safeBigDecimal(loan.getTotalPaidPrincipal()));
+        summaryInfo.setInterest_paid(safeBigDecimal(loan.getTotalPaidInterest()));
+
+        BigDecimal totalRepaymentAmount = safeBigDecimal(loan.getTotalRepaymentAmount());
+        BigDecimal totalPaidAmount = safeBigDecimal(loan.getTotalPaidAmount());
+        BigDecimal loanAmount = safeBigDecimal(loan.getLoanAmount());
+        BigDecimal remainingPrincipal = safeBigDecimal(loan.getRemainingPrincipal());
+
+        summaryInfo.setRemaining_total(totalRepaymentAmount.subtract(totalPaidAmount));
+        summaryInfo.setRemaining_principal(remainingPrincipal);
+        // 计算剩余利息
+        summaryInfo.setRemaining_interest(totalRepaymentAmount.subtract(loanAmount));
+        response.setSummary(summaryInfo);
+
+        return response;
+    }
+
+    // 私有辅助方法：安全处理BigDecimal，null值返回BigDecimal.ZERO
+    private BigDecimal safeBigDecimal(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
+    // 私有辅助方法：根据贷款ID获取贷款信息
+    private entity.financing.Loan getLoanById(String loanId) throws SQLException {
+        return dbManager.getLoanById(loanId);
+    }
+
+    // 私有辅助方法：根据贷款ID获取联合贷款伙伴信息
+    private List<Map<String, Object>> getJointLoanPartnersByLoanId(long loanId) throws SQLException {
+        return dbManager.getJointLoanPartnersByLoanId(loanId);
+    }
+
+
+
+
+    /**
+     * 处理单人贷款放款
+     */
+    private void handleSingleLoanDisbursement(entity.financing.LoanApplication loanApplication,
+                                              entity.financing.Loan loan) throws SQLException {
+        // 获取主借款人信息
+        String farmerUid = getFarmerUidByFarmerId(loanApplication.getFarmerId());
+        if (farmerUid == null) {
+            throw new SQLException("未找到主借款人信息");
+        }
+
+        // 给主借款人账户增加资金
+        updateUserBalance(farmerUid, loan.getDisburseAmount());
+
+        // 更新主借款人的信用额度
+        updateCreditLimitUsed(loanApplication.getFarmerId(), loan.getLoanAmount());
+    }
+
+    /**
+     * 处理联合贷款放款
+     */
+    private void handleJointLoanDisbursement(entity.financing.LoanApplication loanApplication,
+                                             entity.financing.Loan loan,
+                                             long loanRecordId) throws SQLException {
+        // 获取联合贷款伙伴信息
+        List<Map<String, Object>> partners = getJointLoanPartnersByApplicationId(loanApplication.getId());
+
+        // 获取主借款人信息
+        String mainFarmerUid = getFarmerUidByFarmerId(loanApplication.getFarmerId());
+        if (mainFarmerUid == null) {
+            throw new SQLException("未找到主借款人信息");
+        }
+
+        // 给主借款人账户增加资金
+        updateUserBalance(mainFarmerUid, loan.getDisburseAmount());
+
+        // 更新主借款人的信用额度
+        updateCreditLimitUsed(loanApplication.getFarmerId(), loan.getLoanAmount());
+
+        // 计算每个参与者的份额（包括主申请人在内）
+        int totalParticipants = partners.size() + 1; // 合作伙伴数量 + 主申请人
+        BigDecimal partnerShareRatio = BigDecimal.valueOf(100.0).divide(BigDecimal.valueOf(totalParticipants), 2, BigDecimal.ROUND_HALF_UP);
+
+        // 主申请人的份额金额基于贷款总金额计算
+        BigDecimal mainShareAmount = loan.getLoanAmount().multiply(partnerShareRatio).divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP);
+
+        // 为主申请人创建联合贷款记录（将主申请人也视为合作伙伴之一）
+        BigDecimal mainPrincipal = mainShareAmount;
+        BigDecimal mainInterest = calculateTotalInterest(mainPrincipal, loan.getInterestRate(), loan.getTermMonths());
+        BigDecimal mainTotalRepayment = mainPrincipal.add(mainInterest);
+
+        entity.financing.JointLoan mainJointLoan = new entity.financing.JointLoan();
+        mainJointLoan.setLoanId(loanRecordId);
+        mainJointLoan.setPartnerFarmerId(loanApplication.getFarmerId()); // 主申请人的农户ID
+        mainJointLoan.setPartnerShareRatio(partnerShareRatio); // 使用平均分配的份额比例
+        mainJointLoan.setPartnerShareAmount(mainPrincipal);
+        mainJointLoan.setPartnerPrincipal(mainPrincipal);
+        mainJointLoan.setPartnerInterest(mainInterest);
+        mainJointLoan.setPartnerTotalRepayment(mainTotalRepayment);
+        mainJointLoan.setPartnerPaidAmount(BigDecimal.ZERO);
+        mainJointLoan.setPartnerRemainingPrincipal(mainPrincipal);
+        mainJointLoan.setCreatedAt(new Timestamp(System.currentTimeMillis()));
+        mainJointLoan.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+
+        saveJointLoan(mainJointLoan);
+
+        // 为每个联合贷款伙伴创建记录并处理资金
+        for (Map<String, Object> partner : partners) {
+            Long partnerFarmerId = (Long) partner.get("partner_farmer_id");
+            // 根据贷款总金额和份额比例计算伙伴的份额金额
+            BigDecimal partnerShareRatioFromDB = (BigDecimal) partner.get("partner_share_ratio");
+            BigDecimal partnerShareAmount = loan.getLoanAmount().multiply(partnerShareRatioFromDB).divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP);
+
+            // 获取伙伴用户ID
+            String partnerUid = getFarmerUidByFarmerId(partnerFarmerId);
+            if (partnerUid == null) {
+                throw new SQLException("未找到联合贷款伙伴信息: " + partner.get("phone"));
+            }
+
+            // 给伙伴账户增加资金
+            updateUserBalance(partnerUid, partnerShareAmount);
+
+            // 更新伙伴的信用额度
+            updateCreditLimitUsed(partnerFarmerId, partnerShareAmount);
+
+            // 计算伙伴的利息和总还款金额（与主贷款人使用相同的利率和期限）
+            BigDecimal partnerPrincipal = partnerShareAmount;
+            BigDecimal partnerInterest = calculateTotalInterest(partnerPrincipal, loan.getInterestRate(), loan.getTermMonths());
+            BigDecimal partnerTotalRepayment = partnerPrincipal.add(partnerInterest);
+
+            // 创建联合贷款记录
+            entity.financing.JointLoan jointLoan = new entity.financing.JointLoan();
+            jointLoan.setLoanId(loanRecordId);
+            jointLoan.setPartnerFarmerId(partnerFarmerId);
+            jointLoan.setPartnerShareRatio(partnerShareRatioFromDB);
+            jointLoan.setPartnerShareAmount(partnerShareAmount);
+            jointLoan.setPartnerPrincipal(partnerPrincipal);
+            jointLoan.setPartnerInterest(partnerInterest);
+            jointLoan.setPartnerTotalRepayment(partnerTotalRepayment);
+            jointLoan.setPartnerPaidAmount(BigDecimal.ZERO);
+            jointLoan.setPartnerRemainingPrincipal(partnerPrincipal);
+            jointLoan.setCreatedAt(new Timestamp(System.currentTimeMillis()));
+            jointLoan.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+
+            saveJointLoan(jointLoan);
+        }
+    }
+
+
+
+    /**
+     * 计算总利息（简化计算）
+     */
+    private BigDecimal calculateTotalInterest(BigDecimal principal, BigDecimal interestRate, int termMonths) {
+        // 总利息 = 本金 * 年利率 * 期限(年)
+        BigDecimal annualInterest = principal.multiply(interestRate).divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP);
+        return annualInterest.multiply(BigDecimal.valueOf(termMonths)).divide(BigDecimal.valueOf(12), 2, BigDecimal.ROUND_HALF_UP);
+    }
+
+
+    /**
+     * 计算总还款金额（简化计算）
+     */
+    private BigDecimal calculateTotalRepaymentAmount(BigDecimal principal, BigDecimal interestRate, int termMonths) {
+        // 简化计算：总利息 = 本金 * 年利率 * 期限(年)
+        BigDecimal annualInterest = principal.multiply(interestRate).divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP);
+        BigDecimal totalInterest = annualInterest.multiply(BigDecimal.valueOf(termMonths)).divide(BigDecimal.valueOf(12), 2, BigDecimal.ROUND_HALF_UP);
+        return principal.add(totalInterest);
+    }
+
+    /**
+     * 验证贷款审批请求
+     */
+    private void validateLoanApprovalRequest(LoanApprovalRequestDTO request, List<Map<String, String>> errors) {
+        if (request.getPhone() == null || request.getPhone().trim().isEmpty()) {
+            errors.add(createError("phone", "银行操作员手机号不能为空"));
+        }
+
+        if (request.getApplication_id() == null || request.getApplication_id().trim().isEmpty()) {
+            errors.add(createError("application_id", "贷款申请ID不能为空"));
+        }
+
+        if (request.getAction() == null || request.getAction().trim().isEmpty()) {
+            errors.add(createError("action", "审批动作不能为空"));
+        } else if (!Arrays.asList("approve", "reject").contains(request.getAction())) {
+            errors.add(createError("action", "审批动作必须是approve或reject"));
+        }
+
+        if ("approve".equals(request.getAction())) {
+            if (request.getApproved_amount() == null || request.getApproved_amount().compareTo(BigDecimal.ZERO) <= 0) {
+                errors.add(createError("approved_amount", "批准金额必须大于0"));
+            }
+        }
+
+        if ("reject".equals(request.getAction())) {
+            if (request.getReject_reason() == null || request.getReject_reason().trim().isEmpty()) {
+                errors.add(createError("reject_reason", "拒绝原因不能为空"));
+            } else if (request.getReject_reason().length() < 2 || request.getReject_reason().length() > 200) {
+                errors.add(createError("reject_reason", "拒绝原因必须在2-200个字符之间"));
+            }
+        }
+    }
+
+    /**
+     * 验证贷款放款请求
+     */
+    private void validateLoanDisbursementRequest(LoanDisbursementRequestDTO request, List<Map<String, String>> errors) {
+        if (request.getPhone() == null || request.getPhone().trim().isEmpty()) {
+            errors.add(createError("phone", "银行操作员手机号不能为空"));
+        }
+
+        if (request.getApplication_id() == null || request.getApplication_id().trim().isEmpty()) {
+            errors.add(createError("application_id", "贷款申请ID不能为空"));
+        }
+
+        if (request.getDisburse_amount() == null || request.getDisburse_amount().compareTo(BigDecimal.ZERO) <= 0) {
+            errors.add(createError("disburse_amount", "放款金额必须大于0"));
+        }
+
+        if (request.getDisburse_method() == null || request.getDisburse_method().trim().isEmpty()) {
+            errors.add(createError("disburse_method", "放款方式不能为空"));
+        } else if (!Arrays.asList("bank_transfer", "cash", "check").contains(request.getDisburse_method())) {
+            errors.add(createError("disburse_method", "放款方式必须是bank_transfer、cash或check"));
+        }
+
+        if (request.getFirst_repayment_date() == null) {
+            errors.add(createError("first_repayment_date", "首次还款日期不能为空"));
+        } else {
+            // 检查首次还款日期是否在放款日期之后至少15天
+            java.util.Date disburseDate = new java.util.Date();
+            java.util.Date firstRepaymentDate = new java.util.Date(request.getFirst_repayment_date().getTime());
+            long diffInMillies = Math.abs(firstRepaymentDate.getTime() - disburseDate.getTime());
+            long diffInDays = TimeUnit.DAYS.convert(diffInMillies, TimeUnit.MILLISECONDS);
+
+            if (diffInDays < 15) {
+                errors.add(createError("first_repayment_date", "首次还款日期不能早于或等于放款日期，必须至少间隔15天"));
+            }
+        }
+
+        if (request.getRemarks() != null && request.getRemarks().length() > 200) {
+            errors.add(createError("remarks", "放款备注不能超过200个字符"));
+        }
+    }
+
+    // 添加辅助方法
+    private entity.financing.LoanApplication getLoanApplicationById(String applicationId) throws SQLException {
+        return dbManager.getLoanApplicationById(applicationId);
+    }
+
+    private void updateLoanApplicationStatus(String applicationId, String status, Long approvedBy,
+                                             Timestamp approvedAt, BigDecimal approvedAmount) throws SQLException {
+        dbManager.updateLoanApplicationStatus(applicationId, status, approvedBy, approvedAt, approvedAmount);
+    }
+
+    private void updateLoanApplicationRejection(String applicationId, String status, Long approvedBy,
+                                                Timestamp approvedAt, String rejectReason) throws SQLException {
+        dbManager.updateLoanApplicationRejection(applicationId, status, approvedBy, approvedAt, rejectReason);
+    }
+
+    private long saveLoan(entity.financing.Loan loan) throws SQLException {
+        return dbManager.saveLoan(loan);
+    }
+
+    private void saveJointLoan(entity.financing.JointLoan jointLoan) throws SQLException {
+        dbManager.saveJointLoan(jointLoan);
+    }
+
+    private List<Map<String, Object>> getJointLoanPartnersByApplicationId(long loanApplicationId) throws SQLException {
+        return dbManager.getJointLoanPartnersByApplicationId(loanApplicationId);
+    }
+
+    private void updateUserBalance(String uid, BigDecimal amount) throws SQLException {
+        dbManager.updateUserBalance(uid, amount);
+    }
+
+    private void updateCreditLimitUsed(Long farmerId, BigDecimal usedAmount) throws SQLException {
+        dbManager.updateCreditLimitUsed(farmerId, usedAmount);
+    }
+
+    private String getFarmerUidByFarmerId(Long farmerId) throws SQLException {
+        return dbManager.getFarmerUidByFarmerId(farmerId);
     }
 
     // 私有辅助方法：验证单人贷款申请请求
@@ -744,8 +1432,16 @@ public class FinancingService {
         }
     }
 
+
+
     // 私有辅助方法：根据产品ID获取贷款产品
     private entity.financing.LoanProduct getLoanProductById(String productId) throws SQLException {
+        // 直接使用字符串ID查询，不需要转换为Long
+        return dbManager.getLoanProductById(productId);
+    }
+
+    // 私有辅助方法：根据产品ID（Long类型）获取贷款产品
+    private entity.financing.LoanProduct getLoanProductById(Long productId) throws SQLException {
         return dbManager.getLoanProductById(productId);
     }
 
