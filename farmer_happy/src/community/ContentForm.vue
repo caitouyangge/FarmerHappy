@@ -240,12 +240,12 @@ export default {
       imageFiles.value.splice(index, 1);
     };
 
-    // 处理图片上传（这里简化处理，实际应该上传到服务器获取URL）
     const processImages = async () => {
-      // 在实际应用中，这里应该将图片上传到服务器获取URL
-      // 目前简化处理，使用 base64 或者本地预览
-      // 注意：base64 方式不推荐用于生产环境，应该上传到OSS等存储服务
-      return imagePreviews.value;
+      if (!imagePreviews.value || imagePreviews.value.length === 0) {
+        return [];
+      }
+      const urls = await communityService.uploadImages(imagePreviews.value);
+      return urls;
     };
 
     // 提交表单
@@ -267,7 +267,6 @@ export default {
       submitting.value = true;
 
       try {
-        // 处理图片
         const images = await processImages();
 
         const contentData = {

@@ -521,7 +521,8 @@ public class ProductController {
         if (request.getCategory() != null && request.getCategory().isEmpty()) {
             errors.add("商品分类不能为空");
         } else if (request.getCategory() != null) {
-            Set<String> validCategories = new HashSet<>(Arrays.asList("vegetables", "fruits", "grains", "livestock", "aquatic"));
+            Set<String> validCategories = new HashSet<>(
+                    Arrays.asList("vegetables", "fruits", "grains", "livestock", "aquatic"));
             if (!validCategories.contains(request.getCategory())) {
                 errors.add("商品分类无效，必须是以下值之一: vegetables, fruits, grains, livestock, aquatic");
             }
@@ -618,10 +619,15 @@ public class ProductController {
 
         if (request.getAction() == null || request.getAction().isEmpty()) {
             errors.add("操作类型不能为空");
-        } else if (!"on-shelf".equals(request.getAction()) &&
-                !"off-shelf".equals(request.getAction()) &&
-                !"delete".equals(request.getAction())) {
-            errors.add("无效的操作类型");
+        } else {
+            String normalized = request.getAction().replace('-', '_');
+            if (!"on_shelf".equals(normalized) &&
+                    !"off_shelf".equals(normalized) &&
+                    !"delete".equals(normalized)) {
+                errors.add("无效的操作类型");
+            } else {
+                request.setAction(normalized);
+            }
         }
 
         if (request.getProduct_ids() == null) {

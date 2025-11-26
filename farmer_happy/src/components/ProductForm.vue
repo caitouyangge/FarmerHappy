@@ -97,6 +97,42 @@
              </div>
           </div>
 
+          <div class="form-section">
+            <h3 class="section-title">产品图片（可选）</h3>
+            <div class="image-upload-section">
+              <div class="image-preview-list">
+                <div
+                  v-for="(image, idx) in imagePreviews"
+                  :key="idx"
+                  class="image-preview-item"
+                >
+                  <img :src="image" :alt="`预览${idx + 1}`" class="preview-image" />
+                  <button
+                    type="button"
+                    class="btn-remove-image"
+                    @click="removeImage(idx)"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <label v-if="imagePreviews.length < 9" class="upload-btn">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  @change="handleImageSelect"
+                  class="file-input"
+                />
+                <span class="upload-icon">📷</span>
+                <span class="upload-text">添加图片</span>
+              </label>
+            </div>
+            <div class="upload-hint">
+              最多可上传 9 张图片，支持 JPG、PNG 格式
+            </div>
+          </div>
+
         </div>
 
         <div class="modal-footer">
@@ -115,6 +151,7 @@
 <script>
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { productService } from '../api/product';
+import { communityService } from '../api/community';
 import logger from '../utils/logger';
 
 export default {
@@ -133,6 +170,8 @@ export default {
   setup(props, { emit }) {
     const loading = ref(false);
     const userInfo = ref({});
+    const imagePreviews = ref([]);
+    const imageFiles = ref([]);
 
      // 表单数据
      const form = reactive({
@@ -221,7 +260,7 @@ export default {
        }
 
        logger.validation('ProductForm', isValid, errors);
-       return isValid;
+      return isValid;
     };
 
     // 提交表单
@@ -245,15 +284,19 @@ export default {
 
       loading.value = true;
       try {
-         // 准备提交数据
-         const submitData = {
-           title: form.title.trim(),
-           category: form.category,
-           price: parseFloat(form.price),
-           stock: parseInt(form.stock),
-           detailed_description: form.detailedDescription.trim(),
-           phone: userInfo.value.phone
-         };
+        const images = imagePreviews.value && imagePreviews.value.length > 0
+          ? await communityService.uploadImages(imagePreviews.value)
+          : [];
+
+        const submitData = {
+          title: form.title.trim(),
+          category: form.category,
+          price: parseFloat(form.price),
+          stock: parseInt(form.stock),
+          detailed_description: form.detailedDescription.trim(),
+          phone: userInfo.value.phone,
+          images
+        };
 
          // 调试日志
          logger.debug('PRODUCT_FORM', '用户信息', { 
@@ -300,6 +343,37 @@ export default {
       }
     };
 
+    const handleImageSelect = (event) => {
+      const files = Array.from(event.target.files);
+      const remaining = 9 - imagePreviews.value.length;
+      if (files.length > remaining) {
+        alert(`最多只能上传 ${remaining} 张图片`);
+        files.splice(remaining);
+      }
+      files.forEach((file) => {
+        if (!file.type.startsWith('image/')) {
+          alert('只能上传图片文件');
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          alert('图片大小不能超过 5MB');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          imagePreviews.value.push(e.target.result);
+          imageFiles.value.push(file);
+        };
+        reader.readAsDataURL(file);
+      });
+      event.target.value = '';
+    };
+
+    const removeImage = (index) => {
+      imagePreviews.value.splice(index, 1);
+      imageFiles.value.splice(index, 1);
+    };
+
     // 关闭弹窗
     const handleClose = () => {
       logger.userAction('PRODUCT_FORM_CLOSE', { isEdit: props.isEdit });
@@ -317,9 +391,12 @@ export default {
       loading,
       form,
       errors,
+      imagePreviews,
       handleSubmit,
       handleClose,
-      handleOverlayClick
+      handleOverlayClick,
+      handleImageSelect,
+      removeImage
     };
   }
 };
@@ -391,12 +468,24 @@ export default {
   color: var(--gray-500);
 }
 
-.modal-form {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
+  .modal-form {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .image-upload-section { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .image-preview-list { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .image-preview-item { position: relative; width: 120px; height: 120px; border-radius: 8px; overflow: hidden; border: 2px solid var(--gray-300); }
+  .preview-image { width: 100%; height: 100%; object-fit: cover; }
+  .btn-remove-image { position: absolute; top: 0.25rem; right: 0.25rem; width: 28px; height: 28px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; color: var(--white); font-size: 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+  .btn-remove-image:hover { background: rgba(0,0,0,0.8); }
+  .upload-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 120px; border: 2px dashed var(--gray-300); border-radius: 8px; cursor: pointer; transition: all 0.2s; background: var(--gray-100); }
+  .upload-btn:hover { border-color: var(--primary); background: var(--gray-200); }
+  .file-input { display: none; }
+  .upload-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+  .upload-text { color: var(--gray-600); font-size: 0.875rem; }
+  .upload-hint { color: var(--gray-500); font-size: 0.875rem; margin-top: 0.5rem; }
 
 .form-content {
   flex: 1;
@@ -522,15 +611,15 @@ export default {
   gap: 1rem;
 }
 
-.btn-cancel, .btn-submit {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
+  .btn-cancel, .btn-submit {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
 
 .btn-cancel {
   background: var(--gray-200);

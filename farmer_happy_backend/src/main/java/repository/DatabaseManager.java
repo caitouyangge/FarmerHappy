@@ -14,7 +14,7 @@ public class DatabaseManager {
     private static final String URL = "jdbc:mysql://localhost:3306/";
     private static final String DB_NAME = "farmer_happy";
     private static final String USERNAME = "root";
-    private static final String PASSWORD = "root";
+    private static final String PASSWORD = "123456";
     private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
 
     private static DatabaseManager instance;
@@ -60,21 +60,20 @@ public class DatabaseManager {
             Statement dbStatement = dbConnection.createStatement();
 
             // 示例：创建用户表
-            String createUserTable =
-                    "CREATE TABLE IF NOT EXISTS users (" +
-                            "    uid VARCHAR(36) PRIMARY KEY DEFAULT (UUID())," +
-                            "    phone VARCHAR(11) UNIQUE NOT NULL COMMENT '手机号，11位数字'," +
-                            "    password VARCHAR(255) NOT NULL COMMENT '密码（存储基本字符串）'," +
-                            "    nickname VARCHAR(30) DEFAULT '' COMMENT '用户昵称，1-30个字符'," +
-                            "    login_attempts INT DEFAULT 0 COMMENT '连续登录失败次数'," +
-                            "    locked_until TIMESTAMP NULL COMMENT '账号锁定截止时间'," +
-                            "    is_active BOOLEAN DEFAULT TRUE COMMENT '账号是否激活'," +
-                            "    money DECIMAL(10,2) DEFAULT 1000 COMMENT '账户余额（元）'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
-                            "    INDEX idx_phone (phone)," +
-                            "    INDEX idx_created_at (created_at)" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户基本信息表';";
+            String createUserTable = "CREATE TABLE IF NOT EXISTS users (" +
+                    "    uid VARCHAR(36) PRIMARY KEY DEFAULT (UUID())," +
+                    "    phone VARCHAR(11) UNIQUE NOT NULL COMMENT '手机号，11位数字'," +
+                    "    password VARCHAR(255) NOT NULL COMMENT '密码（存储基本字符串）'," +
+                    "    nickname VARCHAR(30) DEFAULT '' COMMENT '用户昵称，1-30个字符'," +
+                    "    login_attempts INT DEFAULT 0 COMMENT '连续登录失败次数'," +
+                    "    locked_until TIMESTAMP NULL COMMENT '账号锁定截止时间'," +
+                    "    is_active BOOLEAN DEFAULT TRUE COMMENT '账号是否激活'," +
+                    "    money DECIMAL(10,2) DEFAULT 1000 COMMENT '账户余额（元）'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
+                    "    INDEX idx_phone (phone)," +
+                    "    INDEX idx_created_at (created_at)" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户基本信息表';";
             dbStatement.executeUpdate(createUserTable);
 
             // 检查并添加money字段（如果不存在）
@@ -97,158 +96,151 @@ public class DatabaseManager {
                 System.err.println("表结构更新失败（添加money字段）：" + e.getMessage());
             }
 
-// 创建买家扩展表
-            String createUserBuyersTable =
-                    "CREATE TABLE IF NOT EXISTS user_buyers (" +
-                            "    buyer_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
-                            "    shipping_address VARCHAR(500) COMMENT '默认收货地址'," +
-                            "    member_level ENUM('regular', 'silver', 'gold', 'platinum') DEFAULT 'regular' COMMENT '会员等级'," +
-                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用买家功能'," +
-                            "    UNIQUE KEY uk_uid (uid)," +
-                            "    INDEX idx_enable (enable)," +
-                            "    INDEX idx_member_level (member_level)," +
-                            "    FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='买家用户扩展信息表';";
+            // 创建买家扩展表
+            String createUserBuyersTable = "CREATE TABLE IF NOT EXISTS user_buyers (" +
+                    "    buyer_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
+                    "    shipping_address VARCHAR(500) COMMENT '默认收货地址'," +
+                    "    member_level ENUM('regular', 'silver', 'gold', 'platinum') DEFAULT 'regular' COMMENT '会员等级'," +
+                    "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用买家功能'," +
+                    "    UNIQUE KEY uk_uid (uid)," +
+                    "    INDEX idx_enable (enable)," +
+                    "    INDEX idx_member_level (member_level)," +
+                    "    FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='买家用户扩展信息表';";
             dbStatement.executeUpdate(createUserBuyersTable);
 
-// 创建农户扩展表
-            String createUserFarmersTable =
-                    "CREATE TABLE IF NOT EXISTS user_farmers (" +
-                            "    farmer_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
-                            "    farm_name VARCHAR(100) NOT NULL COMMENT '农场名称'," +
-                            "    farm_address VARCHAR(200) COMMENT '农场地址'," +
-                            "    farm_size DECIMAL(10,2) COMMENT '农场面积（亩）'," +
-                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用农户功能'," +
-                            "    UNIQUE KEY uk_uid (uid)," +
-                            "    INDEX idx_enable (enable)," +
-                            "    FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='农户用户扩展信息表';";
+            // 创建农户扩展表
+            String createUserFarmersTable = "CREATE TABLE IF NOT EXISTS user_farmers (" +
+                    "    farmer_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
+                    "    farm_name VARCHAR(100) NOT NULL COMMENT '农场名称'," +
+                    "    farm_address VARCHAR(200) COMMENT '农场地址'," +
+                    "    farm_size DECIMAL(10,2) COMMENT '农场面积（亩）'," +
+                    "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用农户功能'," +
+                    "    UNIQUE KEY uk_uid (uid)," +
+                    "    INDEX idx_enable (enable)," +
+                    "    FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='农户用户扩展信息表';";
             dbStatement.executeUpdate(createUserFarmersTable);
 
-// 创建技术专家扩展表
-            String createUserExpertsTable =
-                    "CREATE TABLE IF NOT EXISTS user_experts (" +
-                            "    expert_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
-                            "    expertise_field VARCHAR(100) NOT NULL COMMENT '专业领域'," +
-                            "    work_experience INT COMMENT '工作经验（年）'," +
-                            "    service_area VARCHAR(200) COMMENT '服务区域'," +
-                            "    consultation_fee DECIMAL(10,2) COMMENT '咨询费用'," +
-                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用专家功能'," +
-                            "    UNIQUE KEY uk_uid (uid)," +
-                            "    INDEX idx_enable (enable)," +
-                            "    INDEX idx_expertise (expertise_field)," +
-                            "    FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='技术专家用户扩展信息表';";
+            // 创建技术专家扩展表
+            String createUserExpertsTable = "CREATE TABLE IF NOT EXISTS user_experts (" +
+                    "    expert_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
+                    "    expertise_field VARCHAR(100) NOT NULL COMMENT '专业领域'," +
+                    "    work_experience INT COMMENT '工作经验（年）'," +
+                    "    service_area VARCHAR(200) COMMENT '服务区域'," +
+                    "    consultation_fee DECIMAL(10,2) COMMENT '咨询费用'," +
+                    "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用专家功能'," +
+                    "    UNIQUE KEY uk_uid (uid)," +
+                    "    INDEX idx_enable (enable)," +
+                    "    INDEX idx_expertise (expertise_field)," +
+                    "    FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='技术专家用户扩展信息表';";
             dbStatement.executeUpdate(createUserExpertsTable);
 
-// 创建银行扩展表
-            String createUserBanksTable =
-                    "CREATE TABLE IF NOT EXISTS user_banks (" +
-                            "    bank_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
-                            "    bank_name VARCHAR(100) NOT NULL COMMENT '银行名称'," +
-                            "    branch_name VARCHAR(100) COMMENT '分行名称'," +
-                            "    contact_person VARCHAR(50) COMMENT '联系人'," +
-                            "    contact_phone VARCHAR(20) COMMENT '联系电话'," +
-                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用银行功能'," +
-                            "    UNIQUE KEY uk_uid (uid)," +
-                            "    INDEX idx_enable (enable)," +
-                            "    INDEX idx_bank_name (bank_name)," +
-                            "    FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='银行用户扩展信息表';";
+            // 创建银行扩展表
+            String createUserBanksTable = "CREATE TABLE IF NOT EXISTS user_banks (" +
+                    "    bank_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
+                    "    bank_name VARCHAR(100) NOT NULL COMMENT '银行名称'," +
+                    "    branch_name VARCHAR(100) COMMENT '分行名称'," +
+                    "    contact_person VARCHAR(50) COMMENT '联系人'," +
+                    "    contact_phone VARCHAR(20) COMMENT '联系电话'," +
+                    "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用银行功能'," +
+                    "    UNIQUE KEY uk_uid (uid)," +
+                    "    INDEX idx_enable (enable)," +
+                    "    INDEX idx_bank_name (bank_name)," +
+                    "    FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='银行用户扩展信息表';";
             dbStatement.executeUpdate(createUserBanksTable);
 
-// 创建管理员扩展表
-            String createUserAdminsTable =
-                    "CREATE TABLE IF NOT EXISTS user_admins (" +
-                            "    admin_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
-                            "    admin_level ENUM('super', 'normal', 'auditor') DEFAULT 'normal' COMMENT '管理员级别'," +
-                            "    department VARCHAR(100) COMMENT '所属部门'," +
-                            "    permissions JSON COMMENT '权限配置'," +
-                            "    last_login_ip VARCHAR(45) COMMENT '最后登录IP'," +
-                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用管理员功能'," +
-                            "    UNIQUE KEY uk_uid (uid)," +
-                            "    INDEX idx_enable (enable)," +
-                            "    INDEX idx_admin_level (admin_level)," +
-                            "    FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员用户扩展信息表';";
+            // 创建管理员扩展表
+            String createUserAdminsTable = "CREATE TABLE IF NOT EXISTS user_admins (" +
+                    "    admin_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    uid VARCHAR(36) NOT NULL COMMENT '用户UID'," +
+                    "    admin_level ENUM('super', 'normal', 'auditor') DEFAULT 'normal' COMMENT '管理员级别'," +
+                    "    department VARCHAR(100) COMMENT '所属部门'," +
+                    "    permissions JSON COMMENT '权限配置'," +
+                    "    last_login_ip VARCHAR(45) COMMENT '最后登录IP'," +
+                    "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用管理员功能'," +
+                    "    UNIQUE KEY uk_uid (uid)," +
+                    "    INDEX idx_enable (enable)," +
+                    "    INDEX idx_admin_level (admin_level)," +
+                    "    FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员用户扩展信息表';";
             dbStatement.executeUpdate(createUserAdminsTable);
 
-
             // 创建商品表
-            String createProductsTable =
-                    "CREATE TABLE IF NOT EXISTS products (" +
-                            "    product_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
-                            "    category ENUM('vegetables', 'fruits', 'grains', 'livestock', 'aquatic') " +
-                            "        NOT NULL COMMENT '商品分类'," +
-                            "    title VARCHAR(100) NOT NULL COMMENT '商品标题'," +
-                            "    detailed_description VARCHAR(200) NOT NULL COMMENT '商品详细介绍'," +
-                            "    price DECIMAL(10,2) NOT NULL COMMENT '价格(元)'," +
-                            "    stock INT NOT NULL DEFAULT 0 COMMENT '库存数量'," +
-                            "    description TEXT COMMENT '商品图文详细描述(HTML格式)'," +
-                            "    origin VARCHAR(200) COMMENT '产地信息'," +
-                            "    status ENUM('pending_review', 'on_shelf', 'off_shelf', 'review_rejected') " +
-                            "        NOT NULL DEFAULT 'pending_review' COMMENT '商品状态'," +
-                            "    view_count INT DEFAULT 0 COMMENT '浏览量'," +
-                            "    sales_count INT DEFAULT 0 COMMENT '销量'," +
-                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
-                            "    INDEX idx_farmer_id (farmer_id)," +
-                            "    INDEX idx_category (category)," +
-                            "    INDEX idx_status (status)," +
-                            "    INDEX idx_enable (enable)," +
-                            "    INDEX idx_created_at (created_at)," +
-                            "    INDEX idx_price (price)," +
-                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品表';";
+            String createProductsTable = "CREATE TABLE IF NOT EXISTS products (" +
+                    "    product_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
+                    "    category ENUM('vegetables', 'fruits', 'grains', 'livestock', 'aquatic') " +
+                    "        NOT NULL COMMENT '商品分类'," +
+                    "    title VARCHAR(100) NOT NULL COMMENT '商品标题'," +
+                    "    detailed_description VARCHAR(200) NOT NULL COMMENT '商品详细介绍'," +
+                    "    price DECIMAL(10,2) NOT NULL COMMENT '价格(元)'," +
+                    "    stock INT NOT NULL DEFAULT 0 COMMENT '库存数量'," +
+                    "    description TEXT COMMENT '商品图文详细描述(HTML格式)'," +
+                    "    origin VARCHAR(200) COMMENT '产地信息'," +
+                    "    status ENUM('pending_review', 'on_shelf', 'off_shelf', 'review_rejected') " +
+                    "        NOT NULL DEFAULT 'pending_review' COMMENT '商品状态'," +
+                    "    view_count INT DEFAULT 0 COMMENT '浏览量'," +
+                    "    sales_count INT DEFAULT 0 COMMENT '销量'," +
+                    "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                    "    INDEX idx_farmer_id (farmer_id)," +
+                    "    INDEX idx_category (category)," +
+                    "    INDEX idx_status (status)," +
+                    "    INDEX idx_enable (enable)," +
+                    "    INDEX idx_created_at (created_at)," +
+                    "    INDEX idx_price (price)," +
+                    "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品表';";
             dbStatement.executeUpdate(createProductsTable);
 
-
             // 创建商品图片表
-            String createProductImagesTable =
-                    "CREATE TABLE IF NOT EXISTS product_images (" +
-                            "    image_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    product_id BIGINT NOT NULL COMMENT '商品ID'," +
-                            "    image_url VARCHAR(500) NOT NULL COMMENT '图片URL'," +
-                            "    sort_order INT DEFAULT 0 COMMENT '排序序号'," +
-                            "    is_main BOOLEAN DEFAULT FALSE COMMENT '是否主图'," +
-                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
-                            "    INDEX idx_product_id (product_id)," +
-                            "    INDEX idx_sort_order (sort_order)," +
-                            "    INDEX idx_enable (enable)," +
-                            "    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品图片表';";
+            String createProductImagesTable = "CREATE TABLE IF NOT EXISTS product_images (" +
+                    "    image_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    product_id BIGINT NOT NULL COMMENT '商品ID'," +
+                    "    image_url VARCHAR(500) NOT NULL COMMENT '图片URL'," +
+                    "    sort_order INT DEFAULT 0 COMMENT '排序序号'," +
+                    "    is_main BOOLEAN DEFAULT FALSE COMMENT '是否主图'," +
+                    "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
+                    "    INDEX idx_product_id (product_id)," +
+                    "    INDEX idx_sort_order (sort_order)," +
+                    "    INDEX idx_enable (enable)," +
+                    "    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品图片表';";
             dbStatement.executeUpdate(createProductImagesTable);
 
             // 创建商品审核记录表
-            String createProductReviewsTable =
-                    "CREATE TABLE IF NOT EXISTS product_reviews (" +
-                            "    review_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    product_id BIGINT NOT NULL COMMENT '商品ID'," +
-                            "    reviewer_id BIGINT COMMENT '审核员ID(关联users表)'," +
-                            "    old_status ENUM('pending_review', 'on_shelf', 'off_shelf', 'review_rejected') NOT NULL COMMENT '原状态'," +
-                            "    new_status ENUM('pending_review', 'on_shelf', 'off_shelf', 'review_rejected') NOT NULL COMMENT '新状态'," +
-                            "    review_comment TEXT COMMENT '审核意见'," +
-                            "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
-                            "    INDEX idx_product_id (product_id)," +
-                            "    INDEX idx_reviewer_id (reviewer_id)," +
-                            "    INDEX idx_enable (enable)," +
-                            "    INDEX idx_created_at (created_at)," +
-                            "    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品审核记录表';";
+            String createProductReviewsTable = "CREATE TABLE IF NOT EXISTS product_reviews (" +
+                    "    review_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    product_id BIGINT NOT NULL COMMENT '商品ID'," +
+                    "    reviewer_id BIGINT COMMENT '审核员ID(关联users表)'," +
+                    "    old_status ENUM('pending_review', 'on_shelf', 'off_shelf', 'review_rejected') NOT NULL COMMENT '原状态',"
+                    +
+                    "    new_status ENUM('pending_review', 'on_shelf', 'off_shelf', 'review_rejected') NOT NULL COMMENT '新状态',"
+                    +
+                    "    review_comment TEXT COMMENT '审核意见'," +
+                    "    enable BOOLEAN DEFAULT TRUE COMMENT '是否启用'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                    "    INDEX idx_product_id (product_id)," +
+                    "    INDEX idx_reviewer_id (reviewer_id)," +
+                    "    INDEX idx_enable (enable)," +
+                    "    INDEX idx_created_at (created_at)," +
+                    "    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品审核记录表';";
             dbStatement.executeUpdate(createProductReviewsTable);
 
             // 更新表结构：将specification列改为detailed_description
             try {
                 // 首先检查列是否存在
                 String checkColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
-                        "WHERE TABLE_SCHEMA = '" + DB_NAME + "' AND TABLE_NAME = 'products' AND COLUMN_NAME = 'specification'";
+                        "WHERE TABLE_SCHEMA = '" + DB_NAME
+                        + "' AND TABLE_NAME = 'products' AND COLUMN_NAME = 'specification'";
                 ResultSet rsCheck = dbStatement.executeQuery(checkColumnSql);
 
                 if (rsCheck.next()) {
@@ -259,7 +251,8 @@ public class DatabaseManager {
                 } else {
                     // specification 列不存在，检查 detailed_description 是否存在
                     String checkNewColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
-                            "WHERE TABLE_SCHEMA = '" + DB_NAME + "' AND TABLE_NAME = 'products' AND COLUMN_NAME = 'detailed_description'";
+                            "WHERE TABLE_SCHEMA = '" + DB_NAME
+                            + "' AND TABLE_NAME = 'products' AND COLUMN_NAME = 'detailed_description'";
                     ResultSet rsCheckNew = dbStatement.executeQuery(checkNewColumnSql);
 
                     if (!rsCheckNew.next()) {
@@ -278,291 +271,282 @@ public class DatabaseManager {
                 System.err.println("表结构更新失败：" + e.getMessage());
             }
             // 创建社区内容表
-            String createContentsTable =
-                    "CREATE TABLE IF NOT EXISTS contents (" +
-                            "    content_id VARCHAR(50) PRIMARY KEY COMMENT '内容ID'," +
-                            "    title VARCHAR(200) NOT NULL COMMENT '标题'," +
-                            "    content TEXT NOT NULL COMMENT '内容'," +
-                            "    content_type ENUM('articles', 'questions', 'experiences') NOT NULL COMMENT '内容类型'," +
-                            "    author_user_id VARCHAR(36) NOT NULL COMMENT '作者用户ID'," +
-                            "    author_nickname VARCHAR(30) NOT NULL COMMENT '作者昵称'," +
-                            "    author_role VARCHAR(20) NOT NULL COMMENT '作者角色'," +
-                            "    view_count INT DEFAULT 0 COMMENT '浏览量'," +
-                            "    comment_count INT DEFAULT 0 COMMENT '评论数'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
-                            "    INDEX idx_content_type (content_type)," +
-                            "    INDEX idx_author_user_id (author_user_id)," +
-                            "    INDEX idx_created_at (created_at)," +
-                            "    INDEX idx_view_count (view_count)," +
-                            "    INDEX idx_comment_count (comment_count)," +
-                            "    FOREIGN KEY (author_user_id) REFERENCES users(uid) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='社区内容表';";
+            String createContentsTable = "CREATE TABLE IF NOT EXISTS contents (" +
+                    "    content_id VARCHAR(50) PRIMARY KEY COMMENT '内容ID'," +
+                    "    title VARCHAR(200) NOT NULL COMMENT '标题'," +
+                    "    content TEXT NOT NULL COMMENT '内容'," +
+                    "    content_type ENUM('articles', 'questions', 'experiences') NOT NULL COMMENT '内容类型'," +
+                    "    author_user_id VARCHAR(36) NOT NULL COMMENT '作者用户ID'," +
+                    "    author_nickname VARCHAR(30) NOT NULL COMMENT '作者昵称'," +
+                    "    author_role VARCHAR(20) NOT NULL COMMENT '作者角色'," +
+                    "    view_count INT DEFAULT 0 COMMENT '浏览量'," +
+                    "    comment_count INT DEFAULT 0 COMMENT '评论数'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
+                    "    INDEX idx_content_type (content_type)," +
+                    "    INDEX idx_author_user_id (author_user_id)," +
+                    "    INDEX idx_created_at (created_at)," +
+                    "    INDEX idx_view_count (view_count)," +
+                    "    INDEX idx_comment_count (comment_count)," +
+                    "    FOREIGN KEY (author_user_id) REFERENCES users(uid) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='社区内容表';";
             dbStatement.executeUpdate(createContentsTable);
 
             // 创建社区内容图片表
-            String createContentImagesTable =
-                    "CREATE TABLE IF NOT EXISTS content_images (" +
-                            "    image_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    content_id VARCHAR(50) NOT NULL COMMENT '内容ID'," +
-                            "    image_url VARCHAR(500) NOT NULL COMMENT '图片URL'," +
-                            "    sort_order INT DEFAULT 0 COMMENT '排序序号'," +
-                            "    INDEX idx_content_id (content_id)," +
-                            "    FOREIGN KEY (content_id) REFERENCES contents(content_id) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='社区内容图片表';";
+            String createContentImagesTable = "CREATE TABLE IF NOT EXISTS content_images (" +
+                    "    image_id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    content_id VARCHAR(50) NOT NULL COMMENT '内容ID'," +
+                    "    image_url VARCHAR(500) NOT NULL COMMENT '图片URL'," +
+                    "    sort_order INT DEFAULT 0 COMMENT '排序序号'," +
+                    "    INDEX idx_content_id (content_id)," +
+                    "    FOREIGN KEY (content_id) REFERENCES contents(content_id) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='社区内容图片表';";
             dbStatement.executeUpdate(createContentImagesTable);
 
             // 创建社区评论表
-            String createCommentsTable =
-                    "CREATE TABLE IF NOT EXISTS comments (" +
-                            "    comment_id VARCHAR(50) PRIMARY KEY COMMENT '评论ID'," +
-                            "    content_id VARCHAR(50) NOT NULL COMMENT '所属内容ID'," +
-                            "    parent_comment_id VARCHAR(50) COMMENT '父评论ID，NULL表示一级评论'," +
-                            "    author_user_id VARCHAR(36) NOT NULL COMMENT '评论者用户ID'," +
-                            "    author_nickname VARCHAR(30) NOT NULL COMMENT '评论者昵称'," +
-                            "    author_role VARCHAR(20) NOT NULL COMMENT '评论者角色'," +
-                            "    reply_to_user_id VARCHAR(36) COMMENT '回复的用户ID（二级评论）'," +
-                            "    reply_to_nickname VARCHAR(30) COMMENT '回复的用户昵称（二级评论）'," +
-                            "    content TEXT NOT NULL COMMENT '评论内容'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
-                            "    INDEX idx_content_id (content_id)," +
-                            "    INDEX idx_parent_comment_id (parent_comment_id)," +
-                            "    INDEX idx_author_user_id (author_user_id)," +
-                            "    INDEX idx_created_at (created_at)," +
-                            "    FOREIGN KEY (content_id) REFERENCES contents(content_id) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (author_user_id) REFERENCES users(uid) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='社区评论表';";
+            String createCommentsTable = "CREATE TABLE IF NOT EXISTS comments (" +
+                    "    comment_id VARCHAR(50) PRIMARY KEY COMMENT '评论ID'," +
+                    "    content_id VARCHAR(50) NOT NULL COMMENT '所属内容ID'," +
+                    "    parent_comment_id VARCHAR(50) COMMENT '父评论ID，NULL表示一级评论'," +
+                    "    author_user_id VARCHAR(36) NOT NULL COMMENT '评论者用户ID'," +
+                    "    author_nickname VARCHAR(30) NOT NULL COMMENT '评论者昵称'," +
+                    "    author_role VARCHAR(20) NOT NULL COMMENT '评论者角色'," +
+                    "    reply_to_user_id VARCHAR(36) COMMENT '回复的用户ID（二级评论）'," +
+                    "    reply_to_nickname VARCHAR(30) COMMENT '回复的用户昵称（二级评论）'," +
+                    "    content TEXT NOT NULL COMMENT '评论内容'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                    "    INDEX idx_content_id (content_id)," +
+                    "    INDEX idx_parent_comment_id (parent_comment_id)," +
+                    "    INDEX idx_author_user_id (author_user_id)," +
+                    "    INDEX idx_created_at (created_at)," +
+                    "    FOREIGN KEY (content_id) REFERENCES contents(content_id) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (author_user_id) REFERENCES users(uid) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='社区评论表';";
             dbStatement.executeUpdate(createCommentsTable);
 
             // 创建订单表
-            String createOrdersTable =
-                    "CREATE TABLE IF NOT EXISTS orders (" +
-                            "    order_id VARCHAR(50) PRIMARY KEY COMMENT '订单唯一ID'," +
-                            "    buyer_uid VARCHAR(36) NOT NULL COMMENT '买家UID'," +
-                            "    farmer_uid VARCHAR(36) NOT NULL COMMENT '农户UID'," +
-                            "    product_id BIGINT NOT NULL COMMENT '商品ID'," +
-                            "    product_title VARCHAR(100) NOT NULL COMMENT '下单时的商品标题'," +
-                            "    product_specification VARCHAR(200) NOT NULL COMMENT '下单时的商品规格'," +
-                            "    product_price DECIMAL(10,2) NOT NULL COMMENT '下单时的商品单价'," +
-                            "    quantity INT NOT NULL COMMENT '购买数量'," +
-                            "    total_amount DECIMAL(10,2) NOT NULL COMMENT '订单总金额'," +
-                            "    buyer_name VARCHAR(50) NOT NULL COMMENT '收货人姓名'," +
-                            "    buyer_address VARCHAR(200) NOT NULL COMMENT '收货地址'," +
-                            "    buyer_phone VARCHAR(11) NOT NULL COMMENT '收货人手机号'," +
-                            "    remark VARCHAR(500) COMMENT '订单备注'," +
-                            "    status ENUM('shipped', 'completed', 'cancelled', 'refunded') " +
-                            "        DEFAULT 'shipped' COMMENT '订单状态'," +
-                            "    refund_reason VARCHAR(200) COMMENT '退款原因'," +
-                            "    refund_type ENUM('only_refund', 'return_and_refund') COMMENT '退款类型'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
-                            "    shipped_at TIMESTAMP NULL COMMENT '发货时间'," +
-                            "    completed_at TIMESTAMP NULL COMMENT '完成时间'," +
-                            "    cancelled_at TIMESTAMP NULL COMMENT '取消时间'," +
-                            "    refunded_at TIMESTAMP NULL COMMENT '退款时间'," +
-                            "    INDEX idx_buyer_uid (buyer_uid)," +
-                            "    INDEX idx_farmer_uid (farmer_uid)," +
-                            "    INDEX idx_product_id (product_id)," +
-                            "    INDEX idx_status (status)," +
-                            "    INDEX idx_created_at (created_at)," +
-                            "    INDEX idx_buyer_status (buyer_uid, status)," +
-                            "    INDEX idx_farmer_status (farmer_uid, status)," +
-                            "    FOREIGN KEY (buyer_uid) REFERENCES users(uid) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (farmer_uid) REFERENCES users(uid) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单表';";
+            String createOrdersTable = "CREATE TABLE IF NOT EXISTS orders (" +
+                    "    order_id VARCHAR(50) PRIMARY KEY COMMENT '订单唯一ID'," +
+                    "    buyer_uid VARCHAR(36) NOT NULL COMMENT '买家UID'," +
+                    "    farmer_uid VARCHAR(36) NOT NULL COMMENT '农户UID'," +
+                    "    product_id BIGINT NOT NULL COMMENT '商品ID'," +
+                    "    product_title VARCHAR(100) NOT NULL COMMENT '下单时的商品标题'," +
+                    "    product_specification VARCHAR(200) NOT NULL COMMENT '下单时的商品规格'," +
+                    "    product_price DECIMAL(10,2) NOT NULL COMMENT '下单时的商品单价'," +
+                    "    quantity INT NOT NULL COMMENT '购买数量'," +
+                    "    total_amount DECIMAL(10,2) NOT NULL COMMENT '订单总金额'," +
+                    "    buyer_name VARCHAR(50) NOT NULL COMMENT '收货人姓名'," +
+                    "    buyer_address VARCHAR(200) NOT NULL COMMENT '收货地址'," +
+                    "    buyer_phone VARCHAR(11) NOT NULL COMMENT '收货人手机号'," +
+                    "    remark VARCHAR(500) COMMENT '订单备注'," +
+                    "    status ENUM('shipped', 'completed', 'cancelled', 'refunded') " +
+                    "        DEFAULT 'shipped' COMMENT '订单状态'," +
+                    "    refund_reason VARCHAR(200) COMMENT '退款原因'," +
+                    "    refund_type ENUM('only_refund', 'return_and_refund') COMMENT '退款类型'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
+                    "    shipped_at TIMESTAMP NULL COMMENT '发货时间'," +
+                    "    completed_at TIMESTAMP NULL COMMENT '完成时间'," +
+                    "    cancelled_at TIMESTAMP NULL COMMENT '取消时间'," +
+                    "    refunded_at TIMESTAMP NULL COMMENT '退款时间'," +
+                    "    INDEX idx_buyer_uid (buyer_uid)," +
+                    "    INDEX idx_farmer_uid (farmer_uid)," +
+                    "    INDEX idx_product_id (product_id)," +
+                    "    INDEX idx_status (status)," +
+                    "    INDEX idx_created_at (created_at)," +
+                    "    INDEX idx_buyer_status (buyer_uid, status)," +
+                    "    INDEX idx_farmer_status (farmer_uid, status)," +
+                    "    FOREIGN KEY (buyer_uid) REFERENCES users(uid) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (farmer_uid) REFERENCES users(uid) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单表';";
             dbStatement.executeUpdate(createOrdersTable);
 
             // 创建信用额度表
-            String createCreditLimitsTable =
-                    "CREATE TABLE IF NOT EXISTS credit_limits (" +
-                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
-                            "    total_limit DECIMAL(15,2) DEFAULT 0 COMMENT '总额度'," +
-                            "    used_limit DECIMAL(15,2) DEFAULT 0 COMMENT '已用额度'," +
-                            "    available_limit DECIMAL(15,2) DEFAULT 0 COMMENT '可用额度'," +
-                            "    currency VARCHAR(10) DEFAULT 'CNY'," +
-                            "    status ENUM('active', 'no_limit', 'frozen') DEFAULT 'active'," +
-                            "    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
-                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
-                            "    INDEX idx_farmer_id (farmer_id)," +
-                            "    INDEX idx_status (status)" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='信用额度表';";
+            String createCreditLimitsTable = "CREATE TABLE IF NOT EXISTS credit_limits (" +
+                    "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
+                    "    total_limit DECIMAL(15,2) DEFAULT 0 COMMENT '总额度'," +
+                    "    used_limit DECIMAL(15,2) DEFAULT 0 COMMENT '已用额度'," +
+                    "    available_limit DECIMAL(15,2) DEFAULT 0 COMMENT '可用额度'," +
+                    "    currency VARCHAR(10) DEFAULT 'CNY'," +
+                    "    status ENUM('active', 'no_limit', 'frozen') DEFAULT 'active'," +
+                    "    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                    "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                    "    INDEX idx_farmer_id (farmer_id)," +
+                    "    INDEX idx_status (status)" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='信用额度表';";
             dbStatement.executeUpdate(createCreditLimitsTable);
 
             // 创建额度申请表
-            String createCreditApplicationsTable =
-                    "CREATE TABLE IF NOT EXISTS credit_applications (" +
-                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    application_id VARCHAR(20) UNIQUE NOT NULL COMMENT '申请ID'," +
-                            "    farmer_id BIGINT NOT NULL COMMENT '申请人农户ID'," +
-                            "    proof_type ENUM('land_certificate', 'property_certificate', 'income_proof', 'business_license', 'other') NOT NULL," +
-                            "    proof_images JSON COMMENT '证明材料图片URL数组'," +
-                            "    apply_amount DECIMAL(15,2) NOT NULL," +
-                            "    description VARCHAR(500)," +
-                            "    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending'," +
-                            "    approved_amount DECIMAL(15,2) COMMENT '批准的额度'," +
-                            "    reject_reason VARCHAR(200)," +
-                            "    approved_by BIGINT COMMENT '审批人银行ID'," +
-                            "    approved_at TIMESTAMP NULL," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
-                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (approved_by) REFERENCES user_banks(bank_id) ON DELETE SET NULL," +
-                            "    INDEX idx_farmer_id (farmer_id)," +
-                            "    INDEX idx_status (status)," +
-                            "    INDEX idx_application_id (application_id)" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='信用额度申请表';";
+            String createCreditApplicationsTable = "CREATE TABLE IF NOT EXISTS credit_applications (" +
+                    "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    application_id VARCHAR(20) UNIQUE NOT NULL COMMENT '申请ID'," +
+                    "    farmer_id BIGINT NOT NULL COMMENT '申请人农户ID'," +
+                    "    proof_type ENUM('land_certificate', 'property_certificate', 'income_proof', 'business_license', 'other') NOT NULL,"
+                    +
+                    "    proof_images JSON COMMENT '证明材料图片URL数组'," +
+                    "    apply_amount DECIMAL(15,2) NOT NULL," +
+                    "    description VARCHAR(500)," +
+                    "    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending'," +
+                    "    approved_amount DECIMAL(15,2) COMMENT '批准的额度'," +
+                    "    reject_reason VARCHAR(200)," +
+                    "    approved_by BIGINT COMMENT '审批人银行ID'," +
+                    "    approved_at TIMESTAMP NULL," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                    "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (approved_by) REFERENCES user_banks(bank_id) ON DELETE SET NULL," +
+                    "    INDEX idx_farmer_id (farmer_id)," +
+                    "    INDEX idx_status (status)," +
+                    "    INDEX idx_application_id (application_id)" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='信用额度申请表';";
             dbStatement.executeUpdate(createCreditApplicationsTable);
 
             // 创建贷款产品表
-            String createLoanProductsTable =
-                    "CREATE TABLE IF NOT EXISTS loan_products (" +
-                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    product_id VARCHAR(20) UNIQUE NOT NULL COMMENT '产品ID'," +
-                            "    product_code VARCHAR(50) UNIQUE COMMENT '产品编号'," +
-                            "    product_name VARCHAR(50) NOT NULL," +
-                            "    min_credit_limit DECIMAL(15,2) NOT NULL COMMENT '最低贷款额度要求'," +
-                            "    max_amount DECIMAL(15,2) NOT NULL COMMENT '最高贷款额度'," +
-                            "    interest_rate DECIMAL(5,2) NOT NULL COMMENT '年利率'," +
-                            "    term_months INT NOT NULL COMMENT '贷款期限(月)'," +
-                            "    repayment_method ENUM('equal_installment', 'interest_first', 'bullet_repayment') NOT NULL," +
-                            "    description VARCHAR(500) NOT NULL," +
-                            "    status ENUM('active', 'inactive') DEFAULT 'active'," +
-                            "    bank_id BIGINT NOT NULL COMMENT '发布银行ID'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
-                            "    FOREIGN KEY (bank_id) REFERENCES user_banks(bank_id) ON DELETE CASCADE," +
-                            "    INDEX idx_product_id (product_id)," +
-                            "    INDEX idx_status (status)," +
-                            "    INDEX idx_bank_id (bank_id)" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款产品表';";
+            String createLoanProductsTable = "CREATE TABLE IF NOT EXISTS loan_products (" +
+                    "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    product_id VARCHAR(20) UNIQUE NOT NULL COMMENT '产品ID'," +
+                    "    product_code VARCHAR(50) UNIQUE COMMENT '产品编号'," +
+                    "    product_name VARCHAR(50) NOT NULL," +
+                    "    min_credit_limit DECIMAL(15,2) NOT NULL COMMENT '最低贷款额度要求'," +
+                    "    max_amount DECIMAL(15,2) NOT NULL COMMENT '最高贷款额度'," +
+                    "    interest_rate DECIMAL(5,2) NOT NULL COMMENT '年利率'," +
+                    "    term_months INT NOT NULL COMMENT '贷款期限(月)'," +
+                    "    repayment_method ENUM('equal_installment', 'interest_first', 'bullet_repayment') NOT NULL," +
+                    "    description VARCHAR(500) NOT NULL," +
+                    "    status ENUM('active', 'inactive') DEFAULT 'active'," +
+                    "    bank_id BIGINT NOT NULL COMMENT '发布银行ID'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                    "    FOREIGN KEY (bank_id) REFERENCES user_banks(bank_id) ON DELETE CASCADE," +
+                    "    INDEX idx_product_id (product_id)," +
+                    "    INDEX idx_status (status)," +
+                    "    INDEX idx_bank_id (bank_id)" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款产品表';";
             dbStatement.executeUpdate(createLoanProductsTable);
 
             // 创建贷款申请表
-            String createLoanApplicationsTable =
-                    "CREATE TABLE IF NOT EXISTS loan_applications (" +
-                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    loan_application_id VARCHAR(20) UNIQUE NOT NULL COMMENT '贷款申请ID'," +
-                            "    farmer_id BIGINT NOT NULL COMMENT '申请人农户ID'," +
-                            "    product_id BIGINT NOT NULL," +
-                            "    application_type ENUM('single', 'joint') NOT NULL COMMENT '申请类型：单人、联合'," +
-                            "    apply_amount DECIMAL(15,2) NOT NULL," +
-                            "    purpose VARCHAR(200) NOT NULL COMMENT '贷款用途'," +
-                            "    repayment_source VARCHAR(200) NOT NULL COMMENT '还款来源'," +
-                            "    status ENUM('pending', 'pending_partners', 'approved', 'rejected', 'disbursed') DEFAULT 'pending'," +
-                            "    approved_amount DECIMAL(15,2) COMMENT '批准的金额'," +
-                            "    reject_reason VARCHAR(200) COMMENT '拒绝原因'," +
-                            "    approved_by BIGINT COMMENT '审批人银行ID'," +
-                            "    approved_at TIMESTAMP NULL," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
-                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (product_id) REFERENCES loan_products(id) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (approved_by) REFERENCES user_banks(bank_id) ON DELETE SET NULL," +
-                            "    INDEX idx_loan_application_id (loan_application_id)," +
-                            "    INDEX idx_farmer_id (farmer_id)," +
-                            "    INDEX idx_status (status)" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款申请表';";
+            String createLoanApplicationsTable = "CREATE TABLE IF NOT EXISTS loan_applications (" +
+                    "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    loan_application_id VARCHAR(20) UNIQUE NOT NULL COMMENT '贷款申请ID'," +
+                    "    farmer_id BIGINT NOT NULL COMMENT '申请人农户ID'," +
+                    "    product_id BIGINT NOT NULL," +
+                    "    application_type ENUM('single', 'joint') NOT NULL COMMENT '申请类型：单人、联合'," +
+                    "    apply_amount DECIMAL(15,2) NOT NULL," +
+                    "    purpose VARCHAR(200) NOT NULL COMMENT '贷款用途'," +
+                    "    repayment_source VARCHAR(200) NOT NULL COMMENT '还款来源'," +
+                    "    status ENUM('pending', 'pending_partners', 'approved', 'rejected', 'disbursed') DEFAULT 'pending',"
+                    +
+                    "    approved_amount DECIMAL(15,2) COMMENT '批准的金额'," +
+                    "    reject_reason VARCHAR(200) COMMENT '拒绝原因'," +
+                    "    approved_by BIGINT COMMENT '审批人银行ID'," +
+                    "    approved_at TIMESTAMP NULL," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                    "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (product_id) REFERENCES loan_products(id) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (approved_by) REFERENCES user_banks(bank_id) ON DELETE SET NULL," +
+                    "    INDEX idx_loan_application_id (loan_application_id)," +
+                    "    INDEX idx_farmer_id (farmer_id)," +
+                    "    INDEX idx_status (status)" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款申请表';";
             dbStatement.executeUpdate(createLoanApplicationsTable);
 
             // 创建联合贷款申请表
-            String createJointLoanApplicationsTable =
-                    "CREATE TABLE IF NOT EXISTS joint_loan_applications (" +
-                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    loan_application_id BIGINT NOT NULL COMMENT '主贷款申请ID'," +
-                            "    partner_farmer_id BIGINT NOT NULL COMMENT '伙伴农户ID'," +
-                            "    partner_share_ratio DECIMAL(5,2) NOT NULL COMMENT '伙伴份额比例(%)'," +
-                            "    partner_share_amount DECIMAL(15,2) NOT NULL COMMENT '伙伴份额金额'," +
-                            "    status ENUM('pending_invitation', 'accepted', 'rejected') DEFAULT 'pending_invitation' COMMENT '伙伴状态'," +
-                            "    invited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '邀请时间'," +
-                            "    responded_at TIMESTAMP NULL COMMENT '响应时间'," +
-                            "    reject_reason VARCHAR(200) COMMENT '拒绝原因'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
-                            "    FOREIGN KEY (loan_application_id) REFERENCES loan_applications(id) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (partner_farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
-                            "    INDEX idx_loan_application_id (loan_application_id)," +
-                            "    INDEX idx_partner_farmer_id (partner_farmer_id)," +
-                            "    INDEX idx_status (status)" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款申请表';";
+            String createJointLoanApplicationsTable = "CREATE TABLE IF NOT EXISTS joint_loan_applications (" +
+                    "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    loan_application_id BIGINT NOT NULL COMMENT '主贷款申请ID'," +
+                    "    partner_farmer_id BIGINT NOT NULL COMMENT '伙伴农户ID'," +
+                    "    partner_share_ratio DECIMAL(5,2) NOT NULL COMMENT '伙伴份额比例(%)'," +
+                    "    partner_share_amount DECIMAL(15,2) NOT NULL COMMENT '伙伴份额金额'," +
+                    "    status ENUM('pending_invitation', 'accepted', 'rejected') DEFAULT 'pending_invitation' COMMENT '伙伴状态',"
+                    +
+                    "    invited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '邀请时间'," +
+                    "    responded_at TIMESTAMP NULL COMMENT '响应时间'," +
+                    "    reject_reason VARCHAR(200) COMMENT '拒绝原因'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                    "    FOREIGN KEY (loan_application_id) REFERENCES loan_applications(id) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (partner_farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                    "    INDEX idx_loan_application_id (loan_application_id)," +
+                    "    INDEX idx_partner_farmer_id (partner_farmer_id)," +
+                    "    INDEX idx_status (status)" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款申请表';";
             dbStatement.executeUpdate(createJointLoanApplicationsTable);
 
-
-
             // 创建贷款表
-            String createLoansTable =
-                    "CREATE TABLE IF NOT EXISTS loans (" +
-                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    loan_id VARCHAR(20) UNIQUE NOT NULL COMMENT '贷款ID，如LOAN202511140001'," +
-                            "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
-                            "    product_id BIGINT NOT NULL COMMENT '贷款产品ID'," +
-                            "    loan_amount DECIMAL(15,2) NOT NULL COMMENT '贷款金额'," +
-                            "    interest_rate DECIMAL(5,2) NOT NULL COMMENT '年利率'," +
-                            "    term_months INT NOT NULL COMMENT '贷款期限(月)'," +
-                            "    repayment_method ENUM('equal_installment', 'interest_first', 'bullet_repayment') NOT NULL COMMENT '还款方式'," +
-                            "    disburse_amount DECIMAL(15,2) NOT NULL COMMENT '实际放款金额'," +
-                            "    disburse_method ENUM('bank_transfer', 'cash', 'check') NOT NULL COMMENT '放款方式'," +
-                            "    disburse_date TIMESTAMP NOT NULL COMMENT '放款日期'," +
-                            "    first_repayment_date DATE NOT NULL COMMENT '首次还款日期'," +
-                            "    loan_account VARCHAR(50) COMMENT '贷款发放账户'," +
-                            "    disburse_remarks VARCHAR(200) COMMENT '放款备注'," +
-                            "    loan_status ENUM('pending', 'approved', 'rejected', 'active', 'closed', 'frozen', 'overdue') DEFAULT 'pending' COMMENT '贷款状态'," +
-                            "    approved_by BIGINT COMMENT '审批人银行ID'," +
-                            "    approved_at TIMESTAMP NULL COMMENT '审批时间'," +
-                            "    reject_reason VARCHAR(200) COMMENT '拒绝原因'," +
-                            "    closed_date TIMESTAMP NULL COMMENT '结清日期'," +
-                            "    total_repayment_amount DECIMAL(15,2) COMMENT '总应还款金额'," +
-                            "    total_paid_amount DECIMAL(15,2) DEFAULT 0 COMMENT '累计已还款金额'," +
-                            "    total_paid_principal DECIMAL(15,2) DEFAULT 0 COMMENT '累计已还本金'," +
-                            "    total_paid_interest DECIMAL(15,2) DEFAULT 0 COMMENT '累计已还利息'," +
-                            "    remaining_principal DECIMAL(15,2) NOT NULL COMMENT '剩余本金'," +
-                            "    current_period INT DEFAULT 1 COMMENT '当前期数'," +
-                            "    next_payment_date DATE COMMENT '下次还款日期'," +
-                            "    next_payment_amount DECIMAL(15,2) COMMENT '下次应还金额'," +
-                            "    overdue_days INT DEFAULT 0 COMMENT '当前逾期天数'," +
-                            "    overdue_amount DECIMAL(15,2) DEFAULT 0 COMMENT '当前逾期金额'," +
-                            "    repayment_schedule JSON COMMENT '还款计划数据'," +
-                            "    purpose VARCHAR(200) NOT NULL COMMENT '贷款用途'," +
-                            "    repayment_source VARCHAR(200) NOT NULL COMMENT '还款来源'," +
-                            "    is_joint_loan BOOLEAN DEFAULT FALSE COMMENT '是否为联合贷款'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
-                            "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (product_id) REFERENCES loan_products(id) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (approved_by) REFERENCES user_banks(bank_id) ON DELETE SET NULL," +
-                            "    INDEX idx_loan_id (loan_id)," +
-                            "    INDEX idx_farmer_id (farmer_id)," +
-                            "    INDEX idx_loan_status (loan_status)," +
-                            "    INDEX idx_next_payment_date (next_payment_date)," +
-                            "    INDEX idx_created_at (created_at)" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款表';";
+            String createLoansTable = "CREATE TABLE IF NOT EXISTS loans (" +
+                    "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    loan_id VARCHAR(20) UNIQUE NOT NULL COMMENT '贷款ID，如LOAN202511140001'," +
+                    "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
+                    "    product_id BIGINT NOT NULL COMMENT '贷款产品ID'," +
+                    "    loan_amount DECIMAL(15,2) NOT NULL COMMENT '贷款金额'," +
+                    "    interest_rate DECIMAL(5,2) NOT NULL COMMENT '年利率'," +
+                    "    term_months INT NOT NULL COMMENT '贷款期限(月)'," +
+                    "    repayment_method ENUM('equal_installment', 'interest_first', 'bullet_repayment') NOT NULL COMMENT '还款方式',"
+                    +
+                    "    disburse_amount DECIMAL(15,2) NOT NULL COMMENT '实际放款金额'," +
+                    "    disburse_method ENUM('bank_transfer', 'cash', 'check') NOT NULL COMMENT '放款方式'," +
+                    "    disburse_date TIMESTAMP NOT NULL COMMENT '放款日期'," +
+                    "    first_repayment_date DATE NOT NULL COMMENT '首次还款日期'," +
+                    "    loan_account VARCHAR(50) COMMENT '贷款发放账户'," +
+                    "    disburse_remarks VARCHAR(200) COMMENT '放款备注'," +
+                    "    loan_status ENUM('pending', 'approved', 'rejected', 'active', 'closed', 'frozen', 'overdue') DEFAULT 'pending' COMMENT '贷款状态',"
+                    +
+                    "    approved_by BIGINT COMMENT '审批人银行ID'," +
+                    "    approved_at TIMESTAMP NULL COMMENT '审批时间'," +
+                    "    reject_reason VARCHAR(200) COMMENT '拒绝原因'," +
+                    "    closed_date TIMESTAMP NULL COMMENT '结清日期'," +
+                    "    total_repayment_amount DECIMAL(15,2) COMMENT '总应还款金额'," +
+                    "    total_paid_amount DECIMAL(15,2) DEFAULT 0 COMMENT '累计已还款金额'," +
+                    "    total_paid_principal DECIMAL(15,2) DEFAULT 0 COMMENT '累计已还本金'," +
+                    "    total_paid_interest DECIMAL(15,2) DEFAULT 0 COMMENT '累计已还利息'," +
+                    "    remaining_principal DECIMAL(15,2) NOT NULL COMMENT '剩余本金'," +
+                    "    current_period INT DEFAULT 1 COMMENT '当前期数'," +
+                    "    next_payment_date DATE COMMENT '下次还款日期'," +
+                    "    next_payment_amount DECIMAL(15,2) COMMENT '下次应还金额'," +
+                    "    overdue_days INT DEFAULT 0 COMMENT '当前逾期天数'," +
+                    "    overdue_amount DECIMAL(15,2) DEFAULT 0 COMMENT '当前逾期金额'," +
+                    "    repayment_schedule JSON COMMENT '还款计划数据'," +
+                    "    purpose VARCHAR(200) NOT NULL COMMENT '贷款用途'," +
+                    "    repayment_source VARCHAR(200) NOT NULL COMMENT '还款来源'," +
+                    "    is_joint_loan BOOLEAN DEFAULT FALSE COMMENT '是否为联合贷款'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                    "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (product_id) REFERENCES loan_products(id) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (approved_by) REFERENCES user_banks(bank_id) ON DELETE SET NULL," +
+                    "    INDEX idx_loan_id (loan_id)," +
+                    "    INDEX idx_farmer_id (farmer_id)," +
+                    "    INDEX idx_loan_status (loan_status)," +
+                    "    INDEX idx_next_payment_date (next_payment_date)," +
+                    "    INDEX idx_created_at (created_at)" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='贷款表';";
             dbStatement.executeUpdate(createLoansTable);
 
-// 创建联合贷款表
-            String createJointLoansTable =
-                    "CREATE TABLE IF NOT EXISTS joint_loans (" +
-                            "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
-                            "    loan_id BIGINT NOT NULL COMMENT '主贷款ID'," +
-                            "    partner_farmer_id BIGINT NOT NULL COMMENT '伙伴农户ID'," +
-                            "    partner_share_ratio DECIMAL(5,2) NOT NULL COMMENT '伙伴份额比例(%)'," +
-                            "    partner_share_amount DECIMAL(15,2) NOT NULL COMMENT '伙伴份额金额'," +
-                            "    partner_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴承担本金'," +
-                            "    partner_interest DECIMAL(15,2) NOT NULL COMMENT '伙伴承担利息'," +
-                            "    partner_total_repayment DECIMAL(15,2) NOT NULL COMMENT '伙伴总还款额'," +
-                            "    partner_paid_amount DECIMAL(15,2) DEFAULT 0 COMMENT '伙伴已还款金额'," +
-                            "    partner_remaining_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴剩余本金'," +
-                            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
-                            "    FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE," +
-                            "    FOREIGN KEY (partner_farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
-                            "    INDEX idx_loan_id (loan_id)," +
-                            "    INDEX idx_partner_farmer_id (partner_farmer_id)" +
-                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款表';";
+            // 创建联合贷款表
+            String createJointLoansTable = "CREATE TABLE IF NOT EXISTS joint_loans (" +
+                    "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    loan_id BIGINT NOT NULL COMMENT '主贷款ID'," +
+                    "    partner_farmer_id BIGINT NOT NULL COMMENT '伙伴农户ID'," +
+                    "    partner_share_ratio DECIMAL(5,2) NOT NULL COMMENT '伙伴份额比例(%)'," +
+                    "    partner_share_amount DECIMAL(15,2) NOT NULL COMMENT '伙伴份额金额'," +
+                    "    partner_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴承担本金'," +
+                    "    partner_interest DECIMAL(15,2) NOT NULL COMMENT '伙伴承担利息'," +
+                    "    partner_total_repayment DECIMAL(15,2) NOT NULL COMMENT '伙伴总还款额'," +
+                    "    partner_paid_amount DECIMAL(15,2) DEFAULT 0 COMMENT '伙伴已还款金额'," +
+                    "    partner_remaining_principal DECIMAL(15,2) NOT NULL COMMENT '伙伴剩余本金'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                    "    FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (partner_farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                    "    INDEX idx_loan_id (loan_id)," +
+                    "    INDEX idx_partner_farmer_id (partner_farmer_id)" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款表';";
             dbStatement.executeUpdate(createJointLoansTable);
-
 
             dbStatement.close();
             dbConnection.close();
@@ -670,8 +654,6 @@ public class DatabaseManager {
         return loanApplication;
     }
 
-
-
     /**
      * 根据贷款申请ID获取所有联合贷款伙伴的手机号
      */
@@ -699,12 +681,11 @@ public class DatabaseManager {
         return partnerPhones;
     }
 
-
     /**
      * 更新贷款申请状态
      */
     public void updateLoanApplicationStatus(String applicationId, String status, Long approvedBy,
-                                            Timestamp approvedAt, BigDecimal approvedAmount) throws SQLException {
+            Timestamp approvedAt, BigDecimal approvedAmount) throws SQLException {
         Connection conn = getConnection();
         try {
             String sql = "UPDATE loan_applications SET status = ?, approved_by = ?, approved_at = ?, approved_amount = ? WHERE loan_application_id = ?";
@@ -737,7 +718,7 @@ public class DatabaseManager {
      * 更新贷款申请拒绝信息
      */
     public void updateLoanApplicationRejection(String applicationId, String status, Long approvedBy,
-                                               Timestamp approvedAt, String rejectReason) throws SQLException {
+            Timestamp approvedAt, String rejectReason) throws SQLException {
         Connection conn = getConnection();
         try {
             String sql = "UPDATE loan_applications SET status = ?, approved_by = ?, approved_at = ?, reject_reason = ? WHERE loan_application_id = ?";
@@ -768,7 +749,8 @@ public class DatabaseManager {
     public long saveLoan(entity.financing.Loan loan) throws SQLException {
         Connection conn = getConnection();
         try {
-            String sql = "INSERT INTO loans (loan_id, farmer_id, product_id, loan_amount, interest_rate, term_months, " +
+            String sql = "INSERT INTO loans (loan_id, farmer_id, product_id, loan_amount, interest_rate, term_months, "
+                    +
                     "repayment_method, disburse_amount, disburse_method, disburse_date, first_repayment_date, " +
                     "loan_account, disburse_remarks, loan_status, approved_by, approved_at, reject_reason, " +
                     "closed_date, total_repayment_amount, total_paid_amount, total_paid_principal, " +
@@ -852,7 +834,8 @@ public class DatabaseManager {
     public void saveJointLoan(entity.financing.JointLoan jointLoan) throws SQLException {
         Connection conn = getConnection();
         try {
-            String sql = "INSERT INTO joint_loans (loan_id, partner_farmer_id, partner_share_ratio, partner_share_amount, " +
+            String sql = "INSERT INTO joint_loans (loan_id, partner_farmer_id, partner_share_ratio, partner_share_amount, "
+                    +
                     "partner_principal, partner_interest, partner_total_repayment, partner_paid_amount, " +
                     "partner_remaining_principal, created_at, updated_at) " +
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -874,8 +857,6 @@ public class DatabaseManager {
             closeConnection();
         }
     }
-
-
 
     /**
      * 更新用户余额
@@ -932,7 +913,8 @@ public class DatabaseManager {
     /**
      * 保存联合贷款申请的伙伴记录
      */
-    public void saveJointLoanApplicationPartners(long loanApplicationId, List<Map<String, Object>> partners) throws SQLException {
+    public void saveJointLoanApplicationPartners(long loanApplicationId, List<Map<String, Object>> partners)
+            throws SQLException {
         Connection conn = getConnection();
         try {
             String sql = "INSERT INTO joint_loan_applications (loan_application_id, partner_farmer_id, partner_share_ratio, partner_share_amount, status) VALUES (?, ?, ?, ?, ?)";
@@ -1501,7 +1483,8 @@ public class DatabaseManager {
             stmt.setString(3, orderId);
 
             int rowsAffected = stmt.executeUpdate();
-            System.out.println("updateOrderRefund - 更新行数: " + rowsAffected + ", orderId: " + orderId + ", refundReason: " + refundReason + ", refundType: " + refundType);
+            System.out.println("updateOrderRefund - 更新行数: " + rowsAffected + ", orderId: " + orderId
+                    + ", refundReason: " + refundReason + ", refundType: " + refundType);
 
             stmt.close();
 
@@ -1956,7 +1939,8 @@ public class DatabaseManager {
         return user;
     }
 
-    public List<Map<String, Object>> getQualifiedPartners(BigDecimal minCreditLimit, List<String> excludePhones, int maxPartners) throws SQLException {
+    public List<Map<String, Object>> getQualifiedPartners(BigDecimal minCreditLimit, List<String> excludePhones,
+            int maxPartners) throws SQLException {
         Connection conn = getConnection();
         List<Map<String, Object>> partners = new ArrayList<>();
         try {
@@ -2152,15 +2136,14 @@ public class DatabaseManager {
         }
     }
 
-
-
     /**
      * 更新信用额度记录
      */
     public void updateCreditLimit(entity.financing.CreditLimit creditLimit) throws SQLException {
         Connection conn = getConnection();
         try {
-            String sql = "UPDATE credit_limits SET total_limit = ?, available_limit = ?, last_updated = ?, updated_at = ? " +
+            String sql = "UPDATE credit_limits SET total_limit = ?, available_limit = ?, last_updated = ?, updated_at = ? "
+                    +
                     "WHERE farmer_id = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setBigDecimal(1, creditLimit.getTotalLimit());
@@ -2181,7 +2164,8 @@ public class DatabaseManager {
     public void saveCreditLimit(entity.financing.CreditLimit creditLimit) throws SQLException {
         Connection conn = getConnection();
         try {
-            String sql = "INSERT INTO credit_limits (farmer_id, total_limit, used_limit, available_limit, currency, status, last_updated, created_at, updated_at) " +
+            String sql = "INSERT INTO credit_limits (farmer_id, total_limit, used_limit, available_limit, currency, status, last_updated, created_at, updated_at) "
+                    +
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setLong(1, creditLimit.getFarmerId());
@@ -2199,7 +2183,6 @@ public class DatabaseManager {
             closeConnection();
         }
     }
-
 
     /**
      * 根据 UID 查找农户用户信息
@@ -2229,7 +2212,6 @@ public class DatabaseManager {
         }
         return farmerInfo;
     }
-
 
     /**
      * 根据产品ID获取贷款产品
@@ -2269,6 +2251,7 @@ public class DatabaseManager {
         }
         return loanProduct;
     }
+
     public entity.financing.LoanProduct getLoanProductById(String productId) throws SQLException {
         Connection conn = getConnection();
         entity.financing.LoanProduct loanProduct = null;
@@ -2305,8 +2288,6 @@ public class DatabaseManager {
         return loanProduct;
     }
 
-
-
     /**
      * 检查贷款产品名称是否已存在
      */
@@ -2328,7 +2309,7 @@ public class DatabaseManager {
     }
 
     public long createLoanApplication(String loanApplicationId, Long farmerId, Long productId, String applicationType,
-                                      BigDecimal applyAmount, String purpose, String repaymentSource) throws SQLException {
+            BigDecimal applyAmount, String purpose, String repaymentSource) throws SQLException {
         Connection conn = getConnection();
         try {
             String sql = "INSERT INTO loan_applications (loan_application_id, farmer_id, product_id, application_type, apply_amount, purpose, repayment_source, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
@@ -2440,7 +2421,6 @@ public class DatabaseManager {
         }
     }
 
-
     /**
      * 确认扣除农户信用额度（贷款批准时调用）
      */
@@ -2507,6 +2487,30 @@ public class DatabaseManager {
         return loan;
     }
 
+
+
+    /**
+     * 更新联合贷款合作伙伴的已还款金额
+     */
+    public void updateJointLoanPartnerRepayment(Long loanId, Long partnerFarmerId, BigDecimal repaymentAmount) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE joint_loans SET partner_paid_amount = partner_paid_amount + ? " +
+                    "WHERE loan_id = ? AND partner_farmer_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setBigDecimal(1, repaymentAmount);
+            stmt.setLong(2, loanId);
+            stmt.setLong(3, partnerFarmerId);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+
+
+
     /**
      * 根据贷款ID获取联合贷款伙伴信息
      */
@@ -2541,6 +2545,80 @@ public class DatabaseManager {
         }
         return partners;
     }
+
+    /**
+     * 保存还款记录
+     */
+    public void saveRepayment(entity.financing.Repayment repayment) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO repayments (repayment_id, loan_id, farmer_id, repayment_amount, " +
+                    "principal_amount, interest_amount, repayment_method, payment_account, remarks, " +
+                    "repayment_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, repayment.getRepaymentId());
+            stmt.setLong(2, repayment.getLoanId());
+            stmt.setLong(3, repayment.getFarmerId());
+            stmt.setBigDecimal(4, repayment.getRepaymentAmount());
+            stmt.setBigDecimal(5, repayment.getPrincipalAmount());
+            stmt.setBigDecimal(6, repayment.getInterestAmount());
+            stmt.setString(7, repayment.getRepaymentMethod());
+            stmt.setString(8, repayment.getPaymentAccount());
+            stmt.setString(9, repayment.getRemarks());
+            stmt.setTimestamp(10, repayment.getRepaymentDate());
+            stmt.setTimestamp(11, repayment.getCreatedAt());
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 还款后更新贷款状态
+     */
+    public void updateLoanAfterRepayment(entity.financing.Loan loan) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE loans SET loan_status = ?, total_paid_amount = ?, " +
+                    "overdue_days = ?, overdue_amount = ?, total_repayment_amount = ?, " +
+                    "next_payment_date = ?, current_period = ?, closed_date = ?, updated_at = ? " +
+                    "WHERE id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, loan.getLoanStatus());
+            stmt.setBigDecimal(2, loan.getTotalPaidAmount() != null ? loan.getTotalPaidAmount() : BigDecimal.ZERO);
+            // 修复：正确处理 Integer 对象类型的 null 值检查
+            Integer currentOverdueDaysObj = loan.getOverdueDays();
+            stmt.setInt(3, currentOverdueDaysObj != null ? loan.getOverdueDays() : 0);
+            stmt.setBigDecimal(4, loan.getOverdueAmount() != null ? loan.getOverdueAmount() : BigDecimal.ZERO);
+            stmt.setBigDecimal(5, loan.getTotalRepaymentAmount() != null ? loan.getTotalRepaymentAmount() : BigDecimal.ZERO);
+
+            if (loan.getNextPaymentDate() != null) {
+                stmt.setDate(6, loan.getNextPaymentDate());
+            } else {
+                stmt.setNull(6, java.sql.Types.DATE);
+            }
+            Integer currentOverdueDaysObj1 = loan.getOverdueDays();
+            // 修复：正确处理 Integer 对象类型的 null 值检查
+            stmt.setInt(7, currentOverdueDaysObj1 != null ? loan.getCurrentPeriod() : 0);
+
+            if (loan.getClosedDate() != null) {
+                stmt.setTimestamp(8, loan.getClosedDate());
+            } else {
+                stmt.setNull(8, java.sql.Types.TIMESTAMP);
+            }
+
+            stmt.setTimestamp(9, loan.getUpdatedAt());
+            stmt.setLong(10, loan.getId());
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+
+
 
 
     /**
@@ -2587,7 +2665,8 @@ public class DatabaseManager {
         Connection conn = getConnection();
         try {
             String sql = "INSERT INTO loan_products (product_id, product_code, product_name, min_credit_limit, " +
-                    "max_amount, interest_rate, term_months, repayment_method, description, status, bank_id, created_at, updated_at) " +
+                    "max_amount, interest_rate, term_months, repayment_method, description, status, bank_id, created_at, updated_at) "
+                    +
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, loanProduct.getProductId());

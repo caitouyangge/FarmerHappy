@@ -21,6 +21,11 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.UUID;
+import java.util.Base64;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public class RouterConfig {
     private AuthController authController;
@@ -39,8 +44,15 @@ public class RouterConfig {
         this.financingController = new FinancingController();
     }
 
-    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, Map<String, String> queryParams) {
+    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody,
+            Map<String, String> headers, Map<String, String> queryParams) {
         // ============= 融资相关路由 =============
+
+        // 在处理请求的方法中添加
+        if ("/api/v1/financing/repayment".equals(path) && "POST".equals(method)) {
+            return financingController.makeRepayment(requestBody, headers);
+        }
+
 
         // 获取还款列表
         if ("/api/v1/financing/repayment/schedule".equals(path) && "POST".equals(method)) {
@@ -320,6 +332,10 @@ public class RouterConfig {
             return authController.getBalance(phone, userType);
         }
 
+        if ("/api/v1/storage/upload".equals(path) && "POST".equals(method)) {
+            return handleImageUpload(requestBody);
+        }
+
         switch (path) {
             case "/api/v1/auth/register":
                 if ("POST".equals(method)) {
@@ -354,13 +370,85 @@ public class RouterConfig {
     }
 
     // 重载方法以保持向后兼容
-    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers) {
+    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody,
+            Map<String, String> headers) {
         return handleRequest(path, method, requestBody, headers, new HashMap<>());
     }
 
     // 旧的sessionId版本兼容
-    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody, Map<String, String> headers, String sessionId) {
+    public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody,
+            Map<String, String> headers, String sessionId) {
         return handleRequest(path, method, requestBody, headers, new HashMap<>());
+    }
+
+    private Map<String, Object> handleImageUpload(Map<String, Object> requestBody) {
+        Map<String, Object> response = new HashMap<>();
+        Object imagesObj = requestBody != null ? requestBody.get("images") : null;
+        if (!(imagesObj instanceof List)) {
+            response.put("code", 400);
+            response.put("message", "参数验证失败");
+            List<Map<String, String>> errors = new ArrayList<>();
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "images");
+            error.put("message", "images 必须为数组");
+            errors.add(error);
+            response.put("errors", errors);
+            return response;
+        }
+
+        List<?> images = (List<?>) imagesObj;
+        List<String> urls = new ArrayList<>();
+        try {
+            Path uploadDir = Paths.get("uploads");
+            if (!Files.exists(uploadDir)) {
+                Files.createDirectories(uploadDir);
+            }
+
+            for (Object obj : images) {
+                if (!(obj instanceof String)) {
+                    continue;
+                }
+                String dataUrl = (String) obj;
+                String prefix;
+                String base64Part;
+                int commaIndex = dataUrl.indexOf(',');
+                if (commaIndex > 0) {
+                    prefix = dataUrl.substring(0, commaIndex);
+                    base64Part = dataUrl.substring(commaIndex + 1);
+                } else {
+                    prefix = "";
+                    base64Part = dataUrl;
+                }
+
+                String ext;
+                if (prefix.contains("image/png")) {
+                    ext = ".png";
+                } else if (prefix.contains("image/jpeg") || prefix.contains("image/jpg")) {
+                    ext = ".jpg";
+                } else if (prefix.contains("image/gif")) {
+                    ext = ".gif";
+                } else {
+                    ext = ".bin";
+                }
+
+                byte[] bytes = Base64.getDecoder().decode(base64Part);
+                String fileName = UUID.randomUUID().toString() + ext;
+                Path filePath = uploadDir.resolve(fileName);
+                Files.write(filePath, bytes);
+                urls.add("http://localhost:8080/uploads/" + fileName);
+            }
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("urls", urls);
+            response.put("code", 201);
+            response.put("message", "上传成功");
+            response.put("data", data);
+            return response;
+        } catch (Exception e) {
+            response.put("code", 500);
+            response.put("message", "服务器内部错误");
+            return response;
+        }
     }
 
     private Map<String, Object> handleRegister(Map<String, Object> requestBody) {
@@ -455,7 +543,6 @@ public class RouterConfig {
 
         return loginResult;
     }
-
 
     /**
      * 解析贷款审批请求
@@ -730,7 +817,8 @@ public class RouterConfig {
 
         // 处理数值类型字段，使用BigDecimal.valueOf()进行转换
         if (requestBody.get("min_credit_limit") instanceof Number) {
-            request.setMin_credit_limit(BigDecimal.valueOf(((Number) requestBody.get("min_credit_limit")).doubleValue()));
+            request.setMin_credit_limit(
+                    BigDecimal.valueOf(((Number) requestBody.get("min_credit_limit")).doubleValue()));
         }
 
         if (requestBody.get("max_amount") instanceof Number) {
@@ -841,7 +929,8 @@ public class RouterConfig {
 
         // 处理数值类型字段
         if (requestBody.get("min_credit_limit") instanceof Number) {
-            request.setMin_credit_limit(BigDecimal.valueOf(((Number) requestBody.get("min_credit_limit")).doubleValue()));
+            request.setMin_credit_limit(
+                    BigDecimal.valueOf(((Number) requestBody.get("min_credit_limit")).doubleValue()));
         }
 
         if (requestBody.get("max_partners") instanceof Number) {

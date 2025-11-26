@@ -57,6 +57,28 @@ public class application {
 
                         System.out.println("处理请求: " + method + " " + path + (query != null ? "?" + query : ""));
 
+                        if ("GET".equals(method) && path.startsWith("/uploads/")) {
+                            java.nio.file.Path filePath = java.nio.file.Paths.get("uploads").resolve(path.substring("/uploads/".length()));
+                            if (java.nio.file.Files.exists(filePath)) {
+                                String contentType;
+                                String p = path.toLowerCase();
+                                if (p.endsWith(".png")) contentType = "image/png";
+                                else if (p.endsWith(".jpg") || p.endsWith(".jpeg")) contentType = "image/jpeg";
+                                else if (p.endsWith(".gif")) contentType = "image/gif";
+                                else contentType = "application/octet-stream";
+                                exchange.getResponseHeaders().set("Content-Type", contentType);
+                                byte[] bytes = java.nio.file.Files.readAllBytes(filePath);
+                                exchange.sendResponseHeaders(200, bytes.length);
+                                OutputStream os = exchange.getResponseBody();
+                                os.write(bytes);
+                                os.close();
+                                return;
+                            } else {
+                                exchange.sendResponseHeaders(404, -1);
+                                return;
+                            }
+                        }
+
                         // 解析请求体
                         Map<String, Object> requestBody = parseRequestBody(exchange);
 
@@ -567,7 +589,10 @@ public class application {
                         return serializeLoanDisbursementResponseDTO((LoanDisbursementResponseDTO) value);
                     }else if (value instanceof RepaymentScheduleResponseDTO) {
                         return serializeRepaymentScheduleResponseDTO((RepaymentScheduleResponseDTO) value);
+                    }else if (value instanceof RepaymentResponseDTO) {
+                        return serializeRepaymentResponseDTO((RepaymentResponseDTO) value);
                     }
+
 
                     else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
@@ -592,6 +617,70 @@ public class application {
                     json.append("]");
                     return json.toString();
                 }
+
+                // 序列化 RepaymentResponseDTO
+                private String serializeRepaymentResponseDTO(RepaymentResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+
+                    if (dto.getRepayment_id() != null) {
+                        json.append("\"repayment_id\":\"").append(escapeJsonString(dto.getRepayment_id())).append("\",");
+                    }
+
+                    if (dto.getLoan_id() != null) {
+                        json.append("\"loan_id\":\"").append(escapeJsonString(dto.getLoan_id())).append("\",");
+                    }
+
+                    if (dto.getRepayment_amount() != null) {
+                        json.append("\"repayment_amount\":").append(dto.getRepayment_amount()).append(",");
+                    }
+
+                    if (dto.getPrincipal_amount() != null) {
+                        json.append("\"principal_amount\":").append(dto.getPrincipal_amount()).append(",");
+                    }
+
+                    if (dto.getInterest_amount() != null) {
+                        json.append("\"interest_amount\":").append(dto.getInterest_amount()).append(",");
+                    }
+
+                    if (dto.getRemaining_principal() != null) {
+                        json.append("\"remaining_principal\":").append(dto.getRemaining_principal()).append(",");
+                    }
+
+                    if (dto.getRepayment_method() != null) {
+                        json.append("\"repayment_method\":\"").append(escapeJsonString(dto.getRepayment_method())).append("\",");
+                    }
+
+                    if (dto.getRepayment_date() != null) {
+                        json.append("\"repayment_date\":\"").append(escapeJsonString(dto.getRepayment_date().toString())).append("\",");
+                    }
+
+                    if (dto.getNext_payment_date() != null) {
+                        json.append("\"next_payment_date\":\"").append(escapeJsonString(dto.getNext_payment_date().toString())).append("\",");
+                    }
+
+                    if (dto.getNext_payment_amount() != null) {
+                        json.append("\"next_payment_amount\":").append(dto.getNext_payment_amount()).append(",");
+                    }
+
+                    if (dto.getLoan_status() != null) {
+                        json.append("\"loan_status\":\"").append(escapeJsonString(dto.getLoan_status())).append("\",");
+                    }
+
+                    if (dto.getClosed_date() != null) {
+                        json.append("\"closed_date\":\"").append(escapeJsonString(dto.getClosed_date().toString())).append("\",");
+                    }
+
+                    if (dto.getTotal_interest_saved() != null) {
+                        json.append("\"total_interest_saved\":").append(dto.getTotal_interest_saved()).append(",");
+                    }
+
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
 
                 // 序列化 RepaymentScheduleResponseDTO
                 private String serializeRepaymentScheduleResponseDTO(RepaymentScheduleResponseDTO dto) {
