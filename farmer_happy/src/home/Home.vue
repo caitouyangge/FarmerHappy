@@ -230,6 +230,15 @@ export default {
             icon: '📦',
             route: '/orders'
           }
+        ],
+        bank: [
+          {
+            id: 'loan',
+            name: '融资服务',
+            description: '发布贷款产品，审批贷款申请，管理放款',
+            icon: '💰',
+            route: '/loan'
+          }
         ]
       };
 
@@ -252,7 +261,7 @@ export default {
       });
       
       // 支持路由的模块直接跳转
-      if (module.id === 'trading' || module.id === 'community' || module.id === 'orders') {
+      if (module.id === 'trading' || module.id === 'community' || module.id === 'orders' || module.id === 'loan') {
         router.push(module.route);
       } else {
         // 其他模块暂时使用提示

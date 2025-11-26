@@ -8,6 +8,7 @@ import ContentDetail from '../community/ContentDetail.vue';
 import ContentForm from '../community/ContentForm.vue';
 import OrderList from '../orders/OrderList.vue';
 import OrderDetail from '../orders/OrderDetail.vue';
+import Financing from '../financing/Financing.vue';
 
 const routes = [
   {
@@ -64,6 +65,12 @@ const routes = [
     path: '/orders/:id',
     name: 'OrderDetail',
     component: OrderDetail,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/loan',
+    name: 'Financing',
+    component: Financing,
     meta: { requiresAuth: true }
   }
 ];
