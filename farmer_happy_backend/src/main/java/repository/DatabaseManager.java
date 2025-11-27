@@ -1,5 +1,6 @@
 package repository;
 
+import config.DatabaseConfig;
 import entity.Comment;
 import entity.Content;
 
@@ -12,17 +13,13 @@ import java.util.List;
 import java.util.Map;
 
 public class DatabaseManager {
-    private static final String URL = "jdbc:mysql://localhost:3306/";
-    private static final String DB_NAME = "farmer_happy";
-    private static final String USERNAME = "root";
-    private static final String PASSWORD = "root";
-    private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
-
     private static DatabaseManager instance;
     private Connection connection;
+    private DatabaseConfig config;
 
     // 私有构造函数（单例模式）
     private DatabaseManager() {
+        this.config = DatabaseConfig.getInstance();
     }
 
     // 获取单例实例
@@ -36,8 +33,12 @@ public class DatabaseManager {
     // 获取数据库连接
     public Connection getConnection() throws SQLException {
         try {
-            Class.forName(DRIVER);
-            connection = DriverManager.getConnection(URL + DB_NAME, USERNAME, PASSWORD);
+            Class.forName(config.getDriver());
+            connection = DriverManager.getConnection(
+                config.getFullUrl(), 
+                config.getUsername(), 
+                config.getPassword()
+            );
             return connection;
         } catch (ClassNotFoundException e) {
             throw new SQLException("MySQL JDBC Driver not found", e);
@@ -48,11 +49,15 @@ public class DatabaseManager {
     public void initializeDatabase() {
         try {
             // 首先连接到 MySQL 服务器（不指定数据库）
-            Connection serverConnection = DriverManager.getConnection(URL, USERNAME, PASSWORD);
+            Connection serverConnection = DriverManager.getConnection(
+                config.getUrl(), 
+                config.getUsername(), 
+                config.getPassword()
+            );
             Statement serverStatement = serverConnection.createStatement();
 
             // 创建数据库（如果不存在）
-            serverStatement.executeUpdate("CREATE DATABASE IF NOT EXISTS " + DB_NAME);
+            serverStatement.executeUpdate("CREATE DATABASE IF NOT EXISTS " + config.getDatabaseName());
             serverStatement.close();
             serverConnection.close();
 
