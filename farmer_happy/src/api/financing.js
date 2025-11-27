@@ -157,6 +157,206 @@ export const financingService = {
     },
 
     /**
+     * 银行审批信贷额度申请
+     * @param {Object} approvalData - 审批数据
+     * @param {string} approvalData.phone - 银行操作员手机号
+     * @param {string} approvalData.application_id - 信贷额度申请ID
+     * @param {string} approvalData.action - 审批动作（approve/reject）
+     * @param {number} [approvalData.approved_amount] - 批准金额（action为approve时必填）
+     * @param {string} [approvalData.reject_reason] - 拒绝原因（action为reject时必填）
+     * @returns {Promise<Object>} 响应数据
+     */
+    async approveCreditApplication(approvalData) {
+        try {
+            logger.apiRequest('POST', `${BANK_API_URL}/credit/approve`, {
+                application_id: approvalData.application_id,
+                action: approvalData.action
+            });
+            logger.info('FINANCING', '银行审批信贷额度申请', {
+                application_id: approvalData.application_id,
+                action: approvalData.action
+            });
+
+            const response = await axios.post(`${BANK_API_URL}/credit/approve`, approvalData);
+
+            logger.apiResponse('POST', `${BANK_API_URL}/credit/approve`, response.status, {
+                code: response.data.code
+            });
+
+            if (response.data.code !== 200) {
+                logger.error('FINANCING', '审批信贷额度申请失败', {
+                    code: response.data.code,
+                    message: response.data.message
+                });
+
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+
+                throw errorObj;
+            }
+
+            logger.info('FINANCING', '信贷额度申请审批成功', {
+                application_id: approvalData.application_id,
+                status: response.data.data?.status
+            });
+
+            return response.data;
+        } catch (error) {
+            logger.apiError('POST', `${BANK_API_URL}/credit/approve`, error);
+            logger.error('FINANCING', '审批信贷额度申请失败', {
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+
+            if (error.code && error.message) {
+                throw error;
+            }
+
+            throw {
+                code: 500,
+                message: error.message || '审批信贷额度申请失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
+     * 获取待审批的信贷额度申请列表
+     * @param {string} phone - 银行操作员手机号
+     * @returns {Promise<Object>} 响应数据
+     */
+    async getPendingCreditApplications(phone) {
+        try {
+            logger.apiRequest('POST', `${BANK_API_URL}/credit/pending`, { phone });
+            logger.info('FINANCING', '获取待审批信贷额度申请列表', { phone });
+
+            const response = await axios.post(`${BANK_API_URL}/credit/pending`, { phone });
+
+            logger.apiResponse('POST', `${BANK_API_URL}/credit/pending`, response.status, {
+                code: response.data.code,
+                count: response.data.data?.total || 0
+            });
+
+            if (response.data.code !== 200) {
+                logger.error('FINANCING', '获取待审批信贷额度申请列表失败', {
+                    code: response.data.code,
+                    message: response.data.message
+                });
+
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+
+                throw errorObj;
+            }
+
+            logger.info('FINANCING', '获取待审批信贷额度申请列表成功', {
+                count: response.data.data?.total || 0
+            });
+
+            return response.data;
+        } catch (error) {
+            logger.apiError('POST', `${BANK_API_URL}/credit/pending`, error);
+            logger.error('FINANCING', '获取待审批信贷额度申请列表失败', {
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+
+            if (error.code && error.message) {
+                throw error;
+            }
+
+            throw {
+                code: 500,
+                message: error.message || '获取待审批信贷额度申请列表失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
+     * 获取待审批的贷款申请列表
+     * @param {string} phone - 银行操作员手机号
+     * @returns {Promise<Object>} 响应数据
+     */
+    async getPendingLoanApplications(phone) {
+        try {
+            logger.apiRequest('POST', `${BANK_API_URL}/loans/pending`, { phone });
+            logger.info('FINANCING', '获取待审批贷款申请列表', { phone });
+
+            const response = await axios.post(`${BANK_API_URL}/loans/pending`, { phone });
+
+            logger.apiResponse('POST', `${BANK_API_URL}/loans/pending`, response.status, {
+                code: response.data.code,
+                count: response.data.data?.total || 0
+            });
+
+            if (response.data.code !== 200) {
+                logger.error('FINANCING', '获取待审批贷款申请列表失败', {
+                    code: response.data.code,
+                    message: response.data.message
+                });
+
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+
+                throw errorObj;
+            }
+
+            logger.info('FINANCING', '获取待审批贷款申请列表成功', {
+                count: response.data.data?.total || 0
+            });
+
+            return response.data;
+        } catch (error) {
+            logger.apiError('POST', `${BANK_API_URL}/loans/pending`, error);
+            logger.error('FINANCING', '获取待审批贷款申请列表失败', {
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+
+            if (error.code && error.message) {
+                throw error;
+            }
+
+            throw {
+                code: 500,
+                message: error.message || '获取待审批贷款申请列表失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
      * 银行放款操作
      * @param {Object} disbursementData - 放款数据
      * @param {string} disbursementData.phone - 银行操作员手机号
@@ -669,6 +869,69 @@ export const financingService = {
             throw {
                 code: 500,
                 message: error.message || '获取还款计划失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
+     * 获取农户申请记录
+     * @param {string} phone - 农户手机号
+     * @returns {Promise<Object>} 申请记录列表
+     */
+    async getFarmerCreditApplications(phone) {
+        try {
+            const requestData = { phone };
+            logger.apiRequest('POST', `${FINANCING_API_URL}/credit/applications`, requestData);
+            logger.info('FINANCING', '获取农户申请记录', { phone });
+
+            const response = await axios.post(`${FINANCING_API_URL}/credit/applications`, requestData);
+
+            logger.apiResponse('POST', `${FINANCING_API_URL}/credit/applications`, response.status, {
+                code: response.data.code
+            });
+
+            if (response.data.code !== 200) {
+                logger.error('FINANCING', '获取申请记录失败', {
+                    code: response.data.code,
+                    message: response.data.message
+                });
+
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+
+                throw errorObj;
+            }
+
+            logger.info('FINANCING', '获取申请记录成功', { 
+                count: response.data.data?.total || 0 
+            });
+
+            return response.data.data;
+        } catch (error) {
+            logger.apiError('POST', `${FINANCING_API_URL}/credit/applications`, error);
+            logger.error('FINANCING', '获取申请记录失败', {
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+
+            if (error.code && error.message) {
+                throw error;
+            }
+
+            throw {
+                code: 500,
+                message: error.message || '获取申请记录失败，请稍后重试',
                 errors: []
             };
         }

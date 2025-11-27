@@ -2,7 +2,7 @@
   <div class="modal-overlay" @click.self="handleClose">
     <div class="modal-container">
       <div class="modal-header">
-        <h2 class="modal-title">审批贷款申请</h2>
+        <h2 class="modal-title">审批信贷额度申请</h2>
         <button class="btn-close" @click="handleClose">×</button>
       </div>
 
@@ -13,9 +13,9 @@
         </div>
 
         <div v-else-if="applications.length === 0" class="empty-state">
-          <div class="empty-icon">📋</div>
+          <div class="empty-icon">📝</div>
           <h3>暂无待审批申请</h3>
-          <p>当前没有待审批的贷款申请</p>
+          <p>当前没有待审批的信贷额度申请</p>
         </div>
 
         <div v-else class="applications-list">
@@ -23,10 +23,10 @@
             <h3>待审批申请 ({{ applications.length }})</h3>
           </div>
 
-          <div class="application-item" v-for="application in applications" :key="application.loan_application_id">
+          <div class="application-item" v-for="application in applications" :key="application.application_id">
             <div class="application-info">
               <div class="application-header">
-                <span class="application-id">{{ application.loan_application_id }}</span>
+                <span class="application-id">{{ application.application_id }}</span>
                 <span class="application-amount">{{ formatCurrency(application.apply_amount) }}</span>
               </div>
               <div class="application-details">
@@ -35,20 +35,29 @@
                   <span class="value">{{ application.farmer_name }} ({{ application.farmer_phone }})</span>
                 </div>
                 <div class="detail-item">
-                  <span class="label">贷款产品：</span>
-                  <span class="value">{{ application.product_name }}</span>
-                </div>
-                <div class="detail-item">
-                  <span class="label">申请类型：</span>
-                  <span class="value">{{ getApplicationTypeName(application.application_type) }}</span>
-                </div>
-                <div class="detail-item">
-                  <span class="label">贷款用途：</span>
-                  <span class="value">{{ application.purpose }}</span>
+                  <span class="label">证明类型：</span>
+                  <span class="value">{{ getProofTypeName(application.proof_type) }}</span>
                 </div>
                 <div class="detail-item">
                   <span class="label">申请时间：</span>
                   <span class="value">{{ formatDate(application.created_at) }}</span>
+                </div>
+                <div v-if="application.description" class="detail-item">
+                  <span class="label">申请说明：</span>
+                  <span class="value">{{ application.description }}</span>
+                </div>
+                <div v-if="getProofImages(application.proof_images).length > 0" class="detail-item">
+                  <span class="label">证明材料：</span>
+                  <div class="proof-images">
+                    <div 
+                      v-for="(imageUrl, index) in getProofImages(application.proof_images)" 
+                      :key="index"
+                      class="image-preview"
+                      @click="viewImage(imageUrl)"
+                    >
+                      <img :src="imageUrl" :alt="`证明材料${index + 1}`" />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -80,27 +89,25 @@
             </div>
             <div class="approval-form-body">
               <div class="selected-application-info">
-                <p><strong>申请ID：</strong>{{ selectedApplication?.loan_application_id }}</p>
+                <p><strong>申请ID：</strong>{{ selectedApplication?.application_id }}</p>
                 <p><strong>申请人：</strong>{{ selectedApplication?.farmer_name }}</p>
                 <p><strong>申请金额：</strong>{{ formatCurrency(selectedApplication?.apply_amount) }}</p>
-                <p><strong>贷款产品：</strong>{{ selectedApplication?.product_name }}</p>
-                <p><strong>申请类型：</strong>{{ getApplicationTypeName(selectedApplication?.application_type) }}</p>
               </div>
               
               <form @submit.prevent="submitApproval">
                 <div v-if="approvalAction === 'approve'" class="form-group">
-                  <label class="form-label">批准金额 <span class="required">*</span></label>
+                  <label class="form-label">批准额度 <span class="required">*</span></label>
                   <input
                     v-model.number="formData.approved_amount"
                     type="number"
                     class="form-input"
-                    placeholder="请输入批准金额（元）"
+                    placeholder="请输入批准额度（元）"
                     min="0"
                     step="0.01"
                     required
                   />
                   <div class="form-hint">
-                    提示：可以调整申请金额，建议不超过申请金额的120%
+                    提示：可以调整申请额度，建议不超过申请金额的120%
                   </div>
                 </div>
 
@@ -114,7 +121,7 @@
                     required
                   ></textarea>
                   <div class="form-hint">
-                    常见拒绝原因：信用不足、申请金额过高、资料不全等
+                    常见拒绝原因：证明材料不足、信用记录不良、申请金额过高等
                   </div>
                 </div>
 
@@ -141,7 +148,7 @@ import { financingService } from '../../api/financing';
 import logger from '../../utils/logger';
 
 export default {
-  name: 'LoanApprovalModal',
+  name: 'CreditApprovalModal',
   emits: ['close', 'success'],
   setup(props, { emit }) {
     const userInfo = ref({});
@@ -172,16 +179,16 @@ export default {
 
       loadingApplications.value = true;
       try {
-        logger.info('FINANCING', '获取待审批贷款申请列表', { phone: userInfo.value.phone });
+        logger.info('FINANCING', '获取待审批信贷额度申请列表', { phone: userInfo.value.phone });
         
-        const response = await financingService.getPendingLoanApplications(userInfo.value.phone);
+        const response = await financingService.getPendingCreditApplications(userInfo.value.phone);
         applications.value = response.data.applications || [];
         
-        logger.info('FINANCING', '获取待审批贷款申请列表成功', { 
+        logger.info('FINANCING', '获取待审批信贷额度申请列表成功', { 
           count: applications.value.length 
         });
       } catch (error) {
-        logger.error('FINANCING', '获取待审批贷款申请列表失败', {
+        logger.error('FINANCING', '获取待审批信贷额度申请列表失败', {
           errorMessage: error.message || error
         }, error);
         alert('获取申请列表失败：' + (error.message || '请稍后重试'));
@@ -218,7 +225,7 @@ export default {
       if (!selectedApplication.value) return;
 
       if (approvalAction.value === 'approve' && !formData.approved_amount) {
-        alert('请输入批准金额');
+        alert('请输入批准额度');
         return;
       }
 
@@ -229,28 +236,28 @@ export default {
 
       submitting.value = true;
       try {
-        logger.info('FINANCING', '提交贷款审批', { 
-          application_id: selectedApplication.value.loan_application_id,
+        logger.info('FINANCING', '提交信贷额度审批', { 
+          application_id: selectedApplication.value.application_id,
           action: approvalAction.value 
         });
 
         const approvalData = {
           phone: userInfo.value.phone,
-          application_id: selectedApplication.value.loan_application_id,
+          application_id: selectedApplication.value.application_id,
           action: approvalAction.value,
           ...(approvalAction.value === 'approve' && { approved_amount: parseFloat(formData.approved_amount) }),
           ...(approvalAction.value === 'reject' && { reject_reason: formData.reject_reason })
         };
 
-        const response = await financingService.approveLoan(approvalData);
+        const response = await financingService.approveCreditApplication(approvalData);
         
-        logger.info('FINANCING', '贷款审批提交成功', { 
-          application_id: selectedApplication.value.loan_application_id,
+        logger.info('FINANCING', '信贷额度审批提交成功', { 
+          application_id: selectedApplication.value.application_id,
           action: approvalAction.value
         });
         
         if (approvalAction.value === 'approve') {
-          alert(`审批成功！已批准金额：${formData.approved_amount}元`);
+          alert(`审批成功！已批准额度：${formData.approved_amount}元`);
         } else {
           alert('审批成功！已拒绝申请');
         }
@@ -261,7 +268,7 @@ export default {
         
         emit('success');
       } catch (error) {
-        logger.error('FINANCING', '提交贷款审批失败', {
+        logger.error('FINANCING', '提交信贷额度审批失败', {
           errorMessage: error.message || error
         }, error);
         alert('提交失败：' + (error.message || '请稍后重试'));
@@ -294,12 +301,35 @@ export default {
       });
     };
 
-    const getApplicationTypeName = (applicationType) => {
+    const getProofTypeName = (proofType) => {
       const typeMap = {
-        'single': '单人贷款',
-        'joint': '联合贷款'
+        'land_certificate': '土地证书',
+        'property_certificate': '房产证书',
+        'income_proof': '收入证明',
+        'business_license': '营业执照',
+        'other': '其他'
       };
-      return typeMap[applicationType] || applicationType;
+      return typeMap[proofType] || proofType;
+    };
+
+    const getProofImages = (proofImagesJson) => {
+      if (!proofImagesJson) return [];
+      try {
+        // 如果已经是数组，直接返回
+        if (Array.isArray(proofImagesJson)) {
+          return proofImagesJson;
+        }
+        // 如果是字符串，尝试解析JSON
+        return JSON.parse(proofImagesJson);
+      } catch (error) {
+        console.warn('解析证明材料图片失败:', error);
+        return [];
+      }
+    };
+
+    const viewImage = (imageUrl) => {
+      // 在新窗口打开图片
+      window.open(imageUrl, '_blank');
     };
 
     return {
@@ -318,7 +348,9 @@ export default {
       handleClose,
       formatCurrency,
       formatDate,
-      getApplicationTypeName
+      getProofTypeName,
+      getProofImages,
+      viewImage
     };
   }
 };
@@ -509,6 +541,38 @@ export default {
   color: var(--gray-800);
 }
 
+/* 证明材料图片样式 */
+.proof-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.image-preview {
+  width: 60px;
+  height: 60px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid var(--gray-200);
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--gray-50);
+}
+
+.image-preview:hover {
+  border-color: var(--primary);
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .application-actions {
   display: flex;
   gap: 0.5rem;
@@ -674,4 +738,3 @@ export default {
   background: var(--gray-300);
 }
 </style>
-

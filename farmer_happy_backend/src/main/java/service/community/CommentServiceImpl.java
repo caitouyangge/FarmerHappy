@@ -48,16 +48,19 @@ public class CommentServiceImpl implements CommentService {
             throw new IllegalArgumentException("评论失败，目标帖子不存在或已被删除");
         }
 
-        // 4. 获取用户角色
-        String userRole = databaseManager.getUserRole(user.getUid());
+        // 4. 获取用户角色（支持多重身份）
+        List<String> userRoles = databaseManager.getUserRole(user.getUid());
+        
+        // 5. 选择主要角色用于显示（优先显示专家身份）
+        String displayRole = selectPrimaryRole(userRoles);
 
-        // 5. 创建评论对象（一级评论，parentCommentId为null）
+        // 6. 创建评论对象（一级评论，parentCommentId为null）
         Comment comment = new Comment(
             contentId,
             null, // 一级评论
             user.getUid(),
             user.getNickname(),
-            userRole,
+            displayRole,
             request.getComment(),
             null, // 一级评论不需要replyToUserId
             null  // 一级评论不需要replyToNickname
@@ -99,8 +102,11 @@ public class CommentServiceImpl implements CommentService {
             throw new IllegalArgumentException("回复失败，目标评论不存在或已被删除");
         }
 
-        // 4. 获取用户角色
-        String userRole = databaseManager.getUserRole(user.getUid());
+        // 4. 获取用户角色（支持多重身份）
+        List<String> userRoles = databaseManager.getUserRole(user.getUid());
+        
+        // 5. 选择主要角色用于显示（优先显示专家身份）
+        String displayRole = selectPrimaryRole(userRoles);
 
         // 5. 确定真正的父评论ID（如果当前评论是二级评论，需要找到一级评论）
         String topLevelCommentId = parentComment.isTopLevelComment() ? 
@@ -112,7 +118,7 @@ public class CommentServiceImpl implements CommentService {
             topLevelCommentId, // 保存一级评论ID
             user.getUid(),
             user.getNickname(),
-            userRole,
+            displayRole,
             request.getComment(),
             parentComment.getAuthorUserId(), // 被回复的用户ID
             parentComment.getAuthorNickname() // 被回复的用户昵称
@@ -200,6 +206,33 @@ public class CommentServiceImpl implements CommentService {
     @Override
     public Comment findCommentById(String commentId) throws SQLException {
         return databaseManager.findCommentById(commentId);
+    }
+    
+    /**
+     * 从多重身份中选择主要角色用于显示
+     * 优先级：expert > farmer > buyer > bank
+     */
+    private String selectPrimaryRole(List<String> userRoles) {
+        if (userRoles == null || userRoles.isEmpty()) {
+            return "user"; // 默认角色
+        }
+        
+        // 按优先级返回角色
+        if (userRoles.contains("expert")) {
+            return "expert";
+        }
+        if (userRoles.contains("farmer")) {
+            return "farmer";
+        }
+        if (userRoles.contains("buyer")) {
+            return "buyer";
+        }
+        if (userRoles.contains("bank")) {
+            return "bank";
+        }
+        
+        // 如果都不匹配，返回第一个角色
+        return userRoles.get(0);
     }
 }
 

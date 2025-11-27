@@ -40,7 +40,7 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">年利率：</span>
-                <span class="detail-value highlight">{{ (product.interest_rate * 100).toFixed(2) }}%</span>
+                <span class="detail-value highlight">{{ (product.interest_rate ).toFixed(2) }}%</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">贷款期限：</span>

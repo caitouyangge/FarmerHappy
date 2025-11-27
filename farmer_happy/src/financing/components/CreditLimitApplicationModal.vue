@@ -71,8 +71,8 @@
             <button type="button" class="btn btn-secondary" @click="handleClose">
               取消
             </button>
-            <button type="submit" class="btn btn-primary" :disabled="submitting">
-              {{ submitting ? '提交中...' : '提交申请' }}
+            <button type="submit" class="btn btn-primary" :disabled="submitting || uploadingImages">
+              {{ submitButtonText }}
             </button>
           </div>
         </form>
@@ -82,22 +82,29 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { financingService } from '../../api/financing';
 import logger from '../../utils/logger';
 
 export default {
   name: 'CreditLimitApplicationModal',
-  emits: ['close', 'success'],
+  emits: ['close', 'success', 'viewHistory'],
   setup(props, { emit }) {
     const userInfo = ref({});
     const fileInput = ref(null);
     const submitting = ref(false);
+    const uploadingImages = ref(false);
     const formData = reactive({
       proof_type: '',
       apply_amount: null,
       proof_images: [],
       description: ''
+    });
+
+    const submitButtonText = computed(() => {
+      if (uploadingImages.value) return '上传图片中...';
+      if (submitting.value) return '提交申请中...';
+      return '提交申请';
     });
 
     onMounted(() => {
@@ -138,10 +145,52 @@ export default {
       try {
         logger.info('FINANCING', '提交贷款额度申请', { formData });
 
-        // TODO: 先上传图片获取URL，这里暂时使用占位URL
-        const imageUrls = formData.proof_images.map(img => 
-          img.url || `https://example.com/uploads/${img.name || img}`
-        );
+        // 先上传图片获取真实URL
+        let imageUrls = [];
+        if (formData.proof_images.length > 0) {
+          uploadingImages.value = true;
+          logger.info('FINANCING', '开始上传图片', { count: formData.proof_images.length });
+          
+          try {
+            // 将文件转换为base64格式用于上传
+            const imagesToUpload = [];
+            for (const imgObj of formData.proof_images) {
+              if (imgObj.file) {
+                const reader = new FileReader();
+                const base64Promise = new Promise((resolve, reject) => {
+                  reader.onload = () => resolve(reader.result);
+                  reader.onerror = reject;
+                });
+                reader.readAsDataURL(imgObj.file);
+                imagesToUpload.push(base64Promise);
+              }
+            }
+            
+            // 等待所有文件读取完成
+            const base64Images = await Promise.all(imagesToUpload);
+            
+            // 上传图片到服务器
+            const uploadResponse = await fetch('/api/v1/storage/upload', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                images: base64Images
+              })
+            });
+            
+            const uploadResult = await uploadResponse.json();
+            if (uploadResult.code === 201 && uploadResult.data && uploadResult.data.urls) {
+              imageUrls = uploadResult.data.urls;
+              logger.info('FINANCING', '图片上传成功', { urls: imageUrls });
+            } else {
+              throw new Error('图片上传失败：' + (uploadResult.message || '未知错误'));
+            }
+          } finally {
+            uploadingImages.value = false;
+          }
+        }
 
         const applicationData = {
           phone: userInfo.value.phone,
@@ -162,9 +211,19 @@ export default {
         handleClose();
       } catch (error) {
         logger.error('FINANCING', '提交贷款额度申请失败', {
-          errorMessage: error.message || error
+          errorMessage: error.message || error,
+          errorCode: error.code
         }, error);
-        alert('提交失败：' + (error.message || '请稍后重试'));
+        
+        if (error.code === 409) {
+          // 存在待审批申请的情况
+          const result = confirm('您已有待审批的额度申请，请勿重复提交。\n\n点击"确定"查看申请记录，点击"取消"关闭对话框。');
+          if (result) {
+            emit('viewHistory'); // 触发查看申请记录
+          }
+        } else {
+          alert('提交失败：' + (error.message || '请稍后重试'));
+        }
       } finally {
         submitting.value = false;
       }
@@ -174,7 +233,9 @@ export default {
       userInfo,
       fileInput,
       submitting,
+      uploadingImages,
       formData,
+      submitButtonText,
       handleFileChange,
       removeFile,
       handleClose,

@@ -64,7 +64,7 @@
               placeholder="请输入年利率（小数，如0.06表示6%）"
               min="0"
               max="1"
-              step="0.0001"
+              step="0.01"
               required
             />
             <div class="form-hint">
@@ -101,7 +101,7 @@
               v-model="formData.description"
               class="form-input textarea"
               rows="4"
-              placeholder="请输入产品描述（可选）"
+              placeholder="请输入产品描述（必填）"
             ></textarea>
           </div>
 
@@ -173,7 +173,7 @@ export default {
           ...(formData.product_code && { product_code: formData.product_code }),
           min_credit_limit: parseFloat(formData.min_credit_limit),
           max_amount: parseFloat(formData.max_amount),
-          interest_rate: parseFloat(formData.interest_rate),
+          interest_rate: parseFloat(formData.interest_rate*100),
           term_months: parseInt(formData.term_months),
           repayment_method: formData.repayment_method,
           ...(formData.description && { description: formData.description })

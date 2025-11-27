@@ -14,7 +14,7 @@ public class DatabaseManager {
     private static final String URL = "jdbc:mysql://localhost:3306/";
     private static final String DB_NAME = "farmer_happy";
     private static final String USERNAME = "root";
-    private static final String PASSWORD = "123456";
+    private static final String PASSWORD = "root";
     private static final String DRIVER = "com.mysql.cj.jdbc.Driver";
 
     private static DatabaseManager instance;
@@ -1231,11 +1231,11 @@ public class DatabaseManager {
     }
 
     /**
-     * 获取用户角色
+     * 获取用户角色（支持多重身份）
      */
-    public String getUserRole(String uid) throws SQLException {
+    public List<String> getUserRole(String uid) throws SQLException {
         Connection conn = getConnection();
-        String role = null;
+        List<String> roles = new ArrayList<>();
         try {
             // 检查是否是农户
             String farmerSql = "SELECT 1 FROM user_farmers WHERE uid = ? AND enable = TRUE";
@@ -1243,53 +1243,47 @@ public class DatabaseManager {
             farmerStmt.setString(1, uid);
             ResultSet farmerRs = farmerStmt.executeQuery();
             if (farmerRs.next()) {
-                role = "farmer";
+                roles.add("farmer");
             }
             farmerRs.close();
             farmerStmt.close();
 
-            if (role == null) {
-                // 检查是否是专家
-                String expertSql = "SELECT 1 FROM user_experts WHERE uid = ? AND enable = TRUE";
-                PreparedStatement expertStmt = conn.prepareStatement(expertSql);
-                expertStmt.setString(1, uid);
-                ResultSet expertRs = expertStmt.executeQuery();
-                if (expertRs.next()) {
-                    role = "expert";
-                }
-                expertRs.close();
-                expertStmt.close();
+            // 检查是否是专家
+            String expertSql = "SELECT 1 FROM user_experts WHERE uid = ? AND enable = TRUE";
+            PreparedStatement expertStmt = conn.prepareStatement(expertSql);
+            expertStmt.setString(1, uid);
+            ResultSet expertRs = expertStmt.executeQuery();
+            if (expertRs.next()) {
+                roles.add("expert");
             }
+            expertRs.close();
+            expertStmt.close();
 
-            if (role == null) {
-                // 检查是否是买家
-                String buyerSql = "SELECT 1 FROM user_buyers WHERE uid = ? AND enable = TRUE";
-                PreparedStatement buyerStmt = conn.prepareStatement(buyerSql);
-                buyerStmt.setString(1, uid);
-                ResultSet buyerRs = buyerStmt.executeQuery();
-                if (buyerRs.next()) {
-                    role = "buyer";
-                }
-                buyerRs.close();
-                buyerStmt.close();
+            // 检查是否是买家
+            String buyerSql = "SELECT 1 FROM user_buyers WHERE uid = ? AND enable = TRUE";
+            PreparedStatement buyerStmt = conn.prepareStatement(buyerSql);
+            buyerStmt.setString(1, uid);
+            ResultSet buyerRs = buyerStmt.executeQuery();
+            if (buyerRs.next()) {
+                roles.add("buyer");
             }
+            buyerRs.close();
+            buyerStmt.close();
 
-            if (role == null) {
-                // 检查是否是银行用户
-                String bankSql = "SELECT 1 FROM user_banks WHERE uid = ? AND enable = TRUE";
-                PreparedStatement bankStmt = conn.prepareStatement(bankSql);
-                bankStmt.setString(1, uid);
-                ResultSet bankRs = bankStmt.executeQuery();
-                if (bankRs.next()) {
-                    role = "bank";
-                }
-                bankRs.close();
-                bankStmt.close();
+            // 检查是否是银行用户
+            String bankSql = "SELECT 1 FROM user_banks WHERE uid = ? AND enable = TRUE";
+            PreparedStatement bankStmt = conn.prepareStatement(bankSql);
+            bankStmt.setString(1, uid);
+            ResultSet bankRs = bankStmt.executeQuery();
+            if (bankRs.next()) {
+                roles.add("bank");
             }
+            bankRs.close();
+            bankStmt.close();
         } finally {
             closeConnection();
         }
-        return role;
+        return roles;
     }
 
     // ============= 订单相关方法 =============
@@ -2805,6 +2799,13 @@ public class DatabaseManager {
             String sql = "INSERT INTO credit_applications (application_id, farmer_id, proof_type, proof_images, " +
                     "apply_amount, description, status, created_at, updated_at) " +
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            
+            System.out.println("=== DEBUG: 保存信贷申请到数据库 ===");
+            System.out.println("申请ID: " + application.getApplicationId());
+            System.out.println("农户ID: " + application.getFarmerId());
+            System.out.println("申请金额: " + application.getApplyAmount());
+            System.out.println("状态: " + application.getStatus());
+            
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, application.getApplicationId());
             stmt.setLong(2, application.getFarmerId());
@@ -2815,11 +2816,232 @@ public class DatabaseManager {
             stmt.setString(7, application.getStatus());
             stmt.setTimestamp(8, application.getCreatedAt());
             stmt.setTimestamp(9, application.getUpdatedAt());
+            
+            int affectedRows = stmt.executeUpdate();
+            System.out.println("插入成功，影响行数: " + affectedRows);
+            System.out.println("=== DEBUG END ===");
+            
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 根据申请ID获取信贷额度申请
+     */
+    public entity.financing.CreditApplication getCreditApplicationById(String applicationId) throws SQLException {
+        Connection conn = getConnection();
+        entity.financing.CreditApplication application = null;
+        try {
+            String sql = "SELECT * FROM credit_applications WHERE application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, applicationId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                application = new entity.financing.CreditApplication();
+                application.setId(rs.getLong("id"));
+                application.setApplicationId(rs.getString("application_id"));
+                application.setFarmerId(rs.getLong("farmer_id"));
+                application.setProofType(rs.getString("proof_type"));
+                application.setProofImages(rs.getString("proof_images"));
+                application.setApplyAmount(rs.getBigDecimal("apply_amount"));
+                application.setDescription(rs.getString("description"));
+                application.setStatus(rs.getString("status"));
+                application.setApprovedAmount(rs.getBigDecimal("approved_amount"));
+                application.setRejectReason(rs.getString("reject_reason"));
+                application.setApprovedBy(rs.getLong("approved_by"));
+                application.setApprovedAt(rs.getTimestamp("approved_at"));
+                application.setCreatedAt(rs.getTimestamp("created_at"));
+                application.setUpdatedAt(rs.getTimestamp("updated_at"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return application;
+    }
+
+    /**
+     * 更新信贷额度申请状态（批准）
+     */
+    public void updateCreditApplicationStatus(String applicationId, String status, Long approvedBy, 
+                                            Timestamp approvedAt, BigDecimal approvedAmount) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE credit_applications SET status = ?, approved_by = ?, approved_at = ?, " +
+                        "approved_amount = ?, updated_at = CURRENT_TIMESTAMP WHERE application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, status);
+            stmt.setLong(2, approvedBy);
+            stmt.setTimestamp(3, approvedAt);
+            stmt.setBigDecimal(4, approvedAmount);
+            stmt.setString(5, applicationId);
             stmt.executeUpdate();
             stmt.close();
         } finally {
             closeConnection();
         }
+    }
+
+    /**
+     * 更新信贷额度申请状态（拒绝）
+     */
+    public void updateCreditApplicationRejection(String applicationId, String status, Long approvedBy,
+                                               Timestamp approvedAt, String rejectReason) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE credit_applications SET status = ?, approved_by = ?, approved_at = ?, " +
+                        "reject_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, status);
+            stmt.setLong(2, approvedBy);
+            stmt.setTimestamp(3, approvedAt);
+            stmt.setString(4, rejectReason);
+            stmt.setString(5, applicationId);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 根据农户ID获取申请记录列表
+     */
+    public List<Map<String, Object>> getCreditApplicationsByFarmerId(Long farmerId) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> applications = new ArrayList<>();
+        try {
+            String sql = "SELECT ca.*, u.nickname as farmer_name, u.phone as farmer_phone, " +
+                        "bu.bank_name as approver_name " +
+                        "FROM credit_applications ca " +
+                        "JOIN user_farmers uf ON ca.farmer_id = uf.farmer_id " +
+                        "JOIN users u ON uf.uid = u.uid " +
+                        "LEFT JOIN user_banks bu ON ca.approved_by = bu.bank_id " +
+                        "WHERE ca.farmer_id = ? " +
+                        "ORDER BY ca.created_at DESC";
+            
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, farmerId);
+            ResultSet rs = stmt.executeQuery();
+            
+            while (rs.next()) {
+                Map<String, Object> application = new HashMap<>();
+                application.put("application_id", rs.getString("application_id"));
+                application.put("apply_amount", rs.getBigDecimal("apply_amount"));
+                application.put("proof_type", rs.getString("proof_type"));
+                application.put("proof_images", rs.getString("proof_images"));
+                application.put("description", rs.getString("description"));
+                application.put("status", rs.getString("status"));
+                application.put("approved_amount", rs.getBigDecimal("approved_amount"));
+                application.put("reject_reason", rs.getString("reject_reason"));
+                application.put("created_at", rs.getTimestamp("created_at"));
+                application.put("updated_at", rs.getTimestamp("updated_at"));
+                application.put("approved_at", rs.getTimestamp("approved_at"));
+                application.put("farmer_name", rs.getString("farmer_name"));
+                application.put("farmer_phone", rs.getString("farmer_phone"));
+                application.put("approver_name", rs.getString("approver_name"));
+                applications.add(application);
+            }
+            
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return applications;
+    }
+
+    /**
+     * 获取待审批的信贷额度申请列表
+     */
+    public List<Map<String, Object>> getPendingCreditApplicationsList() throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> applications = new ArrayList<>();
+        try {
+            String sql = "SELECT ca.application_id, ca.apply_amount, ca.proof_type, ca.proof_images, ca.description, " +
+                        "ca.created_at, u.nickname as farmer_name, u.phone as farmer_phone " +
+                        "FROM credit_applications ca " +
+                        "JOIN user_farmers uf ON ca.farmer_id = uf.farmer_id " +
+                        "JOIN users u ON uf.uid = u.uid " +
+                        "WHERE ca.status = 'pending' " +
+                        "ORDER BY ca.created_at DESC";
+            
+            System.out.println("=== DEBUG: 执行查询待审批申请SQL ===");
+            System.out.println("SQL: " + sql);
+            
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            ResultSet rs = stmt.executeQuery();
+            
+            int count = 0;
+
+            while (rs.next()) {
+                count++;
+                Map<String, Object> application = new HashMap<>();
+                application.put("application_id", rs.getString("application_id"));
+                application.put("apply_amount", rs.getBigDecimal("apply_amount"));
+                application.put("proof_type", rs.getString("proof_type"));
+                application.put("proof_images", rs.getString("proof_images"));
+                application.put("description", rs.getString("description"));
+                application.put("created_at", rs.getTimestamp("created_at"));
+                application.put("farmer_name", rs.getString("farmer_name"));
+                application.put("farmer_phone", rs.getString("farmer_phone"));
+                applications.add(application);
+                
+                System.out.println("查询到申请 #" + count + ": " + rs.getString("application_id") + 
+                                 " - " + rs.getString("farmer_name"));
+                System.out.println("  证明图片: " + rs.getString("proof_images"));
+            }
+            
+            System.out.println("总共查询到 " + count + " 条待审批申请");
+            System.out.println("=== DEBUG END ===");
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return applications;
+    }
+
+    /**
+     * 获取待审批的贷款申请列表
+     */
+    public List<Map<String, Object>> getPendingLoanApplicationsList() throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> applications = new ArrayList<>();
+        try {
+            String sql = "SELECT la.loan_application_id, la.apply_amount, la.purpose, la.application_type, " +
+                        "la.created_at, lp.product_name, u.nickname as farmer_name, u.phone as farmer_phone " +
+                        "FROM loan_applications la " +
+                        "JOIN user_farmers uf ON la.farmer_id = uf.farmer_id " +
+                        "JOIN users u ON uf.uid = u.uid " +
+                        "JOIN loan_products lp ON la.product_id = lp.id " +
+                        "WHERE la.status IN ('pending', 'pending_partners') " +
+                        "ORDER BY la.created_at DESC";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                Map<String, Object> application = new HashMap<>();
+                application.put("loan_application_id", rs.getString("loan_application_id"));
+                application.put("apply_amount", rs.getBigDecimal("apply_amount"));
+                application.put("purpose", rs.getString("purpose"));
+                application.put("application_type", rs.getString("application_type"));
+                application.put("created_at", rs.getTimestamp("created_at"));
+                application.put("product_name", rs.getString("product_name"));
+                application.put("farmer_name", rs.getString("farmer_name"));
+                application.put("farmer_phone", rs.getString("farmer_phone"));
+                applications.add(application);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return applications;
     }
 
 }

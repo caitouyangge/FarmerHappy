@@ -43,24 +43,27 @@ public class ContentServiceImpl implements ContentService {
             throw new SecurityException("用户认证失败，请检查手机号或重新登录");
         }
 
-        // 3. 获取用户角色
-        String userRole = databaseManager.getUserRole(user.getUid());
-        if (userRole == null) {
+        // 3. 获取用户角色（支持多重身份）
+        List<String> userRoles = databaseManager.getUserRole(user.getUid());
+        if (userRoles == null || userRoles.isEmpty()) {
             throw new SecurityException("无法获取用户角色信息");
         }
 
-        // 4. 验证权限
-        if (!validatePermission(userRole, request.getContentType())) {
-            if (userRole.equals("farmer") && request.getContentType().equals("articles")) {
-                throw new SecurityException("权限不足，农户角色不能发布技术文章");
-            } else if (userRole.equals("expert") && !request.getContentType().equals("articles")) {
-                throw new SecurityException("权限不足，专家角色只能发布技术文章");
-            } else {
-                throw new SecurityException("权限不足");
+        // 4. 验证权限（多重身份支持）
+        if (!validatePermissionMultiRole(userRoles, request.getContentType())) {
+            String errorMsg = "权限不足";
+            if (userRoles.contains("farmer") && request.getContentType().equals("articles")) {
+                errorMsg = "权限不足，农户角色不能发布技术文章";
+            } else if (userRoles.contains("expert") && !request.getContentType().equals("articles")) {
+                errorMsg = "权限不足，专家角色只能发布技术文章";
             }
+            throw new SecurityException(errorMsg);
         }
 
-        // 5. 创建内容对象
+        // 5. 选择最适合的角色用于创建内容
+        String selectedRole = selectBestRoleForContent(userRoles, request.getContentType());
+
+        // 6. 创建内容对象
         Content content = new Content(
             request.getTitle(),
             request.getContent(),
@@ -68,10 +71,10 @@ public class ContentServiceImpl implements ContentService {
             request.getImages(),
             user.getUid(),
             user.getNickname(),
-            userRole
+            selectedRole
         );
 
-        // 6. 保存到数据库
+        // 7. 保存到数据库
         saveContent(content);
 
         // 7. 构建响应
@@ -162,6 +165,43 @@ public class ContentServiceImpl implements ContentService {
         }
         
         return false;
+    }
+
+    /**
+     * 支持多重身份的权限验证
+     */
+    public boolean validatePermissionMultiRole(List<String> userRoles, String contentType) {
+        // 如果用户有多重身份，只要其中一个身份有权限就可以发布
+        for (String role : userRoles) {
+            if (validatePermission(role, contentType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 根据内容类型确定最适合的用户角色
+     */
+    public String selectBestRoleForContent(List<String> userRoles, String contentType) {
+        // 优先级：专家发布技术文章，农户发布问题和经验
+        if ("articles".equals(contentType) && userRoles.contains("expert")) {
+            return "expert";
+        }
+        if (("questions".equals(contentType) || "experiences".equals(contentType)) 
+            && userRoles.contains("farmer")) {
+            return "farmer";
+        }
+        
+        // 如果没有完美匹配，返回第一个有权限的角色
+        for (String role : userRoles) {
+            if (validatePermission(role, contentType)) {
+                return role;
+            }
+        }
+        
+        // 如果都没有权限，返回第一个角色用于错误提示
+        return userRoles.isEmpty() ? null : userRoles.get(0);
     }
 
     @Override

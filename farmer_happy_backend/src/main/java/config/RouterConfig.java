@@ -70,6 +70,24 @@ public class RouterConfig {
             return financingController.disburseLoan(request);
         }
 
+        // 银行审批信贷额度申请
+        if ("/api/v1/bank/credit/approve".equals(path) && "POST".equals(method)) {
+            CreditApprovalRequestDTO request = parseCreditApprovalRequest(requestBody);
+            return financingController.approveCreditApplication(request);
+        }
+
+        // 获取待审批的信贷额度申请列表
+        if ("/api/v1/bank/credit/pending".equals(path) && "POST".equals(method)) {
+            String phone = (String) requestBody.get("phone");
+            return financingController.getPendingCreditApplications(phone);
+        }
+
+        // 获取待审批的贷款申请列表
+        if ("/api/v1/bank/loans/pending".equals(path) && "POST".equals(method)) {
+            String phone = (String) requestBody.get("phone");
+            return financingController.getPendingLoanApplications(phone);
+        }
+
         // 查询可用贷款额度
         if ("/api/v1/financing/credit/limit".equals(path) && "POST".equals(method)) {
             CreditLimitRequestDTO request = parseCreditLimitRequest(requestBody);
@@ -80,6 +98,12 @@ public class RouterConfig {
         if ("/api/v1/financing/credit/apply".equals(path) && "POST".equals(method)) {
             CreditApplicationRequestDTO request = parseCreditApplicationRequest(requestBody);
             return financingController.applyForCreditLimit(request);
+        }
+
+        // 获取农户申请记录
+        if ("/api/v1/financing/credit/applications".equals(path) && "POST".equals(method)) {
+            String phone = (String) requestBody.get("phone");
+            return financingController.getFarmerCreditApplications(phone);
         }
 
         // 查询可申请的贷款产品
@@ -549,6 +573,24 @@ public class RouterConfig {
      */
     private LoanApprovalRequestDTO parseLoanApprovalRequest(Map<String, Object> requestBody) {
         LoanApprovalRequestDTO request = new LoanApprovalRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        request.setApplication_id((String) requestBody.get("application_id"));
+        request.setAction((String) requestBody.get("action"));
+        request.setReject_reason((String) requestBody.get("reject_reason"));
+
+        // 处理数值类型字段
+        if (requestBody.get("approved_amount") instanceof Number) {
+            request.setApproved_amount(BigDecimal.valueOf(((Number) requestBody.get("approved_amount")).doubleValue()));
+        }
+
+        return request;
+    }
+
+    /**
+     * 解析信贷额度审批请求
+     */
+    private CreditApprovalRequestDTO parseCreditApprovalRequest(Map<String, Object> requestBody) {
+        CreditApprovalRequestDTO request = new CreditApprovalRequestDTO();
         request.setPhone((String) requestBody.get("phone"));
         request.setApplication_id((String) requestBody.get("application_id"));
         request.setAction((String) requestBody.get("action"));
