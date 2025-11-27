@@ -88,6 +88,12 @@ public class RouterConfig {
             return financingController.getPendingLoanApplications(phone);
         }
 
+        // 获取已审批待放款的贷款申请列表
+        if ("/api/v1/bank/loans/approved".equals(path) && "POST".equals(method)) {
+            String phone = (String) requestBody.get("phone");
+            return financingController.getApprovedLoanApplications(phone);
+        }
+
         // 查询可用贷款额度
         if ("/api/v1/financing/credit/limit".equals(path) && "POST".equals(method)) {
             CreditLimitRequestDTO request = parseCreditLimitRequest(requestBody);
@@ -104,6 +110,18 @@ public class RouterConfig {
         if ("/api/v1/financing/credit/applications".equals(path) && "POST".equals(method)) {
             String phone = (String) requestBody.get("phone");
             return financingController.getFarmerCreditApplications(phone);
+        }
+
+        // 获取农户已放款的贷款列表
+        if ("/api/v1/financing/loans/list".equals(path) && "POST".equals(method)) {
+            String phone = (String) requestBody.get("phone");
+            return financingController.getFarmerLoans(phone);
+        }
+
+        // 获取农户贷款申请记录
+        if ("/api/v1/financing/loans/applications".equals(path) && "POST".equals(method)) {
+            String phone = (String) requestBody.get("phone");
+            return financingController.getFarmerLoanApplications(phone);
         }
 
         // 查询可申请的贷款产品

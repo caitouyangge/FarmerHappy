@@ -52,7 +52,7 @@
                 </div>
                 <div class="loan-detail">
                   <span class="detail-label">年利率：</span>
-                  <span class="detail-value">{{ (loan.interest_rate * 100).toFixed(2) }}%</span>
+                  <span class="detail-value">{{ (loan.interest_rate ).toFixed(2) }}%</span>
                 </div>
                 <div class="loan-detail">
                   <span class="detail-label">贷款期限：</span>
@@ -111,61 +111,81 @@
                 </div>
                 <div class="overview-item">
                   <span class="overview-label">年利率：</span>
-                  <span class="overview-value">{{ (schedule.interest_rate * 100).toFixed(2) }}%</span>
+                  <span class="overview-value">{{ (schedule.interest_rate ).toFixed(2) }}%</span>
                 </div>
                 <div class="overview-item">
                   <span class="overview-label">贷款期限：</span>
                   <span class="overview-value">{{ schedule.term_months }} 个月</span>
                 </div>
-                <div class="overview-item">
-                  <span class="overview-label">还款方式：</span>
-                  <span class="overview-value">{{ getRepaymentMethodText(schedule.repayment_method) }}</span>
-                </div>
-                <div class="overview-item">
-                  <span class="overview-label">已还金额：</span>
-                  <span class="overview-value">¥{{ formatAmount(schedule.total_paid || 0) }}</span>
-                </div>
-                <div class="overview-item">
-                  <span class="overview-label">剩余金额：</span>
-                  <span class="overview-value highlight">¥{{ formatAmount(schedule.remaining_amount || 0) }}</span>
-                </div>
               </div>
             </div>
 
-            <!-- 还款计划表格 -->
-            <div class="schedule-table-container">
-              <h3 class="table-title">还款明细</h3>
-              <table class="schedule-table">
-                <thead>
-                  <tr>
-                    <th>期数</th>
-                    <th>还款日期</th>
-                    <th>本金</th>
-                    <th>利息</th>
-                    <th>合计</th>
-                    <th>状态</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(item, index) in schedule.repayment_plan" :key="index">
-                    <td>{{ item.period || index + 1 }}</td>
-                    <td>{{ formatDate(item.due_date) }}</td>
-                    <td>¥{{ formatAmount(item.principal) }}</td>
-                    <td>¥{{ formatAmount(item.interest) }}</td>
-                    <td class="total-amount">¥{{ formatAmount(item.total) }}</td>
-                    <td>
-                      <span :class="['status-badge', `status-${item.status || 'pending'}`]">
-                        {{ getStatusText(item.status) }}
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <!-- 简化还款区域 -->
+            <div class="simple-repayment-container">
+              <h3 class="table-title">贷款还款</h3>
+              <div class="repayment-summary">
+                <div class="summary-grid">
+                  <div class="summary-item">
+                    <span class="summary-label">贷款总额：</span>
+                    <span class="summary-value">¥{{ formatAmount(schedule.loan_amount) }}</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">已还金额：</span>
+                    <span class="summary-value">¥{{ formatAmount(schedule.summary?.total_paid || 0) }}</span>
+                  </div>
+                  <div class="summary-item highlight">
+                    <span class="summary-label">剩余欠款：</span>
+                    <span class="summary-value">¥{{ formatAmount(getRemainingDebt()) }}</span>
+                  </div>
+                </div>
+                
+                <div v-if="getRemainingDebt() > 0 && schedule.loan_status === 'active'" class="repayment-action">
+                  <div class="repayment-form">
+                    <div class="form-group">
+                      <label>还款金额（¥）</label>
+                      <input 
+                        type="number" 
+                        v-model="repaymentAmount"
+                        :max="getRemainingDebt()"
+                        :min="1"
+                        step="0.01"
+                        class="form-control"
+                        placeholder="输入要还款的金额"
+                      />
+                    </div>
+                    <div class="form-actions">
+                      <button 
+                        class="btn btn-outline btn-sm"
+                        @click="setFullRepayment"
+                      >
+                        全额还清
+                      </button>
+                      <button 
+                        class="btn btn-primary"
+                        @click="executeRepayment"
+                        :disabled="!repaymentAmount || repaymentAmount <= 0 || repaymentAmount > getRemainingDebt() || processingRepayment"
+                      >
+                        {{ processingRepayment ? '处理中...' : '确认还款' }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div v-else-if="getRemainingDebt() <= 0" class="repayment-completed">
+                  <div class="completed-icon">✅</div>
+                  <p class="completed-text">贷款已全部还清</p>
+                </div>
+                
+                <div v-else class="repayment-disabled">
+                  <p class="disabled-text">当前贷款状态不允许还款</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -186,6 +206,8 @@ export default {
     const loadingLoans = ref(false);
     const error = ref('');
     const loansError = ref('');
+    const processingRepayment = ref(false);
+    const repaymentAmount = ref('');
 
     onMounted(() => {
       const storedUser = localStorage.getItem('user');
@@ -209,13 +231,10 @@ export default {
       try {
         logger.info('FINANCING', '开始加载贷款列表', { phone: userInfo.value.phone });
         
-        // TODO: 这里需要后端提供获取用户贷款列表的API
-        // 目前先使用空数组，等待后端实现
-        // const data = await financingService.getLoanList(userInfo.value.phone);
-        // loans.value = data.loans || [];
+        const data = await financingService.getFarmerLoans(userInfo.value.phone);
+        loans.value = data.loans || [];
         
-        logger.warn('FINANCING', '获取贷款列表API未实现，显示空列表');
-        loans.value = [];
+        logger.info('FINANCING', '贷款列表加载成功', { count: loans.value.length });
       } catch (err) {
         logger.error('FINANCING', '加载贷款列表失败', {
           errorMessage: err.message || err
@@ -318,6 +337,87 @@ export default {
       return statusMap[status] || status || '未知';
     };
 
+    // 计算剩余欠款
+    const getRemainingDebt = () => {
+      if (!schedule.value) return 0;
+      
+      // 优先使用summary中的remaining_total
+      if (schedule.value.summary?.remaining_total) {
+        return schedule.value.summary.remaining_total;
+      }
+      
+      // 如果没有summary，简单计算：剩余本金
+      if (schedule.value.remaining_principal) {
+        return schedule.value.remaining_principal;
+      }
+      
+      // 最后兜底：总应还款额 - 已还款额
+      const totalAmount = schedule.value.loan_amount || 0;
+      const paidAmount = schedule.value.total_paid || 0;
+      return Math.max(0, totalAmount - paidAmount);
+    };
+
+    // 设置全额还款
+    const setFullRepayment = () => {
+      repaymentAmount.value = getRemainingDebt();
+    };
+
+    // 执行还款
+    const executeRepayment = async () => {
+      if (!repaymentAmount.value || repaymentAmount.value <= 0) {
+        alert('请输入有效的还款金额');
+        return;
+      }
+
+      if (repaymentAmount.value > getRemainingDebt()) {
+        alert('还款金额不能超过剩余欠款');
+        return;
+      }
+
+      processingRepayment.value = true;
+
+      try {
+        logger.info('FINANCING', '开始执行还款', {
+          loanId: selectedLoanId.value,
+          amount: repaymentAmount.value
+        });
+
+        // 判断还款类型
+        const repaymentType = repaymentAmount.value >= getRemainingDebt() ? 'advance' : 'partial';
+        
+        const result = await financingService.makeRepayment(
+          userInfo.value.phone,
+          selectedLoanId.value,
+          parseFloat(repaymentAmount.value),
+          repaymentType, // partial: 部分还款, advance: 提前全额还款
+          '', // 不需要账户信息
+          `${repaymentType === 'advance' ? '提前全额还款' : '部分还款'}：${repaymentAmount.value}元`
+        );
+
+        logger.info('FINANCING', '还款执行成功', { result });
+
+        // 显示成功消息
+        alert(`还款成功！已还款 ¥${repaymentAmount.value}`);
+
+        // 重置还款金额
+        repaymentAmount.value = '';
+
+        // 重新加载还款计划
+        await loadSchedule(selectedLoanId.value);
+
+        // 重新加载贷款列表
+        await loadLoans();
+
+      } catch (err) {
+        logger.error('FINANCING', '还款执行失败', {
+          errorMessage: err.message || err
+        }, err);
+        alert(err.message || '还款失败，请稍后重试');
+      } finally {
+        processingRepayment.value = false;
+      }
+    };
+
     const handleClose = () => {
       emit('close');
     };
@@ -331,6 +431,8 @@ export default {
       loadingLoans,
       error,
       loansError,
+      processingRepayment,
+      repaymentAmount,
       formatAmount,
       formatDate,
       getRepaymentMethodText,
@@ -339,6 +441,9 @@ export default {
       loadLoans,
       viewSchedule,
       backToList,
+      getRemainingDebt,
+      setFullRepayment,
+      executeRepayment,
       handleClose
     };
   }
@@ -724,5 +829,153 @@ export default {
 
 .refresh-icon, .back-icon {
   font-size: 1rem;
+}
+
+/* 简化还款样式 */
+.simple-repayment-container {
+  background: var(--white);
+  border-radius: 12px;
+  border: 1px solid var(--gray-200);
+  overflow: hidden;
+}
+
+.repayment-summary {
+  padding: 1.5rem;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--gray-200);
+}
+
+.summary-item.highlight {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.summary-label {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+  margin-bottom: 0.5rem;
+}
+
+.summary-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.summary-item.highlight .summary-value {
+  color: var(--primary);
+}
+
+.repayment-action {
+  background: var(--gray-50);
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--gray-200);
+}
+
+.repayment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1a202c;
+}
+
+.form-control {
+  padding: 0.75rem;
+  border: 2px solid var(--gray-200);
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 2px solid var(--primary);
+  color: var(--primary);
+}
+
+.btn-outline:hover {
+  background: var(--primary);
+  color: var(--white);
+}
+
+.repayment-completed {
+  text-align: center;
+  padding: 2rem;
+  background: #f0fdf4;
+  border: 1px solid #16a34a;
+  border-radius: 8px;
+}
+
+.completed-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.completed-text {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #16a34a;
+  margin: 0;
+}
+
+.repayment-disabled {
+  text-align: center;
+  padding: 2rem;
+  background: var(--gray-100);
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+}
+
+.disabled-text {
+  font-size: 1rem;
+  color: var(--gray-600);
+  margin: 0;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  border-radius: 0 0 16px 16px;
 }
 </style>

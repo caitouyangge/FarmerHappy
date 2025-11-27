@@ -3,7 +3,6 @@ package dto.financing;
 
 import java.math.BigDecimal;
 import java.sql.Date;
-import java.sql.Timestamp;
 
 public class RepaymentScheduleResponseDTO {
     private String loan_id;
@@ -21,6 +20,7 @@ public class RepaymentScheduleResponseDTO {
     private DueInfo current_due;
     private PaymentInfo next_payment;
     private SummaryInfo summary;
+    private java.util.List<RepaymentPlanItem> repayment_plan;
 
     // Getters and Setters
     public String getLoan_id() { return loan_id; }
@@ -67,6 +67,9 @@ public class RepaymentScheduleResponseDTO {
 
     public SummaryInfo getSummary() { return summary; }
     public void setSummary(SummaryInfo summary) { this.summary = summary; }
+
+    public java.util.List<RepaymentPlanItem> getRepayment_plan() { return repayment_plan; }
+    public void setRepayment_plan(java.util.List<RepaymentPlanItem> repayment_plan) { this.repayment_plan = repayment_plan; }
 
     public static class DueInfo {
         private Date due_date;
@@ -142,5 +145,33 @@ public class RepaymentScheduleResponseDTO {
 
         public BigDecimal getRemaining_interest() { return remaining_interest; }
         public void setRemaining_interest(BigDecimal remaining_interest) { this.remaining_interest = remaining_interest; }
+    }
+
+    public static class RepaymentPlanItem {
+        private int period;
+        private Date due_date;
+        private BigDecimal principal;
+        private BigDecimal interest;
+        private BigDecimal total;
+        private String status; // pending, paid, overdue
+
+        // Getters and Setters
+        public int getPeriod() { return period; }
+        public void setPeriod(int period) { this.period = period; }
+
+        public Date getDue_date() { return due_date; }
+        public void setDue_date(Date due_date) { this.due_date = due_date; }
+
+        public BigDecimal getPrincipal() { return principal; }
+        public void setPrincipal(BigDecimal principal) { this.principal = principal; }
+
+        public BigDecimal getInterest() { return interest; }
+        public void setInterest(BigDecimal interest) { this.interest = interest; }
+
+        public BigDecimal getTotal() { return total; }
+        public void setTotal(BigDecimal total) { this.total = total; }
+
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 }

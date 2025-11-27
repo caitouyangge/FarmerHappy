@@ -6,6 +6,7 @@ import entity.Content;
 import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -550,6 +551,9 @@ public class DatabaseManager {
 
             dbStatement.close();
             dbConnection.close();
+
+            // 初始化测试数据
+            initializeTestLoanData();
 
             System.out.println("数据库初始化完成");
 
@@ -2684,6 +2688,132 @@ public class DatabaseManager {
     }
 
     /**
+     * 初始化测试贷款数据
+     */
+    public void initializeTestLoanData() throws SQLException {
+        Connection conn = getConnection();
+        try {
+            // 检查是否已经有贷款数据
+            String checkSql = "SELECT COUNT(*) FROM loans WHERE loan_status IN ('active', 'overdue')";
+            PreparedStatement checkStmt = conn.prepareStatement(checkSql);
+            ResultSet rs = checkStmt.executeQuery();
+            rs.next();
+            int count = rs.getInt(1);
+            rs.close();
+            checkStmt.close();
+            
+            // 如果已经有活跃贷款，则不重复创建
+            if (count > 0) {
+                return;
+            }
+            
+            // 获取第一个农户ID（假设农户ID为1）
+            String farmerSql = "SELECT farmer_id FROM farmers LIMIT 1";
+            PreparedStatement farmerStmt = conn.prepareStatement(farmerSql);
+            ResultSet farmerRs = farmerStmt.executeQuery();
+            if (!farmerRs.next()) {
+                // 没有农户，先返回
+                farmerRs.close();
+                farmerStmt.close();
+                return;
+            }
+            Long farmerId = farmerRs.getLong("farmer_id");
+            farmerRs.close();
+            farmerStmt.close();
+            
+            // 获取第一个贷款产品ID
+            String productSql = "SELECT id FROM loan_products LIMIT 1";
+            PreparedStatement productStmt = conn.prepareStatement(productSql);
+            ResultSet productRs = productStmt.executeQuery();
+            if (!productRs.next()) {
+                // 没有贷款产品，先返回
+                productRs.close();
+                productStmt.close();
+                return;
+            }
+            Long productId = productRs.getLong("id");
+            productRs.close();
+            productStmt.close();
+            
+            // 创建测试贷款数据
+            String loanId = "LOAN" + System.currentTimeMillis();
+            BigDecimal loanAmount = new BigDecimal("50000.00");
+            BigDecimal interestRate = new BigDecimal("12.00"); // 12%年利率
+            int termMonths = 12;
+            BigDecimal totalRepaymentAmount = new BigDecimal("56000.00");
+            BigDecimal monthlyPayment = totalRepaymentAmount.divide(
+                new BigDecimal(termMonths), 2, BigDecimal.ROUND_HALF_UP);
+            BigDecimal totalPaidAmount = new BigDecimal("10000.00"); // 已还1万元
+            BigDecimal remainingAmount = totalRepaymentAmount.subtract(totalPaidAmount); // 剩余4.6万元
+            
+            // 当前日期
+            Timestamp now = new Timestamp(System.currentTimeMillis());
+            Date disburseDate = new Date(now.getTime());
+            
+            // 首次还款日期（放款后一个月）
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(disburseDate);
+            calendar.add(Calendar.MONTH, 1);
+            Date firstRepaymentDate = new Date(calendar.getTimeInMillis());
+            
+            // 下次还款日期（当前期数的还款日）
+            calendar.setTime(firstRepaymentDate);
+            calendar.add(Calendar.MONTH, 2); // 假设已还款2期，现在是第3期
+            Date nextPaymentDate = new Date(calendar.getTimeInMillis());
+            
+            String insertSql = "INSERT INTO loans (loan_id, farmer_id, product_id, loan_amount, interest_rate, term_months, "
+                    + "repayment_method, disburse_amount, disburse_method, disburse_date, first_repayment_date, "
+                    + "loan_account, disburse_remarks, loan_status, total_repayment_amount, total_paid_amount, "
+                    + "total_paid_principal, total_paid_interest, remaining_principal, current_period, "
+                    + "next_payment_date, next_payment_amount, overdue_days, overdue_amount, purpose, "
+                    + "repayment_source, is_joint_loan, created_at, updated_at) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    
+            PreparedStatement stmt = conn.prepareStatement(insertSql);
+            stmt.setString(1, loanId);
+            stmt.setLong(2, farmerId);
+            stmt.setLong(3, productId);
+            stmt.setBigDecimal(4, loanAmount);
+            stmt.setBigDecimal(5, interestRate);
+            stmt.setInt(6, termMonths);
+            stmt.setString(7, "equal_installment");
+            stmt.setBigDecimal(8, loanAmount);
+            stmt.setString(9, "bank_transfer");
+            stmt.setDate(10, disburseDate);
+            stmt.setDate(11, firstRepaymentDate);
+            stmt.setString(12, "6222021234567890123");
+            stmt.setString(13, "测试贷款数据");
+            stmt.setString(14, "active");
+            stmt.setBigDecimal(15, totalRepaymentAmount);
+            stmt.setBigDecimal(16, totalPaidAmount); // 已还1万元
+            stmt.setBigDecimal(17, new BigDecimal("8500.00")); // 已还本金
+            stmt.setBigDecimal(18, new BigDecimal("1500.00")); // 已还利息
+            stmt.setBigDecimal(19, loanAmount.subtract(new BigDecimal("8500.00"))); // 剩余本金
+            stmt.setInt(20, 3); // 当前期数
+            stmt.setDate(21, nextPaymentDate);
+            stmt.setBigDecimal(22, monthlyPayment);
+            stmt.setInt(23, 0);
+            stmt.setBigDecimal(24, new BigDecimal("0.00"));
+            stmt.setString(25, "农业生产资金需求");
+            stmt.setString(26, "农产品销售收入");
+            stmt.setBoolean(27, false);
+            stmt.setTimestamp(28, now);
+            stmt.setTimestamp(29, now);
+            
+            stmt.executeUpdate();
+            stmt.close();
+            
+            System.out.println("测试贷款数据初始化完成：" + loanId);
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("初始化测试贷款数据失败：" + e.getMessage());
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
      * 获取所有激活的贷款产品
      */
     public List<entity.financing.LoanProduct> getAllActiveLoanProducts() throws SQLException {
@@ -3034,6 +3164,170 @@ public class DatabaseManager {
                 application.put("product_name", rs.getString("product_name"));
                 application.put("farmer_name", rs.getString("farmer_name"));
                 application.put("farmer_phone", rs.getString("farmer_phone"));
+                applications.add(application);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return applications;
+    }
+
+    /**
+     * 获取已审批待放款的贷款申请列表
+     */
+    public List<Map<String, Object>> getApprovedLoanApplicationsList() throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> applications = new ArrayList<>();
+        try {
+            String sql = "SELECT la.loan_application_id, la.apply_amount, la.approved_amount, la.purpose, " +
+                        "la.application_type, la.created_at, la.approved_at, lp.product_name, lp.interest_rate, " +
+                        "lp.term_months, lp.repayment_method, u.nickname as farmer_name, u.phone as farmer_phone, " +
+                        "approver.nickname as approver_name " +
+                        "FROM loan_applications la " +
+                        "JOIN user_farmers uf ON la.farmer_id = uf.farmer_id " +
+                        "JOIN users u ON uf.uid = u.uid " +
+                        "JOIN loan_products lp ON la.product_id = lp.id " +
+                        "LEFT JOIN user_banks ub ON la.approved_by = ub.bank_id " +
+                        "LEFT JOIN users approver ON ub.uid = approver.uid " +
+                        "WHERE la.status = 'approved' " +
+                        "ORDER BY la.approved_at DESC";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                Map<String, Object> application = new HashMap<>();
+                application.put("loan_application_id", rs.getString("loan_application_id"));
+                application.put("apply_amount", rs.getBigDecimal("apply_amount"));
+                application.put("approved_amount", rs.getBigDecimal("approved_amount"));
+                application.put("purpose", rs.getString("purpose"));
+                application.put("application_type", rs.getString("application_type"));
+                application.put("created_at", rs.getTimestamp("created_at"));
+                application.put("approved_at", rs.getTimestamp("approved_at"));
+                application.put("product_name", rs.getString("product_name"));
+                application.put("interest_rate", rs.getBigDecimal("interest_rate"));
+                application.put("term_months", rs.getInt("term_months"));
+                application.put("repayment_method", rs.getString("repayment_method"));
+                application.put("farmer_name", rs.getString("farmer_name"));
+                application.put("farmer_phone", rs.getString("farmer_phone"));
+                application.put("approver_name", rs.getString("approver_name"));
+                applications.add(application);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return applications;
+    }
+
+    /**
+     * 根据农户ID获取已放款的贷款记录列表
+     */
+    public List<Map<String, Object>> getLoansByFarmerId(Long farmerId) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> loans = new ArrayList<>();
+        try {
+            String sql = "SELECT l.id, l.loan_id, l.farmer_id, l.loan_amount, l.interest_rate, " +
+                        "l.term_months, l.repayment_method, l.disburse_amount, l.disburse_method, " +
+                        "l.disburse_date, l.first_repayment_date, l.loan_account, l.disburse_remarks, " +
+                        "l.loan_status, l.total_repayment_amount, l.total_paid_amount, l.remaining_principal, " +
+                        "l.current_period, l.next_payment_date, l.next_payment_amount, l.purpose, " +
+                        "l.repayment_source, l.is_joint_loan, l.created_at, l.updated_at, " +
+                        "lp.product_name, lp.max_amount as product_max_amount " +
+                        "FROM loans l " +
+                        "JOIN loan_products lp ON l.product_id = lp.id " +
+                        "WHERE l.farmer_id = ? AND l.loan_status IN ('active', 'overdue', 'closed') " +
+                        "ORDER BY l.disburse_date DESC";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, farmerId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                Map<String, Object> loan = new HashMap<>();
+                loan.put("id", rs.getLong("id"));
+                loan.put("loan_id", rs.getString("loan_id"));
+                loan.put("farmer_id", rs.getLong("farmer_id"));
+                loan.put("loan_amount", rs.getBigDecimal("loan_amount"));
+                loan.put("interest_rate", rs.getBigDecimal("interest_rate"));
+                loan.put("term_months", rs.getInt("term_months"));
+                loan.put("repayment_method", rs.getString("repayment_method"));
+                loan.put("disburse_amount", rs.getBigDecimal("disburse_amount"));
+                loan.put("disburse_method", rs.getString("disburse_method"));
+                loan.put("disburse_date", rs.getTimestamp("disburse_date"));
+                loan.put("first_repayment_date", rs.getDate("first_repayment_date"));
+                loan.put("loan_account", rs.getString("loan_account"));
+                loan.put("disburse_remarks", rs.getString("disburse_remarks"));
+                loan.put("loan_status", rs.getString("loan_status"));
+                loan.put("total_repayment_amount", rs.getBigDecimal("total_repayment_amount"));
+                loan.put("total_paid_amount", rs.getBigDecimal("total_paid_amount"));
+                loan.put("remaining_principal", rs.getBigDecimal("remaining_principal"));
+                loan.put("current_period", rs.getInt("current_period"));
+                loan.put("next_payment_date", rs.getDate("next_payment_date"));
+                loan.put("next_payment_amount", rs.getBigDecimal("next_payment_amount"));
+                loan.put("purpose", rs.getString("purpose"));
+                loan.put("repayment_source", rs.getString("repayment_source"));
+                loan.put("is_joint_loan", rs.getBoolean("is_joint_loan"));
+                loan.put("created_at", rs.getTimestamp("created_at"));
+                loan.put("updated_at", rs.getTimestamp("updated_at"));
+                loan.put("product_name", rs.getString("product_name"));
+                loan.put("product_max_amount", rs.getBigDecimal("product_max_amount"));
+                loans.add(loan);
+            }
+
+            rs.close();
+            stmt.close();
+        } catch (SQLException e) {
+            throw e;
+        } finally {
+            conn.close();
+        }
+
+        return loans;
+    }
+
+    /**
+     * 根据农户ID获取贷款申请记录列表
+     */
+    public List<Map<String, Object>> getLoanApplicationsByFarmerId(Long farmerId) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> applications = new ArrayList<>();
+        try {
+            String sql = "SELECT la.loan_application_id, la.apply_amount, la.approved_amount, la.purpose, " +
+                        "la.repayment_source, la.application_type, la.status, la.reject_reason, " +
+                        "la.created_at, la.approved_at, la.updated_at, lp.product_name, lp.interest_rate, " +
+                        "lp.term_months, lp.repayment_method, approver.nickname as approver_name, " +
+                        "ub.bank_name as approver_bank " +
+                        "FROM loan_applications la " +
+                        "JOIN loan_products lp ON la.product_id = lp.id " +
+                        "LEFT JOIN user_banks ub ON la.approved_by = ub.bank_id " +
+                        "LEFT JOIN users approver ON ub.uid = approver.uid " +
+                        "WHERE la.farmer_id = ? " +
+                        "ORDER BY la.created_at DESC";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, farmerId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                Map<String, Object> application = new HashMap<>();
+                application.put("loan_application_id", rs.getString("loan_application_id"));
+                application.put("apply_amount", rs.getBigDecimal("apply_amount"));
+                application.put("approved_amount", rs.getBigDecimal("approved_amount"));
+                application.put("purpose", rs.getString("purpose"));
+                application.put("repayment_source", rs.getString("repayment_source"));
+                application.put("application_type", rs.getString("application_type"));
+                application.put("status", rs.getString("status"));
+                application.put("reject_reason", rs.getString("reject_reason"));
+                application.put("created_at", rs.getTimestamp("created_at"));
+                application.put("approved_at", rs.getTimestamp("approved_at"));
+                application.put("updated_at", rs.getTimestamp("updated_at"));
+                application.put("product_name", rs.getString("product_name"));
+                application.put("interest_rate", rs.getBigDecimal("interest_rate"));
+                application.put("term_months", rs.getInt("term_months"));
+                application.put("repayment_method", rs.getString("repayment_method"));
+                application.put("approver_name", rs.getString("approver_name"));
+                application.put("approver_bank", rs.getString("approver_bank"));
                 applications.add(application);
             }
             rs.close();

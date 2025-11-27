@@ -419,6 +419,55 @@ public class FinancingController {
         }
     }
 
+    public Map<String, Object> getApprovedLoanApplications(String phone) {
+        try {
+            // 添加调试信息
+            System.out.println("=== DEBUG: 获取已审批待放款贷款申请列表 ===");
+            System.out.println("银行操作员手机号: " + phone);
+            
+            PendingLoanApplicationsResponseDTO response = financingService.getApprovedLoanApplications(phone);
+            
+            System.out.println("查询到的已审批贷款申请数量: " + (response != null ? response.getTotal() : 0));
+            
+            // 直接构建Map结构避免DTO序列化问题
+            Map<String, Object> dataMap = new HashMap<>();
+            dataMap.put("total", response != null ? response.getTotal() : 0);
+            dataMap.put("applications", response != null ? response.getApplications() : new ArrayList<>());
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 200);
+            result.put("message", "获取成功");
+            result.put("data", dataMap);
+            
+            System.out.println("=== DEBUG END ===");
+            return result;
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            if (e.getMessage().contains("用户认证失败")) {
+                result.put("code", 401);
+                result.put("message", "用户认证失败，请检查手机号或重新登录");
+            } else if (e.getMessage().contains("无银行放款权限")) {
+                result.put("code", 403);
+                result.put("message", "无权限访问");
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "phone");
+                error.put("message", "该用户无银行放款权限");
+                errors.add(error);
+                result.put("errors", errors);
+            } else {
+                result.put("code", 400);
+                result.put("message", "参数验证失败");
+            }
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 500);
+            result.put("message", e.getMessage());
+            return result;
+        }
+    }
+
     public Map<String, Object> disburseLoan(LoanDisbursementRequestDTO request) {
         try {
             LoanDisbursementResponseDTO response = financingService.disburseLoan(request);
@@ -549,6 +598,64 @@ public class FinancingController {
             Map<String, Object> result = new HashMap<>();
             result.put("code", 200);
             result.put("message", "获取申请记录成功");
+            result.put("data", response);
+            return result;
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 400);
+            result.put("message", e.getMessage());
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 500);
+            result.put("message", e.getMessage());
+            return result;
+        }
+    }
+
+    public Map<String, Object> getFarmerLoans(String phone) {
+        try {
+            // 添加调试信息
+            System.out.println("=== DEBUG: 查询农户贷款记录 ===");
+            System.out.println("农户手机号: " + phone);
+            
+            Map<String, Object> response = financingService.getFarmerLoans(phone);
+            
+            System.out.println("查询到的贷款数量: " + response.get("total"));
+            System.out.println("=== DEBUG END ===");
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 200);
+            result.put("message", "获取贷款记录成功");
+            result.put("data", response);
+            return result;
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 400);
+            result.put("message", e.getMessage());
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 500);
+            result.put("message", e.getMessage());
+            return result;
+        }
+    }
+
+    public Map<String, Object> getFarmerLoanApplications(String phone) {
+        try {
+            // 添加调试信息
+            System.out.println("=== DEBUG: 查询农户贷款申请记录 ===");
+            System.out.println("农户手机号: " + phone);
+            
+            Map<String, Object> response = financingService.getFarmerLoanApplications(phone);
+            
+            System.out.println("查询到的贷款申请数量: " + response.get("total"));
+            System.out.println("=== DEBUG END ===");
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 200);
+            result.put("message", "获取贷款申请记录成功");
             result.put("data", response);
             return result;
         } catch (IllegalArgumentException e) {

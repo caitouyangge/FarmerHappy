@@ -162,7 +162,7 @@
     />
 
     <!-- 银行放款 -->
-    <LoanDisbursementModal
+    <LoanDisbursementListModal
       v-if="showDisbursementModal"
       @close="showDisbursementModal = false"
       @success="handleDisbursementSuccess"
@@ -181,6 +181,13 @@
       @close="showPartnersModal = false"
       @select="handlePartnerSelect"
     />
+
+    <!-- 贷款申请记录 -->
+    <LoanApplicationHistoryModal
+      v-if="showLoanApplicationHistoryModal"
+      @close="showLoanApplicationHistoryModal = false"
+      @apply="handleLoanApplicationHistoryApply"
+    />
   </div>
 </template>
 
@@ -195,10 +202,11 @@ import LoanProductListModal from './components/LoanProductListModal.vue';
 import SingleLoanApplicationModal from './components/SingleLoanApplicationModal.vue';
 import JointLoanApplicationModal from './components/JointLoanApplicationModal.vue';
 import JointPartnersModal from './components/JointPartnersModal.vue';
+import LoanApplicationHistoryModal from './components/LoanApplicationHistoryModal.vue';
 import RepaymentScheduleModal from './components/RepaymentScheduleModal.vue';
 import LoanProductPublishModal from './components/LoanProductPublishModal.vue';
 import LoanApprovalModal from './components/LoanApprovalModal.vue';
-import LoanDisbursementModal from './components/LoanDisbursementModal.vue';
+import LoanDisbursementListModal from './components/LoanDisbursementListModal.vue';
 import CreditApprovalModal from './components/CreditApprovalModal.vue';
 
 export default {
@@ -210,10 +218,11 @@ export default {
     SingleLoanApplicationModal,
     JointLoanApplicationModal,
     JointPartnersModal,
+    LoanApplicationHistoryModal,
     RepaymentScheduleModal,
     LoanProductPublishModal,
     LoanApprovalModal,
-    LoanDisbursementModal,
+    LoanDisbursementListModal,
     CreditApprovalModal
   },
   setup() {
@@ -227,6 +236,7 @@ export default {
     const showSingleLoanModal = ref(false);
     const showJointLoanModal = ref(false);
     const showPartnersModal = ref(false);
+    const showLoanApplicationHistoryModal = ref(false);
     const showRepaymentModal = ref(false);
     const showPublishProductModal = ref(false);
     const showApprovalModal = ref(false);
@@ -261,10 +271,17 @@ export default {
       },
       {
         id: 'application_history',
-        name: '申请记录',
+        name: '额度申请记录',
         description: '查看额度申请历史记录及审批状态',
         icon: '📊',
         action: () => { showApplicationHistoryModal.value = true; }
+      },
+      {
+        id: 'loan_application_history',
+        name: '贷款申请记录',
+        description: '查看贷款申请状态，追踪审批进度',
+        icon: '📜',
+        action: () => { showLoanApplicationHistoryModal.value = true; }
       },
       {
         id: 'loan_products',
@@ -469,6 +486,12 @@ export default {
       }
     };
 
+    // 贷款申请记录页面申请新贷款
+    const handleLoanApplicationHistoryApply = () => {
+      showLoanApplicationHistoryModal.value = false;
+      showLoanProductModal.value = true;
+    };
+
     return {
       userInfo,
       creditLimit,
@@ -488,6 +511,7 @@ export default {
       showApprovalModal,
       showDisbursementModal,
       showCreditApprovalModal,
+      showLoanApplicationHistoryModal,
       selectedProduct,
       formatAmount,
       handleBack,
@@ -503,7 +527,8 @@ export default {
       handleApprovalSuccess,
       handleDisbursementSuccess,
       handleCreditApprovalSuccess,
-      handlePartnerSelect
+      handlePartnerSelect,
+      handleLoanApplicationHistoryApply
     };
   }
 };

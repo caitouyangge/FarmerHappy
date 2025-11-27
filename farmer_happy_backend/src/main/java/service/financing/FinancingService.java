@@ -15,7 +15,9 @@ import dto.financing.*;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.sql.Date;
 import java.util.*;
+import java.util.Calendar;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -483,6 +485,70 @@ public class FinancingService {
     }
 
     /**
+     * 获取农户的已放款贷款列表
+     */
+    public Map<String, Object> getFarmerLoans(String phone) {
+        try {
+            // 检查用户是否存在
+            User user = findUserByPhone(phone);
+            if (user == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 检查用户是否具有农户身份
+            Map<String, Object> farmerInfo = checkUserFarmerRole(user.getUid());
+            if (farmerInfo == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 获取农户的已放款贷款列表
+            Long farmerId = ((Long) farmerInfo.get("farmer_id")).longValue();
+            List<Map<String, Object>> loans = dbManager.getLoansByFarmerId(farmerId);
+
+            // 构造响应
+            Map<String, Object> response = new HashMap<>();
+            response.put("total", loans.size());
+            response.put("loans", loans);
+
+            return response;
+        } catch (Exception e) {
+            throw new RuntimeException("获取贷款列表失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 获取农户的贷款申请记录列表
+     */
+    public Map<String, Object> getFarmerLoanApplications(String phone) {
+        try {
+            // 检查用户是否存在
+            User user = findUserByPhone(phone);
+            if (user == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 检查用户是否具有农户身份
+            Map<String, Object> farmerInfo = checkUserFarmerRole(user.getUid());
+            if (farmerInfo == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 获取农户的贷款申请记录列表
+            Long farmerId = ((Long) farmerInfo.get("farmer_id")).longValue();
+            List<Map<String, Object>> applications = getLoanApplicationsByFarmerId(farmerId);
+
+            // 构造响应
+            Map<String, Object> response = new HashMap<>();
+            response.put("total", applications.size());
+            response.put("applications", applications);
+
+            return response;
+        } catch (Exception e) {
+            throw new RuntimeException("获取贷款申请记录列表失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 获取待审批的贷款申请列表
      */
     public PendingLoanApplicationsResponseDTO getPendingLoanApplications(String phone) {
@@ -510,6 +576,37 @@ public class FinancingService {
             return response;
         } catch (Exception e) {
             throw new RuntimeException("获取待审批贷款申请列表失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 获取已审批待放款的贷款申请列表
+     */
+    public PendingLoanApplicationsResponseDTO getApprovedLoanApplications(String phone) {
+        try {
+            // 检查用户是否存在且为银行用户
+            User user = findUserByPhone(phone);
+            if (user == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 检查用户是否具有银行身份
+            Map<String, Object> bankInfo = checkUserBankRole(user.getUid());
+            if (bankInfo == null) {
+                throw new IllegalArgumentException("该用户无银行放款权限");
+            }
+
+            // 获取已审批的贷款申请列表
+            List<Map<String, Object>> approvedApplications = getApprovedLoanApplicationsList();
+
+            // 构造响应
+            PendingLoanApplicationsResponseDTO response = new PendingLoanApplicationsResponseDTO();
+            response.setTotal(approvedApplications.size());
+            response.setApplications(approvedApplications);
+
+            return response;
+        } catch (Exception e) {
+            throw new RuntimeException("获取已审批贷款申请列表失败: " + e.getMessage(), e);
         }
     }
 
@@ -1298,6 +1395,10 @@ public class FinancingService {
         summaryInfo.setRemaining_interest(totalRepaymentAmount.subtract(loanAmount));
         response.setSummary(summaryInfo);
 
+        // 生成详细的还款计划
+        List<RepaymentScheduleResponseDTO.RepaymentPlanItem> repaymentPlan = generateRepaymentPlan(loan);
+        response.setRepayment_plan(repaymentPlan);
+
         return response;
     }
 
@@ -1536,7 +1637,7 @@ public class FinancingService {
         if (request.getRepayment_method() == null || request.getRepayment_method().trim().isEmpty()) {
             errors.add(createError("repayment_method", "还款方式不能为空"));
         } else if (!Arrays.asList("normal", "partial", "advance").contains(request.getRepayment_method())) {
-            errors.add(createError("repayment_method", "还款方式必须是 normal、partial 或 advance"));
+            errors.add(createError("repayment_method", "还款方式必须是 normal（正常还款）、partial（部分还款）或 advance（提前还款）"));
         }
 
         if (request.getRepayment_amount() != null && request.getRepayment_amount().compareTo(BigDecimal.ZERO) <= 0) {
@@ -1627,13 +1728,33 @@ public class FinancingService {
         // 更新贷款状态
         updateLoanAfterRepayment(loan, repayment, isJointPartner, partnerFarmerId);
 
+        // 计算本金和利息分配
+        BigDecimal repaymentAmount = request.getRepayment_amount();
+        // 注意：数据库中存储的利率已经是百分比形式（如12.00表示12%），所以需要除以100
+        BigDecimal monthlyInterest = loan.getRemainingPrincipal().multiply(loan.getInterestRate())
+            .divide(BigDecimal.valueOf(100), 4, BigDecimal.ROUND_HALF_UP)
+            .divide(BigDecimal.valueOf(12), 2, BigDecimal.ROUND_HALF_UP);
+        
+        BigDecimal principalAmount;
+        BigDecimal interestAmount;
+        
+        // 简化计算：如果还款金额大于等于月利息，剩余部分归本金
+        if (repaymentAmount.compareTo(monthlyInterest) >= 0) {
+            interestAmount = monthlyInterest;
+            principalAmount = repaymentAmount.subtract(monthlyInterest);
+        } else {
+            // 还款金额不足以覆盖利息，全部算作利息
+            interestAmount = repaymentAmount;
+            principalAmount = BigDecimal.ZERO;
+        }
+
         // 构造响应
         RepaymentResponseDTO response = new RepaymentResponseDTO();
         response.setRepayment_id("REP" + System.currentTimeMillis()); // 生成虚拟ID
         response.setLoan_id(loan.getLoanId());
         response.setRepayment_amount(request.getRepayment_amount());
-        response.setPrincipal_amount(BigDecimal.ZERO);
-        response.setInterest_amount(BigDecimal.ZERO);
+        response.setPrincipal_amount(principalAmount);
+        response.setInterest_amount(interestAmount);
         response.setRemaining_principal(loan.getRemainingPrincipal());
         response.setRepayment_method(request.getRepayment_method());
         response.setRepayment_date(repayment.getRepaymentDate());
@@ -1649,6 +1770,90 @@ public class FinancingService {
         return response;
     }
 
+    /**
+     * 生成还款计划明细
+     */
+    private List<RepaymentScheduleResponseDTO.RepaymentPlanItem> generateRepaymentPlan(entity.financing.Loan loan) {
+        List<RepaymentScheduleResponseDTO.RepaymentPlanItem> repaymentPlan = new ArrayList<>();
+        
+        // 基础数据
+        int totalPeriods = loan.getTermMonths();
+        BigDecimal loanAmount = safeBigDecimal(loan.getLoanAmount());
+        BigDecimal interestRate = safeBigDecimal(loan.getInterestRate());
+        BigDecimal totalRepaymentAmount = safeBigDecimal(loan.getTotalRepaymentAmount());
+        int currentPeriod = loan.getCurrentPeriod() > 0 ? loan.getCurrentPeriod() : 1;
+        
+        // 计算每期还款金额（等额本息）
+        BigDecimal monthlyPayment = totalRepaymentAmount.divide(
+            BigDecimal.valueOf(totalPeriods), 2, BigDecimal.ROUND_HALF_UP);
+        
+        // 计算月利率
+        BigDecimal monthlyInterestRate = interestRate.divide(
+            BigDecimal.valueOf(100).multiply(BigDecimal.valueOf(12)), 6, BigDecimal.ROUND_HALF_UP);
+        
+        // 剩余本金初始值
+        BigDecimal remainingPrincipal = loanAmount;
+        
+        // 生成每期计划
+        Calendar calendar = Calendar.getInstance();
+        if (loan.getFirstRepaymentDate() != null) {
+            calendar.setTime(loan.getFirstRepaymentDate());
+        } else {
+            calendar.setTime(loan.getDisburseDate());
+            calendar.add(Calendar.MONTH, 1); // 放款后一个月开始还款
+        }
+        
+        for (int i = 1; i <= totalPeriods; i++) {
+            RepaymentScheduleResponseDTO.RepaymentPlanItem item = new RepaymentScheduleResponseDTO.RepaymentPlanItem();
+            
+            // 设置期数和到期日期
+            item.setPeriod(i);
+            item.setDue_date(new java.sql.Date(calendar.getTimeInMillis()));
+            
+            // 计算本期利息
+            BigDecimal interestAmount = remainingPrincipal.multiply(monthlyInterestRate);
+            
+            // 计算本期本金
+            BigDecimal principalAmount = monthlyPayment.subtract(interestAmount);
+            
+            // 最后一期调整，确保本金完全还清
+            if (i == totalPeriods) {
+                principalAmount = remainingPrincipal;
+                monthlyPayment = principalAmount.add(interestAmount);
+            }
+            
+            item.setPrincipal(principalAmount);
+            item.setInterest(interestAmount);
+            item.setTotal(monthlyPayment);
+            
+            // 确定状态
+            String status;
+            if (i < currentPeriod) {
+                status = "paid";
+            } else if (i == currentPeriod) {
+                // 检查是否逾期
+                Date today = new Date(System.currentTimeMillis());
+                if (item.getDue_date().before(today)) {
+                    status = "overdue";
+                } else {
+                    status = "pending";
+                }
+            } else {
+                status = "pending";
+            }
+            item.setStatus(status);
+            
+            repaymentPlan.add(item);
+            
+            // 更新剩余本金
+            remainingPrincipal = remainingPrincipal.subtract(principalAmount);
+            
+            // 下一期日期
+            calendar.add(Calendar.MONTH, 1);
+        }
+        
+        return repaymentPlan;
+    }
 
     // 私有辅助方法：计算应还金额（按日计息）
     private BigDecimal calculateDueAmount(entity.financing.Loan loan) {
@@ -2095,6 +2300,14 @@ public class FinancingService {
 
     private List<Map<String, Object>> getPendingLoanApplicationsList() throws SQLException {
         return dbManager.getPendingLoanApplicationsList();
+    }
+
+    private List<Map<String, Object>> getApprovedLoanApplicationsList() throws SQLException {
+        return dbManager.getApprovedLoanApplicationsList();
+    }
+
+    private List<Map<String, Object>> getLoanApplicationsByFarmerId(Long farmerId) throws SQLException {
+        return dbManager.getLoanApplicationsByFarmerId(farmerId);
     }
 
 }
