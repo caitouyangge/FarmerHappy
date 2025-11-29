@@ -59,9 +59,14 @@ public class FinancingService {
 
             // 创建贷款产品
             LoanProduct loanProduct = new LoanProduct();
-            String productId = "PROD" + new Timestamp(System.currentTimeMillis()).toString().substring(0, 10).replace("-", "") +
+            // 修复产品ID生成逻辑，使用更可靠的格式
+            String timestamp = String.valueOf(System.currentTimeMillis());
+            String productId = "PROD" + timestamp.substring(timestamp.length() - 10) + 
                     String.format("%04d", productIdCounter.getAndIncrement());
             loanProduct.setProductId(productId);
+            
+            // 调试输出
+            System.out.println("DEBUG: 生成的产品ID = " + productId);
 
             String productCode = request.getProduct_code();
             if (productCode == null || productCode.trim().isEmpty()) {
@@ -970,6 +975,307 @@ public class FinancingService {
         }
     }
 
+    /**
+     * 智能贷款申请推荐 - 根据申请金额智能推荐单人贷款或联合贷款
+     */
+    public SmartLoanRecommendationResponseDTO getSmartLoanRecommendation(SmartLoanRecommendationRequestDTO request) {
+        try {
+            // 参数验证
+            List<Map<String, String>> errors = new ArrayList<>();
+            validateSmartLoanRecommendationRequest(request, errors);
+            if (!errors.isEmpty()) {
+                throw new IllegalArgumentException("参数验证失败: " + errors.toString());
+            }
+
+            // 检查用户是否存在
+            User user = findUserByPhone(request.getPhone());
+            if (user == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 检查用户是否具有农户身份
+            Map<String, Object> farmerInfo = checkUserFarmerRole(user.getUid());
+            if (farmerInfo == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 获取贷款产品
+            LoanProduct loanProduct = getLoanProductById(request.getProduct_id());
+            if (loanProduct == null || !"active".equals(loanProduct.getStatus())) {
+                throw new IllegalArgumentException("指定的产品" + request.getProduct_id() + "不存在或已下架，请选择其他产品");
+            }
+
+            // 检查申请金额是否超过产品最高额度
+            if (request.getApply_amount().compareTo(loanProduct.getMaxAmount()) > 0) {
+                throw new IllegalArgumentException("申请金额超过产品最高额度");
+            }
+
+            // 获取用户信用额度
+            CreditLimit farmerCreditLimit = getCreditLimitByFarmerId(((Long) farmerInfo.get("farmer_id")).longValue());
+            if (farmerCreditLimit == null || !"active".equals(farmerCreditLimit.getStatus())) {
+                throw new IllegalArgumentException("您当前无可用贷款额度");
+            }
+
+            SmartLoanRecommendationResponseDTO response = new SmartLoanRecommendationResponseDTO();
+            response.setUser_available_limit(farmerCreditLimit.getAvailableLimit());
+            response.setApply_amount(request.getApply_amount());
+
+            // 检查个人额度是否足够
+            if (request.getApply_amount().compareTo(farmerCreditLimit.getAvailableLimit()) <= 0) {
+                // 个人额度足够，推荐单人贷款
+                response.setRecommendation_type("single");
+                response.setRecommendation_reason("您的可用额度足够，建议申请单人贷款，审批更快");
+                response.setCan_apply_single(true);
+                response.setCan_apply_joint(true); // 也可以选择联合贷款
+            } else {
+                // 个人额度不够，推荐联合贷款
+                BigDecimal shortage = request.getApply_amount().subtract(farmerCreditLimit.getAvailableLimit());
+                response.setRecommendation_type("joint");
+                response.setRecommendation_reason("您的可用额度不足，缺少¥" + shortage + "，建议寻找合作伙伴联合申请");
+                response.setCan_apply_single(false);
+                response.setCan_apply_joint(true);
+
+                // 查找合适的联合伙伴（最多1个，总共2人）
+                List<String> excludePhones = new ArrayList<>();
+                excludePhones.add(request.getPhone());
+                
+                // 计算所需的伙伴最小额度（两人平分）
+                BigDecimal halfAmount = request.getApply_amount().divide(BigDecimal.valueOf(2), 2, BigDecimal.ROUND_HALF_UP);
+                
+                List<Map<String, Object>> qualifiedPartners = getQualifiedPartnersForAmount(halfAmount, excludePhones, 5);
+                
+                // 转换为PartnerItemDTO列表
+                List<PartnerItemDTO> partners = new ArrayList<>();
+                for (Map<String, Object> partnerInfo : qualifiedPartners) {
+                    PartnerItemDTO partner = new PartnerItemDTO();
+                    partner.setPhone((String) partnerInfo.get("phone"));
+                    partner.setNickname((String) partnerInfo.get("nickname"));
+                    partner.setAvailable_credit_limit((BigDecimal) partnerInfo.get("available_limit"));
+                    partner.setTotal_credit_limit((BigDecimal) partnerInfo.get("total_limit"));
+                    partners.add(partner);
+                }
+                response.setRecommended_partners(partners);
+                
+                if (partners.isEmpty()) {
+                    response.setRecommendation_reason("您的可用额度不足，且暂时找不到合适的合作伙伴，建议先申请提升额度");
+                    response.setCan_apply_joint(false);
+                }
+            }
+
+            return response;
+
+        } catch (Exception e) {
+            throw new RuntimeException("获取智能贷款推荐失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 获取符合特定金额要求的伙伴列表
+     */
+    private List<Map<String, Object>> getQualifiedPartnersForAmount(BigDecimal requiredAmount, List<String> excludePhones, int maxPartners) throws SQLException {
+        return dbManager.getQualifiedPartnersForAmount(requiredAmount, excludePhones, maxPartners);
+    }
+
+    /**
+     * 联合贷款伙伴确认申请
+     */
+    public JointLoanPartnerConfirmationResponseDTO confirmJointLoanApplication(JointLoanPartnerConfirmationRequestDTO request) {
+        try {
+            // 参数验证
+            List<Map<String, String>> errors = new ArrayList<>();
+            validateJointLoanPartnerConfirmationRequest(request, errors);
+            if (!errors.isEmpty()) {
+                throw new IllegalArgumentException("参数验证失败: " + errors.toString());
+            }
+
+            // 检查用户是否存在
+            User user = findUserByPhone(request.getPhone());
+            if (user == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 检查用户是否具有农户身份
+            Map<String, Object> farmerInfo = checkUserFarmerRole(user.getUid());
+            if (farmerInfo == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 获取贷款申请信息
+            entity.financing.LoanApplication loanApplication = getLoanApplicationById(request.getApplication_id());
+            if (loanApplication == null) {
+                throw new IllegalArgumentException("指定的申请ID不存在");
+            }
+
+            // 检查申请状态是否为待伙伴确认
+            if (!"pending_partners".equals(loanApplication.getStatus())) {
+                throw new IllegalArgumentException("该申请状态为" + loanApplication.getStatus() + "，不需要伙伴确认");
+            }
+
+            // 检查当前用户是否为该申请的伙伴
+            List<Map<String, Object>> partners = getJointLoanPartnersByApplicationId(loanApplication.getId());
+            boolean isPartner = false;
+            for (Map<String, Object> partner : partners) {
+                String partnerUid = getFarmerUidByFarmerId((Long) partner.get("partner_farmer_id"));
+                if (user.getUid().equals(partnerUid)) {
+                    isPartner = true;
+                    break;
+                }
+            }
+
+            if (!isPartner) {
+                throw new IllegalArgumentException("您不是该联合贷款申请的合作伙伴");
+            }
+
+            JointLoanPartnerConfirmationResponseDTO response = new JointLoanPartnerConfirmationResponseDTO();
+            response.setApplication_id(loanApplication.getLoanApplicationId());
+            response.setPartner_phone(request.getPhone());
+
+            if ("confirm".equals(request.getAction())) {
+                // 确认参与联合贷款
+                // 预扣该伙伴的信用额度
+                Long partnerFarmerId = ((Long) farmerInfo.get("farmer_id")).longValue();
+                
+                // 计算该伙伴需要承担的份额
+                int totalParticipants = partners.size() + 1; // 伙伴数量 + 发起人
+                BigDecimal partnerShareAmount = loanApplication.getApplyAmount().divide(BigDecimal.valueOf(totalParticipants), 2, BigDecimal.ROUND_HALF_UP);
+                
+                // 预扣额度
+                preDeductCreditLimit(partnerFarmerId, partnerShareAmount);
+                
+                // 更新合作伙伴确认状态
+                updatePartnerConfirmationStatus(loanApplication.getId(), partnerFarmerId, "confirmed");
+                
+                // 检查是否所有伙伴都已确认
+                if (areAllPartnersConfirmed(loanApplication.getId())) {
+                    // 所有伙伴都确认了，将申请状态更新为待银行审批
+                    updateLoanApplicationStatus(loanApplication.getLoanApplicationId(), "pending", null, null, null);
+                    response.setNext_step("所有合作伙伴已确认，申请已提交银行审批");
+                } else {
+                    response.setNext_step("确认成功，等待其他合作伙伴确认");
+                }
+                
+                response.setAction_result("confirmed");
+                response.setMessage("您已成功确认参与该联合贷款申请");
+                
+            } else if ("reject".equals(request.getAction())) {
+                // 拒绝参与联合贷款
+                Long partnerFarmerId = ((Long) farmerInfo.get("farmer_id")).longValue();
+                updatePartnerConfirmationStatus(loanApplication.getId(), partnerFarmerId, "rejected");
+                
+                // 将申请状态更新为已拒绝
+                updateLoanApplicationStatus(loanApplication.getLoanApplicationId(), "rejected", null, null, null, "合作伙伴拒绝参与");
+                
+                // 恢复发起人的预扣额度
+                restoreCreditLimit(loanApplication.getFarmerId(), loanApplication.getApplyAmount().divide(BigDecimal.valueOf(partners.size() + 1), 2, BigDecimal.ROUND_HALF_UP));
+                
+                response.setAction_result("rejected");
+                response.setMessage("您已拒绝参与该联合贷款申请，申请已被取消");
+                response.setNext_step("联合贷款申请已取消");
+            } else {
+                throw new IllegalArgumentException("无效的操作类型：" + request.getAction());
+            }
+
+            return response;
+
+        } catch (Exception e) {
+            throw new RuntimeException("联合贷款伙伴确认失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 获取用户待确认的联合贷款申请
+     */
+    public PendingJointLoanApplicationsResponseDTO getPendingJointLoanApplications(PendingJointLoanApplicationsRequestDTO request) {
+        try {
+            // 参数验证
+            if (request.getPhone() == null || request.getPhone().trim().isEmpty()) {
+                throw new IllegalArgumentException("手机号不能为空");
+            }
+
+            // 检查用户是否存在
+            User user = findUserByPhone(request.getPhone());
+            if (user == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 检查用户是否具有农户身份
+            Map<String, Object> farmerInfo = checkUserFarmerRole(user.getUid());
+            if (farmerInfo == null) {
+                throw new IllegalArgumentException("用户认证失败，请检查手机号或重新登录");
+            }
+
+            // 获取待确认的联合贷款申请列表
+            Long farmerId = ((Long) farmerInfo.get("farmer_id")).longValue();
+            List<Map<String, Object>> pendingApplications = getPendingJointLoanApplicationsByFarmerId(farmerId);
+
+            PendingJointLoanApplicationsResponseDTO response = new PendingJointLoanApplicationsResponseDTO();
+            response.setTotal(pendingApplications.size());
+            response.setApplications(pendingApplications);
+
+            return response;
+
+        } catch (Exception e) {
+            throw new RuntimeException("获取待确认联合贷款申请失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 验证联合贷款伙伴确认请求
+     */
+    private void validateJointLoanPartnerConfirmationRequest(JointLoanPartnerConfirmationRequestDTO request, List<Map<String, String>> errors) {
+        if (request.getPhone() == null || request.getPhone().trim().isEmpty()) {
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "phone");
+            error.put("message", "手机号不能为空");
+            errors.add(error);
+        }
+
+        if (request.getApplication_id() == null || request.getApplication_id().trim().isEmpty()) {
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "application_id");
+            error.put("message", "申请ID不能为空");
+            errors.add(error);
+        }
+
+        if (request.getAction() == null || request.getAction().trim().isEmpty()) {
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "action");
+            error.put("message", "操作类型不能为空");
+            errors.add(error);
+        } else if (!"confirm".equals(request.getAction()) && !"reject".equals(request.getAction())) {
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "action");
+            error.put("message", "操作类型必须为confirm或reject");
+            errors.add(error);
+        }
+    }
+
+    /**
+     * 验证智能贷款推荐请求
+     */
+    private void validateSmartLoanRecommendationRequest(SmartLoanRecommendationRequestDTO request, List<Map<String, String>> errors) {
+        if (request.getPhone() == null || request.getPhone().trim().isEmpty()) {
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "phone");
+            error.put("message", "手机号不能为空");
+            errors.add(error);
+        }
+
+        if (request.getProduct_id() == null || request.getProduct_id().trim().isEmpty()) {
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "product_id");
+            error.put("message", "产品ID不能为空");
+            errors.add(error);
+        }
+
+        if (request.getApply_amount() == null || request.getApply_amount().compareTo(BigDecimal.ZERO) <= 0) {
+            Map<String, String> error = new HashMap<>();
+            error.put("field", "apply_amount");
+            error.put("message", "申请金额必须大于0");
+            errors.add(error);
+        }
+    }
+
     // 创建贷款申请记录
     private long createLoanApplication(String loanApplicationId, Long farmerId, Long productId, String applicationType,
                                        BigDecimal applyAmount, String purpose, String repaymentSource) throws SQLException {
@@ -993,6 +1299,34 @@ public class FinancingService {
      */
     private void restoreCreditLimit(Long farmerId, BigDecimal amount) throws SQLException {
         dbManager.restoreCreditLimit(farmerId, amount);
+    }
+
+    /**
+     * 更新合作伙伴确认状态
+     */
+    private void updatePartnerConfirmationStatus(Long loanApplicationId, Long partnerFarmerId, String status) throws SQLException {
+        dbManager.updatePartnerConfirmationStatus(loanApplicationId, partnerFarmerId, status);
+    }
+
+    /**
+     * 检查所有伙伴是否都已确认
+     */
+    private boolean areAllPartnersConfirmed(Long loanApplicationId) throws SQLException {
+        return dbManager.areAllPartnersConfirmed(loanApplicationId);
+    }
+
+    /**
+     * 获取用户待确认的联合贷款申请
+     */
+    private List<Map<String, Object>> getPendingJointLoanApplicationsByFarmerId(Long farmerId) throws SQLException {
+        return dbManager.getPendingJointLoanApplicationsByFarmerId(farmerId);
+    }
+
+    /**
+     * 根据农户ID获取用户ID
+     */
+    private String getFarmerUidByFarmerId(Long farmerId) throws SQLException {
+        return dbManager.getFarmerUidByFarmerId(farmerId);
     }
 
     /**
@@ -1975,6 +2309,16 @@ public class FinancingService {
         dbManager.updateLoanApplicationStatus(applicationId, status, approvedBy, approvedAt, approvedAmount);
     }
 
+    // 包含拒绝原因的重载方法
+    private void updateLoanApplicationStatus(String applicationId, String status, Long approvedBy,
+                                             Timestamp approvedAt, BigDecimal approvedAmount, String rejectReason) throws SQLException {
+        if ("rejected".equals(status)) {
+            dbManager.updateLoanApplicationRejection(applicationId, status, approvedBy, approvedAt, rejectReason);
+        } else {
+            dbManager.updateLoanApplicationStatus(applicationId, status, approvedBy, approvedAt, approvedAmount);
+        }
+    }
+
     private void updateLoanApplicationRejection(String applicationId, String status, Long approvedBy,
                                                 Timestamp approvedAt, String rejectReason) throws SQLException {
         dbManager.updateLoanApplicationRejection(applicationId, status, approvedBy, approvedAt, rejectReason);
@@ -1998,10 +2342,6 @@ public class FinancingService {
 
     private void updateCreditLimitUsed(Long farmerId, BigDecimal usedAmount) throws SQLException {
         dbManager.updateCreditLimitUsed(farmerId, usedAmount);
-    }
-
-    private String getFarmerUidByFarmerId(Long farmerId) throws SQLException {
-        return dbManager.getFarmerUidByFarmerId(farmerId);
     }
 
     // 私有辅助方法：验证单人贷款申请请求

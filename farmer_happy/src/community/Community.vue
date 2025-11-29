@@ -9,10 +9,17 @@
         </button>
         <h1 class="header-title">专家农户交流平台</h1>
       </div>
-      <button class="btn-publish" @click="handlePublishClick">
-        <span class="publish-icon">✎</span>
-        发布内容
-      </button>
+      <div class="header-actions">
+        <button class="btn-ai" @click="handleAskAiClick">
+          <span class="ai-icon">🤖</span>
+          <span v-if="!aiLoading">AI农业专家</span>
+          <span v-else>咨询中...</span>
+        </button>
+        <button class="btn-publish" @click="handlePublishClick">
+          <span class="publish-icon">✎</span>
+          发布内容
+        </button>
+      </div>
     </header>
 
     <!-- 主内容区域 -->
@@ -39,6 +46,64 @@
             @input="handleSearch"
           />
           <span class="search-icon">🔍</span>
+        </div>
+      </div>
+
+      <!-- AI 农业专家聊天框 -->
+      <div class="ai-chat-container" :class="{ collapsed: !showAiChat }">
+        <div class="ai-chat-header" @click="toggleAiChat">
+          <div class="ai-chat-title">
+            <span class="ai-icon-header">🤖</span>
+            <span>AI 农业专家</span>
+            <span v-if="!showAiChat" class="ai-chat-hint">点击展开咨询</span>
+          </div>
+          <button class="ai-chat-toggle" @click.stop="toggleAiChat">
+            <span v-if="showAiChat" class="toggle-icon">▼</span>
+            <span v-else class="toggle-icon">▶</span>
+          </button>
+        </div>
+        <div v-if="showAiChat" class="ai-chat-body">
+          <div class="ai-chat-messages" ref="chatMessagesRef">
+            <div
+              v-for="(msg, index) in aiChatMessages"
+              :key="index"
+              class="ai-chat-message"
+              :class="{ 'user-message': msg.role === 'user', 'ai-message': msg.role === 'ai' }"
+            >
+              <div class="message-content">
+                <div class="message-role">
+                  {{ msg.role === 'user' ? '我' : 'AI专家' }}
+                </div>
+                <div class="message-text">{{ msg.content }}</div>
+              </div>
+            </div>
+            <div v-if="aiLoading" class="ai-chat-message ai-message">
+              <div class="message-content">
+                <div class="message-role">AI专家</div>
+                <div class="message-text loading-text">
+                  <span class="typing-dots">
+                    <span>.</span><span>.</span><span>.</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ai-chat-input-area">
+            <textarea
+              v-model="aiChatInput"
+              class="ai-chat-textarea"
+              placeholder="输入您的问题，按 Enter 发送，Shift+Enter 换行"
+              @keydown="handleChatKeydown"
+              :disabled="aiLoading"
+            ></textarea>
+            <button
+              class="ai-chat-send-btn"
+              @click="sendAiMessage"
+              :disabled="aiLoading || !aiChatInput.trim()"
+            >
+              {{ aiLoading ? '发送中...' : '发送' }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -138,6 +203,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { communityService } from '../api/community';
+import { aiExpertService } from '../api/aiExpert';
 import logger from '../utils/logger';
 
 export default {
@@ -152,6 +218,11 @@ export default {
     const showImagePreview = ref(false);
     const currentImage = ref('');
     const imageList = ref([]);
+    const aiLoading = ref(false);
+    const showAiChat = ref(true);
+    const aiChatInput = ref('');
+    const aiChatMessages = ref([]);
+    const chatMessagesRef = ref(null);
 
     const contentTypes = [
       { value: 'all', label: '全部' },
@@ -245,6 +316,101 @@ export default {
       router.push('/community/publish');
     };
 
+    // 切换 AI 聊天框显示/隐藏
+    const toggleAiChat = () => {
+      showAiChat.value = !showAiChat.value;
+      if (showAiChat.value) {
+        // 展开时滚动到底部
+        setTimeout(() => {
+          scrollChatToBottom();
+        }, 100);
+      }
+    };
+
+    // 向 AI 农业专家提问（打开聊天框）
+    const handleAskAiClick = () => {
+      if (!showAiChat.value) {
+        showAiChat.value = true;
+        setTimeout(() => {
+          scrollChatToBottom();
+        }, 100);
+      }
+    };
+
+    // 发送 AI 消息
+    const sendAiMessage = async () => {
+      const question = aiChatInput.value.trim();
+      if (!question || aiLoading.value) {
+        return;
+      }
+
+      // 添加用户消息
+      aiChatMessages.value.push({
+        role: 'user',
+        content: question
+      });
+      aiChatInput.value = '';
+      aiLoading.value = true;
+
+      // 滚动到底部
+      setTimeout(() => {
+        scrollChatToBottom();
+      }, 50);
+
+      try {
+        logger.userAction('AI_EXPERT_ASK', { questionPreview: question.slice(0, 50) });
+        const result = await aiExpertService.askExpert(question);
+        const answer = result?.answer || '暂未获取到回答，请稍后重试。';
+
+        // 添加 AI 回复
+        aiChatMessages.value.push({
+          role: 'ai',
+          content: answer
+        });
+
+        // 滚动到底部
+        setTimeout(() => {
+          scrollChatToBottom();
+        }, 50);
+      } catch (error) {
+        logger.error('COMMUNITY', 'AI 农业专家咨询失败', {}, error);
+        // 添加错误消息，根据错误类型显示不同提示
+        let errorMessage = '抱歉，AI 农业专家服务暂不可用，请稍后重试。';
+        if (error.code === 429 || error.errorType === 'rate_limit') {
+          errorMessage = '⚠️ AI服务当前负载较高，请稍等片刻后再试。\n\n提示：可以等待10-30秒后重新发送问题。';
+        } else if (error.errorType === 'bad_request') {
+          errorMessage = '❌ AI服务配置错误，请联系管理员处理。';
+        } else if (error.message) {
+          errorMessage = '❌ ' + error.message;
+        }
+        
+        aiChatMessages.value.push({
+          role: 'ai',
+          content: errorMessage
+        });
+        setTimeout(() => {
+          scrollChatToBottom();
+        }, 50);
+      } finally {
+        aiLoading.value = false;
+      }
+    };
+
+    // 处理聊天输入框按键
+    const handleChatKeydown = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendAiMessage();
+      }
+    };
+
+    // 滚动聊天消息到底部
+    const scrollChatToBottom = () => {
+      if (chatMessagesRef.value) {
+        chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight;
+      }
+    };
+
     // 返回
     const goBack = () => {
       router.push('/home');
@@ -331,11 +497,20 @@ export default {
       sortOptions,
       showImagePreview,
       currentImage,
+      aiLoading,
+      showAiChat,
+      aiChatInput,
+      aiChatMessages,
+      chatMessagesRef,
       handleTypeChange,
       handleSortChange,
       handleSearch,
       handleContentClick,
       handlePublishClick,
+      handleAskAiClick,
+      toggleAiChat,
+      sendAiMessage,
+      handleChatKeydown,
       goBack,
       formatTime,
       getTypeLabel,
@@ -371,6 +546,12 @@ export default {
 }
 
 .header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-actions {
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -421,6 +602,33 @@ export default {
   cursor: pointer;
   transition: all 0.3s;
   box-shadow: 0 4px 12px rgba(107, 70, 193, 0.3);
+}
+
+.btn-ai {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--primary);
+  background: #f5f3ff;
+  color: var(--primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-ai:hover {
+  background: var(--primary-50);
+  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.3);
+}
+
+.btn-ai:active {
+  transform: translateY(1px);
+}
+
+.ai-icon {
+  font-size: 1rem;
 }
 
 .btn-publish:hover {
@@ -827,6 +1035,303 @@ export default {
     width: 80px;
     height: 80px;
   }
+
+  .ai-chat-container {
+    margin-bottom: 1rem;
+  }
+
+  .ai-chat-body {
+    max-height: 400px;
+    min-height: 250px;
+  }
+}
+
+/* AI 聊天框样式 */
+.ai-chat-container {
+  width: 100%;
+  max-width: 100%;
+  background: var(--white);
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.08);
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+  border: 1px solid var(--gray-200);
+  overflow: hidden;
+}
+
+.ai-chat-container.collapsed {
+  max-height: 56px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(107, 70, 193, 0.1);
+  border-color: var(--gray-300);
+}
+
+.ai-chat-container.collapsed:hover {
+  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.15);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.ai-chat-header {
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: var(--white);
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ai-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 1rem;
+  flex: 1;
+}
+
+.ai-chat-hint {
+  font-size: 0.875rem;
+  font-weight: 400;
+  opacity: 0.9;
+  margin-left: 0.5rem;
+  font-style: italic;
+}
+
+.ai-icon-header {
+  font-size: 1.25rem;
+}
+
+.ai-chat-toggle {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: var(--white);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.ai-chat-toggle:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.toggle-icon {
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: transform 0.3s ease;
+}
+
+.ai-chat-container.collapsed .toggle-icon {
+  transform: rotate(0deg);
+}
+
+.ai-chat-body {
+  display: flex;
+  flex-direction: column;
+  max-height: 500px;
+  min-height: 300px;
+  overflow: hidden;
+}
+
+.ai-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ai-chat-message {
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-content {
+  max-width: 80%;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  word-wrap: break-word;
+}
+
+.user-message {
+  align-items: flex-end;
+}
+
+.user-message .message-content {
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: var(--white);
+  border-bottom-right-radius: 4px;
+}
+
+.ai-message {
+  align-items: flex-start;
+}
+
+.ai-message .message-content {
+  background: var(--white);
+  color: var(--gray-800);
+  border: 1px solid var(--gray-200);
+  border-bottom-left-radius: 4px;
+}
+
+.message-role {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  opacity: 0.8;
+}
+
+.user-message .message-role {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ai-message .message-role {
+  color: var(--primary);
+}
+
+.message-text {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.loading-text {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.typing-dots {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: typing 1.4s infinite;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+.ai-chat-input-area {
+  padding: 1rem;
+  background: var(--white);
+  border-top: 1px solid var(--gray-200);
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.ai-chat-textarea {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  resize: none;
+  min-height: 40px;
+  max-height: 120px;
+  line-height: 1.5;
+  transition: border-color 0.2s;
+}
+
+.ai-chat-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.1);
+}
+
+.ai-chat-textarea:disabled {
+  background: var(--gray-100);
+  cursor: not-allowed;
+}
+
+.ai-chat-send-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.ai-chat-send-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.3);
+}
+
+.ai-chat-send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 滚动条样式 */
+.ai-chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ai-chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-chat-messages::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: 3px;
+}
+
+.ai-chat-messages::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
 }
 </style>
 

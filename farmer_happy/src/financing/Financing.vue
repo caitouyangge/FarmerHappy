@@ -122,7 +122,15 @@
       @apply="handleLoanApply"
     />
 
-    <!-- 申请单人贷款 -->
+    <!-- 统一贷款申请 -->
+    <UnifiedLoanApplicationModal
+      v-if="showUnifiedLoanModal && selectedProduct"
+      :product="selectedProduct"
+      @close="closeUnifiedLoanModal"
+      @success="handleLoanSuccess"
+    />
+
+    <!-- 申请单人贷款（保留兼容性） -->
     <SingleLoanApplicationModal
       v-if="showSingleLoanModal && selectedProduct"
       :product="selectedProduct"
@@ -130,7 +138,7 @@
       @success="handleLoanSuccess"
     />
 
-    <!-- 申请联合贷款 -->
+    <!-- 申请联合贷款（保留兼容性） -->
     <JointLoanApplicationModal
       v-if="showJointLoanModal && selectedProduct"
       ref="jointLoanComponentRef"
@@ -199,6 +207,7 @@ import logger from '../utils/logger';
 import CreditLimitApplicationModal from './components/CreditLimitApplicationModal.vue';
 import CreditApplicationHistoryModal from './components/CreditApplicationHistoryModal.vue';
 import LoanProductListModal from './components/LoanProductListModal.vue';
+import UnifiedLoanApplicationModal from './components/UnifiedLoanApplicationModal.vue';
 import SingleLoanApplicationModal from './components/SingleLoanApplicationModal.vue';
 import JointLoanApplicationModal from './components/JointLoanApplicationModal.vue';
 import JointPartnersModal from './components/JointPartnersModal.vue';
@@ -215,6 +224,7 @@ export default {
     CreditLimitApplicationModal,
     CreditApplicationHistoryModal,
     LoanProductListModal,
+    UnifiedLoanApplicationModal,
     SingleLoanApplicationModal,
     JointLoanApplicationModal,
     JointPartnersModal,
@@ -233,6 +243,7 @@ export default {
     const showCreditLimitModal = ref(false);
     const showApplicationHistoryModal = ref(false);
     const showLoanProductModal = ref(false);
+    const showUnifiedLoanModal = ref(false);
     const showSingleLoanModal = ref(false);
     const showJointLoanModal = ref(false);
     const showPartnersModal = ref(false);
@@ -289,24 +300,6 @@ export default {
         description: '浏览可申请的贷款产品，选择合适的贷款方案',
         icon: '📋',
         action: () => { showLoanProductModal.value = true; }
-      },
-      {
-        id: 'single_loan',
-        name: '申请单人贷款',
-        description: '以个人名义申请贷款',
-        icon: '👤',
-        action: () => { 
-          showLoanProductModal.value = true;
-        }
-      },
-      {
-        id: 'joint_loan',
-        name: '申请联合贷款',
-        description: '与其他农户联合申请贷款',
-        icon: '👥',
-        action: () => { 
-          showLoanProductModal.value = true;
-        }
       },
       {
         id: 'repayment',
@@ -436,7 +429,10 @@ export default {
     const handleLoanApply = (product, loanType) => {
       selectedProduct.value = product;
       showLoanProductModal.value = false;
-      if (loanType === 'single') {
+      if (loanType === 'unified' || !loanType) {
+        // 默认使用统一申请入口
+        showUnifiedLoanModal.value = true;
+      } else if (loanType === 'single') {
         showSingleLoanModal.value = true;
       } else if (loanType === 'joint') {
         showJointLoanModal.value = true;
@@ -447,6 +443,12 @@ export default {
     const closeLoanModal = () => {
       showSingleLoanModal.value = false;
       showJointLoanModal.value = false;
+      selectedProduct.value = null;
+    };
+
+    // 关闭统一贷款申请弹窗
+    const closeUnifiedLoanModal = () => {
+      showUnifiedLoanModal.value = false;
       selectedProduct.value = null;
     };
 
@@ -504,6 +506,7 @@ export default {
       showCreditLimitModal,
       showApplicationHistoryModal,
       showLoanProductModal,
+      showUnifiedLoanModal,
       showSingleLoanModal,
       showJointLoanModal,
       showRepaymentModal,
@@ -522,6 +525,7 @@ export default {
       handleViewHistoryFromApply,
       handleLoanApply,
       closeLoanModal,
+      closeUnifiedLoanModal,
       handleLoanSuccess,
       handlePublishSuccess,
       handleApprovalSuccess,

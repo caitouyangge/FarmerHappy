@@ -7,6 +7,7 @@ import controller.ContentController;
 import controller.CommentController;
 import controller.OrderController;
 import controller.FinancingController;
+import controller.AiController;
 import dto.auth.*;
 import dto.farmer.*;
 import dto.bank.*;
@@ -34,6 +35,7 @@ public class RouterConfig {
     private CommentController commentController;
     private OrderController orderController;
     private FinancingController financingController;
+    private AiController aiController;
 
     public RouterConfig() {
         this.authController = new AuthController();
@@ -42,10 +44,19 @@ public class RouterConfig {
         this.commentController = new CommentController();
         this.orderController = new OrderController();
         this.financingController = new FinancingController();
+        this.aiController = new AiController();
     }
 
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody,
             Map<String, String> headers, Map<String, String> queryParams) {
+        // ============= AI 农业专家相关路由 =============
+
+        // 与 AI 农业专家对话
+        if ("/api/v1/ai/expert-chat".equals(path) && "POST".equals(method)) {
+            String question = requestBody != null ? (String) requestBody.get("question") : null;
+            return aiController.chatWithAiExpert(question);
+        }
+
         // ============= 融资相关路由 =============
 
         // 在处理请求的方法中添加
@@ -152,6 +163,24 @@ public class RouterConfig {
         if ("/api/v1/financing/partners".equals(path) && "POST".equals(method)) {
             PartnersRequestDTO request = parsePartnersRequest(requestBody);
             return financingController.getJointPartners(request);
+        }
+
+        // 智能贷款推荐
+        if ("/api/v1/financing/smart-recommendation".equals(path) && "POST".equals(method)) {
+            SmartLoanRecommendationRequestDTO request = parseSmartLoanRecommendationRequest(requestBody);
+            return financingController.getSmartLoanRecommendation(request);
+        }
+
+        // 联合贷款伙伴确认
+        if ("/api/v1/financing/joint-loan-confirmation".equals(path) && "POST".equals(method)) {
+            JointLoanPartnerConfirmationRequestDTO request = parseJointLoanPartnerConfirmationRequest(requestBody);
+            return financingController.confirmJointLoanApplication(request);
+        }
+
+        // 获取待确认的联合贷款申请
+        if ("/api/v1/financing/pending-joint-loans".equals(path) && "POST".equals(method)) {
+            PendingJointLoanApplicationsRequestDTO request = parsePendingJointLoanApplicationsRequest(requestBody);
+            return financingController.getPendingJointLoanApplications(request);
         }
 
         // ============= 买家订单相关路由 =============
@@ -1009,6 +1038,48 @@ public class RouterConfig {
             request.setExclude_phones(phones);
         }
 
+        return request;
+    }
+
+    /**
+     * 解析智能贷款推荐请求
+     */
+    private SmartLoanRecommendationRequestDTO parseSmartLoanRecommendationRequest(Map<String, Object> requestBody) {
+        SmartLoanRecommendationRequestDTO request = new SmartLoanRecommendationRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+
+        // 处理产品ID
+        Object productIdObj = requestBody.get("product_id");
+        if (productIdObj != null) {
+            request.setProduct_id(productIdObj.toString());
+        }
+
+        // 处理申请金额
+        if (requestBody.get("apply_amount") instanceof Number) {
+            request.setApply_amount(
+                    BigDecimal.valueOf(((Number) requestBody.get("apply_amount")).doubleValue()));
+        }
+
+        return request;
+    }
+
+    /**
+     * 解析联合贷款伙伴确认请求
+     */
+    private JointLoanPartnerConfirmationRequestDTO parseJointLoanPartnerConfirmationRequest(Map<String, Object> requestBody) {
+        JointLoanPartnerConfirmationRequestDTO request = new JointLoanPartnerConfirmationRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
+        request.setApplication_id((String) requestBody.get("application_id"));
+        request.setAction((String) requestBody.get("action"));
+        return request;
+    }
+
+    /**
+     * 解析获取待确认联合贷款申请请求
+     */
+    private PendingJointLoanApplicationsRequestDTO parsePendingJointLoanApplicationsRequest(Map<String, Object> requestBody) {
+        PendingJointLoanApplicationsRequestDTO request = new PendingJointLoanApplicationsRequestDTO();
+        request.setPhone((String) requestBody.get("phone"));
         return request;
     }
 

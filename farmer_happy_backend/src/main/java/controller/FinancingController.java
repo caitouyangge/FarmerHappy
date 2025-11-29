@@ -771,4 +771,106 @@ public class FinancingController {
         }
     }
 
+    /**
+     * 智能贷款推荐API
+     */
+    public Map<String, Object> getSmartLoanRecommendation(SmartLoanRecommendationRequestDTO request) {
+        try {
+            SmartLoanRecommendationResponseDTO response = financingService.getSmartLoanRecommendation(request);
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 200);
+            result.put("message", "获取推荐成功");
+            result.put("data", response);
+            return result;
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            if (e.getMessage().contains("用户认证失败")) {
+                result.put("code", 401);
+                result.put("message", "用户认证失败，请检查手机号或重新登录");
+            } else if (e.getMessage().contains("无可用贷款额度")) {
+                result.put("code", 400);
+                result.put("message", "您当前无可用贷款额度");
+            } else if (e.getMessage().contains("不存在或已下架")) {
+                result.put("code", 400);
+                result.put("message", "所选产品不存在或已下架");
+            } else if (e.getMessage().contains("超过产品最高额度")) {
+                result.put("code", 400);
+                result.put("message", "申请金额超过产品最高额度");
+            } else {
+                result.put("code", 400);
+                result.put("message", "参数验证失败");
+            }
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 500);
+            result.put("message", e.getMessage());
+            return result;
+        }
+    }
+
+    /**
+     * 联合贷款伙伴确认API
+     */
+    public Map<String, Object> confirmJointLoanApplication(JointLoanPartnerConfirmationRequestDTO request) {
+        try {
+            JointLoanPartnerConfirmationResponseDTO response = financingService.confirmJointLoanApplication(request);
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 200);
+            result.put("message", response.getMessage());
+            result.put("data", response);
+            return result;
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            if (e.getMessage().contains("用户认证失败")) {
+                result.put("code", 401);
+                result.put("message", "用户认证失败，请检查手机号或重新登录");
+            } else if (e.getMessage().contains("不是该联合贷款申请的合作伙伴")) {
+                result.put("code", 403);
+                result.put("message", "您不是该联合贷款申请的合作伙伴");
+            } else if (e.getMessage().contains("不需要伙伴确认")) {
+                result.put("code", 400);
+                result.put("message", "该申请状态不需要伙伴确认");
+            } else {
+                result.put("code", 400);
+                result.put("message", "参数验证失败");
+            }
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 500);
+            result.put("message", e.getMessage());
+            return result;
+        }
+    }
+
+    /**
+     * 获取用户待确认的联合贷款申请API
+     */
+    public Map<String, Object> getPendingJointLoanApplications(PendingJointLoanApplicationsRequestDTO request) {
+        try {
+            PendingJointLoanApplicationsResponseDTO response = financingService.getPendingJointLoanApplications(request);
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 200);
+            result.put("message", "获取成功");
+            result.put("data", response);
+            return result;
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            if (e.getMessage().contains("用户认证失败")) {
+                result.put("code", 401);
+                result.put("message", "用户认证失败，请检查手机号或重新登录");
+            } else {
+                result.put("code", 400);
+                result.put("message", "参数验证失败");
+            }
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 500);
+            result.put("message", e.getMessage());
+            return result;
+        }
+    }
+
 }

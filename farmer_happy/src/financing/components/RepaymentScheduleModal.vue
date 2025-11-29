@@ -52,7 +52,7 @@
                 </div>
                 <div class="loan-detail">
                   <span class="detail-label">年利率：</span>
-                  <span class="detail-value">{{ (loan.interest_rate ).toFixed(2) }}%</span>
+                  <span class="detail-value">{{ (loan.interest_rate || 0).toFixed(2) }}%</span>
                 </div>
                 <div class="loan-detail">
                   <span class="detail-label">贷款期限：</span>
@@ -111,7 +111,7 @@
                 </div>
                 <div class="overview-item">
                   <span class="overview-label">年利率：</span>
-                  <span class="overview-value">{{ (schedule.interest_rate ).toFixed(2) }}%</span>
+                  <span class="overview-value">{{ (schedule.interest_rate || 0).toFixed(2) }}%</span>
                 </div>
                 <div class="overview-item">
                   <span class="overview-label">贷款期限：</span>

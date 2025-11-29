@@ -40,7 +40,7 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">年利率：</span>
-                <span class="detail-value highlight">{{ (product.interest_rate ).toFixed(2) }}%</span>
+                <span class="detail-value highlight">{{ (product.interest_rate || 0).toFixed(2) }}%</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">贷款期限：</span>
@@ -62,12 +62,19 @@
             </div>
 
             <div class="product-actions">
-              <button class="btn btn-secondary" @click="handleApply(product, 'single')">
-                申请单人贷款
+              <button class="btn btn-primary btn-main" @click="handleApply(product, 'unified')">
+                🧠 智能贷款申请（推荐）
               </button>
-              <button class="btn btn-primary" @click="handleApply(product, 'joint')">
-                申请联合贷款
-              </button>
+              <div class="traditional-options">
+                <span class="traditional-hint">或选择传统方式：</span>
+                <button class="btn btn-link" @click="handleApply(product, 'single')">
+                  单人贷款
+                </button>
+                <span class="separator">|</span>
+                <button class="btn btn-link" @click="handleApply(product, 'joint')">
+                  联合贷款
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -359,10 +366,49 @@ export default {
 
 .product-actions {
   display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 0.75rem;
   padding-top: 1rem;
   border-top: 1px solid var(--gray-200);
+}
+
+.btn-main {
+  font-size: 1rem !important;
+  padding: 1rem 2rem !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.2);
+}
+
+.btn-main:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(107, 70, 193, 0.3);
+}
+
+.traditional-options {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--gray-200);
+  opacity: 0.7;
+  font-size: 0.8125rem;
+}
+
+.traditional-options:hover {
+  opacity: 1;
+}
+
+.traditional-hint {
+  color: var(--gray-500);
+  font-size: 0.75rem;
+  margin-right: 0.5rem;
+}
+
+.separator {
+  color: var(--gray-400);
+  margin: 0 0.25rem;
 }
 
 .btn {
@@ -393,6 +439,22 @@ export default {
 .btn-secondary:hover {
   background: var(--primary-light);
   color: var(--white);
+}
+
+.btn-link {
+  background: transparent;
+  color: var(--primary);
+  border: none;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-link:hover {
+  color: var(--primary-dark);
+  text-decoration: none;
 }
 </style>
 

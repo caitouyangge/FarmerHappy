@@ -85,7 +85,7 @@ public class DatabaseManager {
             // 检查并添加money字段（如果不存在）
             try {
                 String checkMoneyColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
-                        "WHERE TABLE_SCHEMA = '" + DB_NAME + "' AND TABLE_NAME = 'users' AND COLUMN_NAME = 'money'";
+                        "WHERE TABLE_SCHEMA = '" + config.getDatabaseName() + "' AND TABLE_NAME = 'users' AND COLUMN_NAME = 'money'";
                 ResultSet rsCheckMoney = dbStatement.executeQuery(checkMoneyColumnSql);
 
                 if (!rsCheckMoney.next()) {
@@ -245,7 +245,7 @@ public class DatabaseManager {
             try {
                 // 首先检查列是否存在
                 String checkColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
-                        "WHERE TABLE_SCHEMA = '" + DB_NAME
+                        "WHERE TABLE_SCHEMA = '" + config.getDatabaseName()
                         + "' AND TABLE_NAME = 'products' AND COLUMN_NAME = 'specification'";
                 ResultSet rsCheck = dbStatement.executeQuery(checkColumnSql);
 
@@ -257,7 +257,7 @@ public class DatabaseManager {
                 } else {
                     // specification 列不存在，检查 detailed_description 是否存在
                     String checkNewColumnSql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
-                            "WHERE TABLE_SCHEMA = '" + DB_NAME
+                            "WHERE TABLE_SCHEMA = '" + config.getDatabaseName()
                             + "' AND TABLE_NAME = 'products' AND COLUMN_NAME = 'detailed_description'";
                     ResultSet rsCheckNew = dbStatement.executeQuery(checkNewColumnSql);
 
@@ -1998,6 +1998,163 @@ public class DatabaseManager {
     }
 
     /**
+     * 更新合作伙伴确认状态
+     */
+    public void updatePartnerConfirmationStatus(Long loanApplicationId, Long partnerFarmerId, String status) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            // 将确认状态映射到现有的枚举值
+            String dbStatus = "confirmed".equals(status) ? "accepted" : "rejected";
+            String sql = "UPDATE joint_loan_applications SET status = ?, responded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP " +
+                    "WHERE loan_application_id = ? AND partner_farmer_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, dbStatus);
+            stmt.setLong(2, loanApplicationId);
+            stmt.setLong(3, partnerFarmerId);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 检查所有伙伴是否都已确认
+     */
+    public boolean areAllPartnersConfirmed(Long loanApplicationId) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "SELECT COUNT(*) as total_partners, " +
+                    "SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as confirmed_partners " +
+                    "FROM joint_loan_applications WHERE loan_application_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, loanApplicationId);
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                int totalPartners = rs.getInt("total_partners");
+                int confirmedPartners = rs.getInt("confirmed_partners");
+                rs.close();
+                stmt.close();
+                return totalPartners > 0 && totalPartners == confirmedPartners;
+            }
+            
+            rs.close();
+            stmt.close();
+            return false;
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 获取用户待确认的联合贷款申请
+     */
+    public List<Map<String, Object>> getPendingJointLoanApplicationsByFarmerId(Long farmerId) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> applications = new ArrayList<>();
+        try {
+            String sql = "SELECT la.*, lp.product_name, lp.interest_rate, lp.term_months, " +
+                    "jla.partner_share_amount, jla.status as partner_status, " +
+                    "initiator.phone as initiator_phone, initiator.nickname as initiator_nickname " +
+                    "FROM loan_applications la " +
+                    "JOIN joint_loan_applications jla ON la.id = jla.loan_application_id " +
+                    "JOIN loan_products lp ON la.product_id = lp.id " +
+                    "JOIN user_farmers uf ON la.farmer_id = uf.farmer_id " +
+                    "JOIN users initiator ON uf.uid = initiator.uid " +
+                    "WHERE jla.partner_farmer_id = ? " +
+                    "AND la.status = 'pending_partners' " +
+                    "AND jla.status = 'pending_invitation' " +
+                    "ORDER BY la.created_at DESC";
+                    
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setLong(1, farmerId);
+            ResultSet rs = stmt.executeQuery();
+            
+            while (rs.next()) {
+                Map<String, Object> application = new HashMap<>();
+                application.put("loan_application_id", rs.getString("loan_application_id"));
+                application.put("product_name", rs.getString("product_name"));
+                application.put("apply_amount", rs.getBigDecimal("apply_amount"));
+                application.put("partner_share_amount", rs.getBigDecimal("partner_share_amount"));
+                application.put("purpose", rs.getString("purpose"));
+                application.put("repayment_source", rs.getString("repayment_source"));
+                application.put("interest_rate", rs.getBigDecimal("interest_rate"));
+                application.put("term_months", rs.getInt("term_months"));
+                application.put("initiator_phone", rs.getString("initiator_phone"));
+                application.put("initiator_nickname", rs.getString("initiator_nickname"));
+                application.put("partner_status", rs.getString("partner_status"));
+                application.put("created_at", rs.getTimestamp("created_at"));
+                applications.add(application);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return applications;
+    }
+
+    /**
+     * 根据特定金额需求获取符合条件的伙伴列表
+     */
+    public List<Map<String, Object>> getQualifiedPartnersForAmount(BigDecimal requiredAmount, List<String> excludePhones,
+            int maxPartners) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> partners = new ArrayList<>();
+        try {
+            StringBuilder sql = new StringBuilder();
+            sql.append("SELECT u.phone, u.nickname, cl.available_limit, cl.total_limit ");
+            sql.append("FROM users u ");
+            sql.append("JOIN user_farmers uf ON u.uid = uf.uid ");
+            sql.append("JOIN credit_limits cl ON uf.farmer_id = cl.farmer_id ");
+            sql.append("WHERE uf.enable = TRUE ");
+            sql.append("AND cl.status = 'active' ");
+            sql.append("AND cl.available_limit >= ? "); // 至少能承担所需的金额
+
+            List<Object> params = new ArrayList<>();
+            params.add(requiredAmount);
+
+            if (excludePhones != null && !excludePhones.isEmpty()) {
+                sql.append("AND u.phone NOT IN (");
+                for (int i = 0; i < excludePhones.size(); i++) {
+                    sql.append("?");
+                    if (i < excludePhones.size() - 1) {
+                        sql.append(",");
+                    }
+                    params.add(excludePhones.get(i));
+                }
+                sql.append(") ");
+            }
+
+            // 按照可用额度降序排列，优先推荐额度高的伙伴
+            sql.append("ORDER BY cl.available_limit DESC ");
+            sql.append("LIMIT ? ");
+            params.add(maxPartners);
+
+            PreparedStatement stmt = conn.prepareStatement(sql.toString());
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setObject(i + 1, params.get(i));
+            }
+
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> partner = new HashMap<>();
+                partner.put("phone", rs.getString("phone"));
+                partner.put("nickname", rs.getString("nickname"));
+                partner.put("available_limit", rs.getBigDecimal("available_limit"));
+                partner.put("total_limit", rs.getBigDecimal("total_limit"));
+                partners.add(partner);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return partners;
+    }
+
+    /**
      * 根据 UID 查找银行用户信息
      */
     public Map<String, Object> getBankInfoByUid(String uid) throws SQLException {
@@ -2259,11 +2416,10 @@ public class DatabaseManager {
         Connection conn = getConnection();
         entity.financing.LoanProduct loanProduct = null;
         try {
-            // 修改SQL查询，同时匹配id和product_id字段
-            String sql = "SELECT * FROM loan_products WHERE (id = ? OR product_id = ?) AND status = 'active'";
+            // 修改SQL查询，优先匹配product_id字段
+            String sql = "SELECT * FROM loan_products WHERE product_id = ? AND status = 'active'";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, productId);
-            stmt.setString(2, String.valueOf(productId));
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {

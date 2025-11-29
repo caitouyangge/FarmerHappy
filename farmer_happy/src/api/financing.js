@@ -876,6 +876,81 @@ export const financingService = {
     },
 
     /**
+     * 获取智能贷款推荐
+     * @param {Object} requestData - 请求数据
+     * @param {string} requestData.phone - 用户手机号
+     * @param {number} requestData.product_id - 贷款产品ID
+     * @param {number} requestData.apply_amount - 申请金额
+     * @returns {Promise<Object>} 智能推荐结果
+     */
+    async getSmartLoanRecommendation(requestData) {
+        try {
+            logger.apiRequest('POST', `${FINANCING_API_URL}/smart-recommendation`, {
+                phone: requestData.phone,
+                product_id: requestData.product_id,
+                apply_amount: requestData.apply_amount
+            });
+            logger.info('FINANCING', '获取智能贷款推荐', {
+                product_id: requestData.product_id,
+                apply_amount: requestData.apply_amount
+            });
+
+            const response = await axios.post(`${FINANCING_API_URL}/smart-recommendation`, requestData);
+
+            logger.apiResponse('POST', `${FINANCING_API_URL}/smart-recommendation`, response.status, {
+                code: response.data.code,
+                recommendation_type: response.data.data?.recommendation_type
+            });
+
+            if (response.data.code !== 200) {
+                logger.error('FINANCING', '获取智能贷款推荐失败', {
+                    code: response.data.code,
+                    message: response.data.message
+                });
+
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+
+                throw errorObj;
+            }
+
+            logger.info('FINANCING', '获取智能贷款推荐成功', {
+                recommendation_type: response.data.data?.recommendation_type,
+                can_apply_single: response.data.data?.can_apply_single,
+                can_apply_joint: response.data.data?.can_apply_joint
+            });
+
+            return response.data.data;
+        } catch (error) {
+            logger.apiError('POST', `${FINANCING_API_URL}/smart-recommendation`, error);
+            logger.error('FINANCING', '获取智能贷款推荐失败', {
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+
+            if (error.code && error.message) {
+                throw error;
+            }
+
+            throw {
+                code: 500,
+                message: error.message || '获取智能贷款推荐失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
      * 获取还款计划
      * @param {string} phone - 农户手机号
      * @param {string} loan_id - 贷款ID
