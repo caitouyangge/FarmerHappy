@@ -8,6 +8,7 @@ import controller.CommentController;
 import controller.OrderController;
 import controller.FinancingController;
 import controller.AiController;
+import controller.PricePredictionController;
 import dto.auth.*;
 import dto.farmer.*;
 import dto.bank.*;
@@ -27,6 +28,8 @@ import java.util.Base64;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 
 public class RouterConfig {
     private AuthController authController;
@@ -36,6 +39,7 @@ public class RouterConfig {
     private OrderController orderController;
     private FinancingController financingController;
     private AiController aiController;
+    private PricePredictionController pricePredictionController;
 
     public RouterConfig() {
         this.authController = new AuthController();
@@ -45,6 +49,7 @@ public class RouterConfig {
         this.orderController = new OrderController();
         this.financingController = new FinancingController();
         this.aiController = new AiController();
+        this.pricePredictionController = new PricePredictionController();
     }
 
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody,
@@ -405,6 +410,19 @@ public class RouterConfig {
 
         if ("/api/v1/storage/upload".equals(path) && "POST".equals(method)) {
             return handleImageUpload(requestBody);
+        }
+
+        // ============= 价格预测相关路由 =============
+
+        // 上传Excel文件
+        if ("/api/v1/farmer/price-prediction/upload".equals(path) && "POST".equals(method)) {
+            return handleExcelUpload(requestBody);
+        }
+
+        // 预测价格
+        if ("/api/v1/farmer/price-prediction/predict".equals(path) && "POST".equals(method)) {
+            PricePredictionRequestDTO request = parsePricePredictionRequest(requestBody);
+            return pricePredictionController.predictPrice(request);
         }
 
         switch (path) {
@@ -1080,6 +1098,79 @@ public class RouterConfig {
     private PendingJointLoanApplicationsRequestDTO parsePendingJointLoanApplicationsRequest(Map<String, Object> requestBody) {
         PendingJointLoanApplicationsRequestDTO request = new PendingJointLoanApplicationsRequestDTO();
         request.setPhone((String) requestBody.get("phone"));
+        return request;
+    }
+
+    /**
+     * 处理Excel文件上传
+     */
+    private Map<String, Object> handleExcelUpload(Map<String, Object> requestBody) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            Object fileObj = requestBody != null ? requestBody.get("file") : null;
+            Object fileNameObj = requestBody != null ? requestBody.get("fileName") : null;
+            
+            if (!(fileObj instanceof String)) {
+                response.put("code", 400);
+                response.put("message", "file参数必须为Base64编码的字符串");
+                return response;
+            }
+            
+            String fileBase64 = (String) fileObj;
+            String fileName = fileNameObj != null ? fileNameObj.toString() : "upload.xlsx";
+            
+            // 验证文件类型
+            if (!fileName.endsWith(".xls") && !fileName.endsWith(".xlsx")) {
+                response.put("code", 400);
+                response.put("message", "不支持的文件格式，仅支持.xls和.xlsx文件");
+                return response;
+            }
+            
+            // 解析Base64
+            String base64Data = fileBase64;
+            if (base64Data.contains(",")) {
+                base64Data = base64Data.substring(base64Data.indexOf(",") + 1);
+            }
+            
+            byte[] fileBytes = Base64.getDecoder().decode(base64Data);
+            
+            // 验证文件大小（限制10MB）
+            if (fileBytes.length > 10 * 1024 * 1024) {
+                response.put("code", 400);
+                response.put("message", "文件大小不能超过10MB");
+                return response;
+            }
+            
+            // 创建输入流并调用控制器
+            InputStream inputStream = new ByteArrayInputStream(fileBytes);
+            return pricePredictionController.uploadExcel(inputStream, fileName);
+            
+        } catch (IllegalArgumentException e) {
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return response;
+        }
+    }
+
+    /**
+     * 解析价格预测请求
+     */
+    private PricePredictionRequestDTO parsePricePredictionRequest(Map<String, Object> requestBody) {
+        PricePredictionRequestDTO request = new PricePredictionRequestDTO();
+        request.setFileId((String) requestBody.get("file_id"));
+        
+        Object predictionDaysObj = requestBody.get("prediction_days");
+        if (predictionDaysObj instanceof Number) {
+            request.setPredictionDays(((Number) predictionDaysObj).intValue());
+        }
+        
+        request.setModelType((String) requestBody.get("model_type"));
         return request;
     }
 

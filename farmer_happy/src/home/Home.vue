@@ -205,6 +205,13 @@ export default {
             icon: '💰',
             route: '/loan'
           },
+          {
+            id: 'price-prediction',
+            name: '价格预测',
+            description: '上传价格数据，预测未来价格走势',
+            icon: '📊',
+            route: '/price-prediction'
+          },
         ],
         expert: [
           {
@@ -261,7 +268,7 @@ export default {
       });
       
       // 支持路由的模块直接跳转
-      if (module.id === 'trading' || module.id === 'community' || module.id === 'orders' || module.id === 'loan') {
+      if (module.id === 'trading' || module.id === 'community' || module.id === 'orders' || module.id === 'loan' || module.id === 'price-prediction') {
         router.push(module.route);
       } else {
         // 其他模块暂时使用提示

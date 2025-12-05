@@ -9,6 +9,7 @@ import ContentForm from '../community/ContentForm.vue';
 import OrderList from '../orders/OrderList.vue';
 import OrderDetail from '../orders/OrderDetail.vue';
 import Financing from '../financing/Financing.vue';
+import PricePrediction from '../pricePrediction/PricePrediction.vue';
 
 const routes = [
   {
@@ -71,6 +72,12 @@ const routes = [
     path: '/loan',
     name: 'Financing',
     component: Financing,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/price-prediction',
+    name: 'PricePrediction',
+    component: PricePrediction,
     meta: { requiresAuth: true }
   }
 ];
