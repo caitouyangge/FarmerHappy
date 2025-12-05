@@ -12,9 +12,12 @@ import dto.farmer.ProductStatusUpdateResponseDTO;
 import dto.farmer.ProductDetailResponseDTO;
 import dto.farmer.ProductBatchActionResultDTO;
 import dto.farmer.PricePredictionResponseDTO;
+import dto.bank.*;
+import dto.farmer.*;
 import dto.community.*;
 import dto.buyer.*;
 import dto.financing.*;
+import dto.crawler.*;
 import repository.DatabaseManager;
 
 import java.io.BufferedReader;
@@ -595,9 +598,9 @@ public class application {
                     } else if (value instanceof dto.farmer.PricePredictionResponseDTO) {
                         return serializePricePredictionResponseDTO((dto.farmer.PricePredictionResponseDTO) value);
                     }
-
-
-                    else {
+                     else if (value instanceof  PriceCrawlResponseDTO) {
+                        return  serializePriceCrawlResponseDTO((PriceCrawlResponseDTO) value);
+                    } else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
                     }
                 }
@@ -1363,6 +1366,20 @@ public class application {
                     json.append("}");
                     return json.toString();
                 }
+
+                // 序列化 PriceCrawlResponseDTO
+                private String serializePriceCrawlResponseDTO(PriceCrawlResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getFile_name() != null) {
+                        json.append("\"file_name\":\"").append(escapeJsonString(dto.getFile_name())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
 
                 // 序列化 CommentReplyItemDTO
                 private String serializeCommentReplyItemDTO(CommentReplyItemDTO dto) {

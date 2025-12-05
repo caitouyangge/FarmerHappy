@@ -1,35 +1,35 @@
 // src/config/RouterConfig.java
 package config;
 
-import controller.AuthController;
-import controller.ProductController;
-import controller.ContentController;
-import controller.CommentController;
-import controller.OrderController;
-import controller.FinancingController;
 import controller.AiController;
+import controller.AuthController;
+import controller.CommentController;
+import controller.ContentController;
+import controller.FinancingController;
+import controller.OrderController;
+import controller.PriceCrawlerController;
 import controller.PricePredictionController;
+import controller.ProductController;
 import dto.auth.*;
-import dto.farmer.*;
 import dto.bank.*;
-import dto.community.*;
 import dto.buyer.*;
+import dto.community.*;
+import dto.farmer.*;
 import dto.financing.*;
-
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.UUID;
-import java.util.Base64;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class RouterConfig {
     private AuthController authController;
@@ -40,6 +40,8 @@ public class RouterConfig {
     private FinancingController financingController;
     private AiController aiController;
     private PricePredictionController pricePredictionController;
+    private PriceCrawlerController priceCrawlerController;
+
 
     public RouterConfig() {
         this.authController = new AuthController();
@@ -50,10 +52,18 @@ public class RouterConfig {
         this.financingController = new FinancingController();
         this.aiController = new AiController();
         this.pricePredictionController = new PricePredictionController();
+        this.priceCrawlerController = new PriceCrawlerController();
     }
 
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody,
             Map<String, String> headers, Map<String, String> queryParams) {
+
+        // ============= 农产品价格爬虫相关路由 =============
+
+        // 获取爬虫数据
+        if ("/api/v1/agriculture/price".equals(path) && "POST".equals(method)) {
+            return priceCrawlerController.crawlAgriculturalPrices(requestBody);
+        }
         // ============= AI 农业专家相关路由 =============
 
         // 与 AI 农业专家对话
