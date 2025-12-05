@@ -8,6 +8,7 @@ import controller.CommentController;
 import controller.OrderController;
 import controller.FinancingController;
 import controller.AiController;
+import controller.PriceCrawlerController;
 import dto.auth.*;
 import dto.farmer.*;
 import dto.bank.*;
@@ -36,6 +37,8 @@ public class RouterConfig {
     private OrderController orderController;
     private FinancingController financingController;
     private AiController aiController;
+    private PriceCrawlerController priceCrawlerController;
+
 
     public RouterConfig() {
         this.authController = new AuthController();
@@ -45,10 +48,18 @@ public class RouterConfig {
         this.orderController = new OrderController();
         this.financingController = new FinancingController();
         this.aiController = new AiController();
+        this.priceCrawlerController = new PriceCrawlerController();
     }
 
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody,
             Map<String, String> headers, Map<String, String> queryParams) {
+
+        // ============= 农产品价格爬虫相关路由 =============
+
+        // 获取爬虫数据
+        if ("/api/v1/agriculture/price".equals(path) && "POST".equals(method)) {
+            return priceCrawlerController.crawlAgriculturalPrices(requestBody);
+        }
         // ============= AI 农业专家相关路由 =============
 
         // 与 AI 农业专家对话

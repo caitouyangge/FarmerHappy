@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/farmer-happy-backend.iml" filepath="$PROJECT_DIR$/farmer-happy-backend.iml" />
       <module fileurl="file://$PROJECT_DIR$/farmer_happy_backend.iml" filepath="$PROJECT_DIR$/farmer_happy_backend.iml" />
+      <module fileurl="file://$PROJECT_DIR$/python/python.iml" filepath="$PROJECT_DIR$/python/python.iml" />
     </modules>
   </component>
 </project>
