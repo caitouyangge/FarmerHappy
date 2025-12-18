@@ -3,19 +3,26 @@ package service.crawler;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.nio.file.*;
 import java.util.HashMap;
 import java.util.Map;
-import java.nio.file.Paths;
+import java.io.IOException;
 
 public class PriceCrawlerServiceImpl implements PriceCrawlerService {
 
+    // 添加CsvSplitterService实例
+    private final CsvSplitterService csvSplitterService = new CsvSplitterService();
+
     @Override
     public Map<String, Object> crawlAgriculturalPrices(String startTime, String endTime, String productName) throws Exception {
+        // 清理result目录中的旧数据
+        cleanResultDirectory();
+
         Map<String, Object> response = new HashMap<>();
 
         // 构建Python脚本路径 - 保持原路径不变
         String projectRoot = System.getProperty("user.dir");
-        String pythonScriptPath = Paths.get(projectRoot, "python","python", "xinfadi_crawler.py").toString();
+        String pythonScriptPath = Paths.get(projectRoot, "python", "xinfadi_crawler.py").toString();
 
         // 构建命令行参数
         ProcessBuilder processBuilder = new ProcessBuilder(
@@ -55,59 +62,16 @@ public class PriceCrawlerServiceImpl implements PriceCrawlerService {
             String outputStr = output.toString().trim();
             System.out.println("Python output: " + outputStr); // 调试日志
 
-            // 更稳健的JSON解析方法
-            if (outputStr.startsWith("{") && outputStr.endsWith("}")) {
-                try {
-                    // 查找file_name字段，使用更精确的匹配方式
-                    int fileNameStart = outputStr.indexOf("\"file_name\"");
-                    if (fileNameStart != -1) {
-                        // 找到冒号位置
-                        int colonIndex = outputStr.indexOf(":", fileNameStart);
-                        if (colonIndex != -1) {
-                            // 找到第一个引号
-                            int firstQuote = outputStr.indexOf("\"", colonIndex);
-                            if (firstQuote != -1) {
-                                // 找到第二个引号
-                                int secondQuote = outputStr.indexOf("\"", firstQuote + 1);
-                                if (secondQuote != -1) {
-                                    String fileName = outputStr.substring(firstQuote + 1, secondQuote);
-                                    response.put("file_name", fileName);
-                                    return response;
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    System.err.println("解析JSON时出错: " + e.getMessage());
-                }
-            }
+            // 使用更安全的方式解析文件名
+            String fileName = parseFileNameFromOutput(outputStr);
+            if (fileName != null && !fileName.isEmpty()) {
+                response.put("file_name", fileName);
 
-            // 如果无法解析JSON，只返回最后一行可能的JSON输出
-            String[] lines = outputStr.split("\n");
-            if (lines.length > 0) {
-                String lastLine = lines[lines.length - 1].trim();
-                if (lastLine.startsWith("{") && lastLine.endsWith("}")) {
-                    try {
-                        // 尝试解析最后一行作为JSON
-                        int fileNameStart = lastLine.indexOf("\"file_name\"");
-                        if (fileNameStart != -1) {
-                            int colonIndex = lastLine.indexOf(":", fileNameStart);
-                            if (colonIndex != -1) {
-                                int firstQuote = lastLine.indexOf("\"", colonIndex);
-                                if (firstQuote != -1) {
-                                    int secondQuote = lastLine.indexOf("\"", firstQuote + 1);
-                                    if (secondQuote != -1) {
-                                        String fileName = lastLine.substring(firstQuote + 1, secondQuote);
-                                        response.put("file_name", fileName);
-                                        return response;
-                                    }
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        System.err.println("解析最后一行JSON时出错: " + e.getMessage());
-                    }
-                }
+                // 调用Java方法分割CSV文件
+                splitCsvFile(fileName);
+
+                System.out.println("Python output: " + fileName);
+                return response;
             }
 
             // 如果仍然无法解析JSON，返回原始输出
@@ -116,5 +80,85 @@ public class PriceCrawlerServiceImpl implements PriceCrawlerService {
         } else {
             throw new Exception("Python脚本执行失败: " + errorOutput.toString());
         }
+    }
+
+    /**
+     * 清理result目录中的旧数据文件
+     */
+    private void cleanResultDirectory() {
+        String projectRoot = System.getProperty("user.dir");
+        Path resultDir = Paths.get(projectRoot, "result");
+
+        try {
+            // 如果result目录存在，删除整个目录
+            if (Files.exists(resultDir)) {
+                deleteDirectoryRecursively(resultDir);
+            }
+
+            // 重新创建result目录
+            Files.createDirectories(resultDir);
+        } catch (IOException e) {
+            System.err.println("清理或创建result目录失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 递归删除目录及其内容
+     *
+     * @param directory 目录路径
+     * @throws IOException IO异常
+     */
+    private void deleteDirectoryRecursively(Path directory) throws IOException {
+        if (Files.exists(directory)) {
+            Files.walk(directory)
+                    .sorted((a, b) -> b.compareTo(a)) // 先删除子文件再删除目录
+                    .forEach(path -> {
+                        try {
+                            Files.delete(path);
+                        } catch (IOException e) {
+                            System.err.println("删除文件/目录失败: " + path.toString() + ", 错误: " + e.getMessage());
+                        }
+                    });
+        }
+    }
+
+    /**
+     * 使用字符串方式安全解析文件名
+     */
+    private String parseFileNameFromOutput(String outputStr) {
+        // 查找最后出现的完整JSON对象
+        int lastBraceStart = outputStr.lastIndexOf("{");
+        int lastBraceEnd = outputStr.lastIndexOf("}");
+
+        if (lastBraceStart != -1 && lastBraceEnd != -1 && lastBraceEnd > lastBraceStart) {
+            String lastJsonObject = outputStr.substring(lastBraceStart, lastBraceEnd + 1);
+
+            // 在这个JSON对象中查找file_name
+            int fileNameIndex = lastJsonObject.indexOf("\"file_name\"");
+            if (fileNameIndex != -1) {
+                int colonIndex = lastJsonObject.indexOf(":", fileNameIndex);
+                if (colonIndex != -1) {
+                    int firstQuote = lastJsonObject.indexOf("\"", colonIndex);
+                    if (firstQuote != -1) {
+                        int secondQuote = lastJsonObject.indexOf("\"", firstQuote + 1);
+                        if (secondQuote != -1) {
+                            return lastJsonObject.substring(firstQuote + 1, secondQuote);
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 分割CSV文件
+     *
+     * @param fileName 文件名
+     * @throws Exception 异常
+     */
+    private void splitCsvFile(String fileName) throws Exception {
+        csvSplitterService.splitCsvFile(fileName);
     }
 }

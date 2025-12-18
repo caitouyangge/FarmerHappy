@@ -3,8 +3,13 @@ import argparse
 import json
 import sys
 import os
+import io
 import time
 from datetime import datetime, timedelta
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 
 class XinfadiCrawler:
     def __init__(self, result_dir="result"):
@@ -180,7 +185,7 @@ def main():
     print(f"搜索条件：时间范围 {today} 至 {today}，品类：苹果")
 
     all_data = crawler.get_limited_price_data(
-        max_pages=2,
+        max_pages=5,
         limit=100,
         pubDateStartTime=today,
         pubDateEndTime=today,
@@ -215,7 +220,7 @@ def main_cli():
 
         # 获取限定页数的数据并保存
         all_data = crawler.get_limited_price_data(
-            max_pages=2,
+            max_pages=5,
             limit=100,
             pubDateStartTime=args.start_time,
             pubDateEndTime=args.end_time,
