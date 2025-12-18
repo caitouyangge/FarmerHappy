@@ -61,6 +61,63 @@ public class application {
 
                         System.out.println("处理请求: " + method + " " + path + (query != null ? "?" + query : ""));
 
+                        // 解析URL查询参数（需要在处理文件下载之前）
+                        Map<String, String> queryParams = parseQueryParams(query);
+
+                        // 处理CSV文件下载
+                        if ("GET".equals(method) && "/api/v1/agriculture/price/download".equals(path)) {
+                            String fileName = queryParams != null ? queryParams.get("file_name") : null;
+                            if (fileName != null && !fileName.isEmpty()) {
+                                // 构建CSV文件路径
+                                // Python脚本将文件保存在项目根目录的result文件夹中
+                                String projectRoot = System.getProperty("user.dir");
+                                java.nio.file.Path filePath = java.nio.file.Paths.get(projectRoot, "result", fileName);
+                                
+                                System.out.println("查找CSV文件 - 项目根目录: " + projectRoot);
+                                System.out.println("查找CSV文件 - 文件名: " + fileName);
+                                System.out.println("查找CSV文件 - 路径1: " + filePath.toString());
+                                System.out.println("查找CSV文件 - 路径1存在: " + java.nio.file.Files.exists(filePath));
+                                
+                                // 如果文件不存在，尝试在python/python/result目录查找（兼容旧路径）
+                                if (!java.nio.file.Files.exists(filePath)) {
+                                    filePath = java.nio.file.Paths.get(projectRoot, "python", "python", "result", fileName);
+                                    System.out.println("查找CSV文件 - 路径2: " + filePath.toString());
+                                    System.out.println("查找CSV文件 - 路径2存在: " + java.nio.file.Files.exists(filePath));
+                                }
+                                
+                                if (java.nio.file.Files.exists(filePath)) {
+                                    System.out.println("找到CSV文件: " + filePath.toString());
+                                    try {
+                                        // 设置响应头
+                                        exchange.getResponseHeaders().set("Content-Type", "text/csv; charset=UTF-8");
+                                        // 使用URL编码的文件名，确保中文字符正确显示
+                                        String encodedFileName = java.net.URLEncoder.encode(fileName, "UTF-8").replace("+", "%20");
+                                        exchange.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"" + encodedFileName + "\"; filename*=UTF-8''" + encodedFileName);
+                                        
+                                        byte[] bytes = java.nio.file.Files.readAllBytes(filePath);
+                                        exchange.sendResponseHeaders(200, bytes.length);
+                                        OutputStream os = exchange.getResponseBody();
+                                        os.write(bytes);
+                                        os.close();
+                                        System.out.println("CSV文件下载成功");
+                                        return;
+                                    } catch (Exception e) {
+                                        System.err.println("下载CSV文件时出错: " + e.getMessage());
+                                        e.printStackTrace();
+                                        exchange.sendResponseHeaders(500, -1);
+                                        return;
+                                    }
+                                } else {
+                                    System.out.println("CSV文件不存在: " + filePath.toString());
+                                    exchange.sendResponseHeaders(404, -1);
+                                    return;
+                                }
+                            } else {
+                                exchange.sendResponseHeaders(400, -1);
+                                return;
+                            }
+                        }
+
                         if ("GET".equals(method) && path.startsWith("/uploads/")) {
                             java.nio.file.Path filePath = java.nio.file.Paths.get("uploads").resolve(path.substring("/uploads/".length()));
                             if (java.nio.file.Files.exists(filePath)) {
@@ -94,10 +151,7 @@ public class application {
                             }
                         }
 
-                        // 解析URL查询参数
-                        Map<String, String> queryParams = parseQueryParams(query);
-
-                        // 处理请求并获取响应（传递查询参数）
+                        // 处理请求并获取响应（传递查询参数，queryParams已在前面定义）
                         Map<String, Object> response = routerConfig.handleRequest(path, method, requestBody, headers, queryParams);
 
                         System.out.println("生成响应: code=" + response.get("code"));
@@ -497,11 +551,20 @@ public class application {
                 }
 
                 private String toJson(Map<String, Object> map) {
+                    if (map == null) {
+                        return "null";
+                    }
                     StringBuilder json = new StringBuilder("{");
                     for (Map.Entry<String, Object> entry : map.entrySet()) {
-                        json.append("\"").append(entry.getKey()).append("\":");
-                        json.append(serializeValue(entry.getValue()));
-                        json.append(",");
+                        try {
+                            json.append("\"").append(entry.getKey()).append("\":");
+                            json.append(serializeValue(entry.getValue()));
+                            json.append(",");
+                        } catch (Exception e) {
+                            System.err.println("序列化键 '" + entry.getKey() + "' 时出错: " + e.getMessage());
+                            e.printStackTrace();
+                            // 跳过这个键值对，继续处理其他的
+                        }
                     }
                     if (json.length() > 1) json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
                     json.append("}");
@@ -521,7 +584,10 @@ public class application {
                     } else if (value instanceof List) {
                         return serializeList((List<?>) value);
                     } else if (value instanceof Map) {
-                        return toJson((Map<String, Object>) value);
+                        // 确保Map的键是String类型
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> map = (Map<String, Object>) value;
+                        return toJson(map);
                     } else if (value instanceof AuthResponseDTO) {
                         return serializeAuthResponseDTO((AuthResponseDTO) value);
                     } else if (value instanceof ProductResponseDTO) {
@@ -1914,6 +1980,26 @@ public class application {
                     
                     if (dto.getTrend() != null) {
                         json.append("\"trend\":\"").append(escapeJsonString(dto.getTrend())).append("\",");
+                    }
+                    
+                    // 始终包含calculation_details字段，即使为null也序列化为空对象
+                    if (dto.getCalculationDetails() != null) {
+                        System.out.println("序列化calculationDetails，包含键: " + dto.getCalculationDetails().keySet());
+                        System.out.println("calculationDetails大小: " + dto.getCalculationDetails().size());
+                        try {
+                            String calcDetailsJson = toJson(dto.getCalculationDetails());
+                            System.out.println("calculationDetails JSON长度: " + calcDetailsJson.length());
+                            System.out.println("calculationDetails JSON前100字符: " + (calcDetailsJson.length() > 100 ? calcDetailsJson.substring(0, 100) : calcDetailsJson));
+                            json.append("\"calculation_details\":").append(calcDetailsJson).append(",");
+                        } catch (Exception e) {
+                            System.err.println("序列化calculationDetails时出错: " + e.getMessage());
+                            e.printStackTrace();
+                            // 即使出错也添加一个空对象，确保字段存在
+                            json.append("\"calculation_details\":{},");
+                        }
+                    } else {
+                        System.out.println("警告: calculationDetails为null，将序列化为空对象");
+                        json.append("\"calculation_details\":{},");
                     }
                     
                     if (json.length() > 1) {

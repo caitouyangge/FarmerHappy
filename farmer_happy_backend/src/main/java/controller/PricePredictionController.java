@@ -79,6 +79,14 @@ public class PricePredictionController {
                 modelType
             );
             
+            // 调试：检查calculationDetails是否设置
+            if (result.getCalculationDetails() != null) {
+                System.out.println("CalculationDetails已设置，包含 " + result.getCalculationDetails().size() + " 个键");
+                System.out.println("键列表: " + result.getCalculationDetails().keySet());
+            } else {
+                System.out.println("警告: CalculationDetails为null!");
+            }
+            
             response.put("code", 200);
             response.put("message", "预测成功");
             response.put("data", result);

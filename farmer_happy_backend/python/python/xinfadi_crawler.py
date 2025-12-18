@@ -173,18 +173,20 @@ def main():
 
     # 获取当前日期
     today = datetime.now().strftime("%Y-%m-%d")
+    # 获取一年前的日期
+    one_year_ago = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
 
     # 获取限定页数的数据并保存（默认最多10页）
-    # 添加默认搜索条件：时间范围为当天，品类为"苹果"
+    # 添加默认搜索条件：时间范围为一年，品类为"苹果"
     print("获取限定页数的价格数据...")
-    print(f"搜索条件：时间范围 {today} 至 {today}，品类：苹果")
+    print(f"搜索条件：时间范围 {one_year_ago} 至 {today}，品类：苹果")
 
     all_data = crawler.get_limited_price_data(
         max_pages=2,
-        limit=100,
-        pubDateStartTime=today,
+        limit=365,
+        pubDateStartTime=one_year_ago,
         pubDateEndTime=today,
-        prodName="猪"
+        prodName="苹果"
     )
 
     if all_data:

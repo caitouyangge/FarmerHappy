@@ -10,6 +10,7 @@ import OrderList from '../orders/OrderList.vue';
 import OrderDetail from '../orders/OrderDetail.vue';
 import Financing from '../financing/Financing.vue';
 import PricePrediction from '../pricePrediction/PricePrediction.vue';
+import PriceData from '../priceData/PriceData.vue';
 
 const routes = [
   {
@@ -78,6 +79,12 @@ const routes = [
     path: '/price-prediction',
     name: 'PricePrediction',
     component: PricePrediction,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/price-data',
+    name: 'PriceData',
+    component: PriceData,
     meta: { requiresAuth: true }
   }
 ];

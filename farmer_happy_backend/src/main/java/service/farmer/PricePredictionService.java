@@ -4,7 +4,7 @@ package service.farmer;
 import dto.farmer.PricePredictionResponseDTO;
 import util.ExcelParser;
 import util.RegressionModel;
-import util.TimeSeriesModel;
+import util.ARIMAModel;
 
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
@@ -87,17 +87,17 @@ public class PricePredictionService {
             trainingData.add(new RegressionModel.Point(daysDiff, point.getPrice()));
         }
         
-        // 统一使用时间序列模型（准确率最高）
-        List<TimeSeriesModel.Point> timeSeriesData = new ArrayList<>();
+        // 使用ARIMA模型
+        List<ARIMAModel.Point> arimaData = new ArrayList<>();
         for (RegressionModel.Point point : trainingData) {
-            timeSeriesData.add(new TimeSeriesModel.Point(point.x, point.y));
+            arimaData.add(new ARIMAModel.Point(point.x, point.y));
         }
         
-        // 自动选择最佳alpha参数
-        double bestAlpha = TimeSeriesModel.findBestAlpha(timeSeriesData);
-        TimeSeriesModel timeSeriesModel = new TimeSeriesModel();
-        timeSeriesModel.trainExponentialSmoothing(timeSeriesData, bestAlpha);
-        TimeSeriesModel.Metrics timeSeriesMetrics = timeSeriesModel.evaluate();
+        // 自动选择ARIMA参数
+        ARIMAModel.ARIMAParams arimaParams = ARIMAModel.autoSelectParams(arimaData);
+        ARIMAModel arimaModel = new ARIMAModel();
+        arimaModel.train(arimaData, arimaParams);
+        ARIMAModel.Metrics arimaMetrics = arimaModel.evaluate();
         
         // 构建历史数据
         List<Map<String, Object>> historicalData = new ArrayList<>();
@@ -111,6 +111,7 @@ public class PricePredictionService {
         
         // 预测未来数据
         List<Map<String, Object>> predictedData = new ArrayList<>();
+        List<Double> futureXValues = new ArrayList<>();
         Date lastDate = dataPoints.get(dataPoints.size() - 1).getDate();
         long lastDays = (lastDate.getTime() - firstDate.getTime()) / oneDay;
         
@@ -119,7 +120,8 @@ public class PricePredictionService {
         
         for (int i = 1; i <= predictionDays; i++) {
             long futureDays = lastDays + i;
-            double predictedPrice = timeSeriesModel.predict(futureDays);
+            futureXValues.add((double)futureDays);
+            double predictedPrice = arimaModel.predict(i);
             
             // 确保价格不为负
             if (predictedPrice < 0) {
@@ -135,20 +137,85 @@ public class PricePredictionService {
             predictedData.add(item);
         }
         
+        // 构建详细计算过程
+        Map<String, Object> calculationDetails = new HashMap<>();
+        
+        // 数据预处理详情
+        Map<String, Object> preprocessingDetails = new HashMap<>();
+        preprocessingDetails.put("original_count", dataPoints.size());
+        preprocessingDetails.put("cleaned_count", cleanedData.size());
+        preprocessingDetails.put("removed_count", dataPoints.size() - cleanedData.size());
+        if (dataPoints.size() != cleanedData.size()) {
+            double mean = dataPoints.stream().mapToDouble(ExcelParser.DataPoint::getPrice).average().orElse(0);
+            double variance = dataPoints.stream()
+                .mapToDouble(p -> Math.pow(p.getPrice() - mean, 2))
+                .average().orElse(0);
+            double stdDev = Math.sqrt(variance);
+            preprocessingDetails.put("mean", Math.round(mean * 100.0) / 100.0);
+            preprocessingDetails.put("std_dev", Math.round(stdDev * 100.0) / 100.0);
+            preprocessingDetails.put("lower_bound", Math.round((mean - 3 * stdDev) * 100.0) / 100.0);
+            preprocessingDetails.put("upper_bound", Math.round((mean + 3 * stdDev) * 100.0) / 100.0);
+            preprocessingDetails.put("method", "3倍标准差规则");
+        } else {
+            preprocessingDetails.put("method", "数据点少于10个，未进行异常值过滤");
+        }
+        calculationDetails.put("preprocessing", preprocessingDetails);
+        
+        // ARIMA模型参数详情
+        Map<String, Object> arimaParamsDetails = new HashMap<>();
+        arimaParamsDetails.put("model_type", arimaParams.toString());
+        arimaParamsDetails.put("p", arimaParams.p);
+        arimaParamsDetails.put("d", arimaParams.d);
+        arimaParamsDetails.put("q", arimaParams.q);
+        arimaParamsDetails.put("is_seasonal", arimaParams.isSeasonal());
+        if (arimaParams.isSeasonal()) {
+            arimaParamsDetails.put("P", arimaParams.P);
+            arimaParamsDetails.put("D", arimaParams.D);
+            arimaParamsDetails.put("Q", arimaParams.Q);
+            arimaParamsDetails.put("s", arimaParams.s);
+        }
+        arimaParamsDetails.put("method", "自动选择：基于数据特征自动确定最优参数");
+        calculationDetails.put("arima_params", arimaParamsDetails);
+        
+        // ARIMA模型计算详情
+        Map<String, Object> modelDetails = getARIMACalculationDetails(arimaModel, arimaData, arimaParams);
+        calculationDetails.put("model_calculation", modelDetails);
+        
+        // 预测过程详情
+        List<Map<String, Object>> predictionDetails = new ArrayList<>();
+        cal.setTime(lastDate);
+        for (int i = 0; i < predictionDays; i++) {
+            cal.add(Calendar.DAY_OF_MONTH, 1);
+            double predictedPrice = arimaModel.predict(i + 1);
+            
+            Map<String, Object> detail = new HashMap<>();
+            detail.put("step", i + 1);
+            detail.put("date", sdf.format(cal.getTime()));
+            detail.put("predicted_price", Math.round(predictedPrice * 100.0) / 100.0);
+            detail.put("formula", String.format("ARIMA预测：使用AR(%d)和MA(%d)模型，差分次数d=%d", 
+                arimaParams.p, arimaParams.q, arimaParams.d));
+            predictionDetails.add(detail);
+        }
+        calculationDetails.put("prediction_steps", predictionDetails);
+        
         // 构建响应
         PricePredictionResponseDTO response = new PricePredictionResponseDTO();
         response.setHistoricalData(historicalData);
         response.setPredictedData(predictedData);
         
         Map<String, Double> metricsMap = new HashMap<>();
-        metricsMap.put("r_squared", Math.round(timeSeriesMetrics.rSquared * 10000.0) / 10000.0);
-        metricsMap.put("mae", Math.round(timeSeriesMetrics.mae * 100.0) / 100.0);
-        metricsMap.put("rmse", Math.round(timeSeriesMetrics.rmse * 100.0) / 100.0);
+        metricsMap.put("r_squared", Math.round(arimaMetrics.rSquared * 10000.0) / 10000.0);
+        metricsMap.put("mae", Math.round(arimaMetrics.mae * 100.0) / 100.0);
+        metricsMap.put("rmse", Math.round(arimaMetrics.rmse * 100.0) / 100.0);
+        metricsMap.put("aic", Math.round(arimaMetrics.aic * 100.0) / 100.0);
         response.setModelMetrics(metricsMap);
         
         // 根据趋势判断价格走势
-        String trend = determineTrend(timeSeriesData);
+        String trend = determineTrendFromARIMA(arimaData);
         response.setTrend(trend);
+        
+        // 设置详细计算过程
+        response.setCalculationDetails(calculationDetails);
         
         return response;
     }
@@ -188,9 +255,84 @@ public class PricePredictionService {
     }
     
     /**
-     * 根据时间序列数据判断趋势
+     * 获取ARIMA模型的计算详情
      */
-    private String determineTrend(List<TimeSeriesModel.Point> data) {
+    private Map<String, Object> getARIMACalculationDetails(ARIMAModel model, 
+                                                             List<ARIMAModel.Point> data,
+                                                             ARIMAModel.ARIMAParams params) {
+        Map<String, Object> details = new HashMap<>();
+        
+        // 模型参数
+        details.put("model_type", params.toString());
+        details.put("p", params.p);
+        details.put("d", params.d);
+        details.put("q", params.q);
+        
+        // AR系数
+        double[] arCoeffs = model.getARCoefficients();
+        List<Map<String, Object>> arCoeffsList = new ArrayList<>();
+        for (int i = 0; i < arCoeffs.length; i++) {
+            Map<String, Object> coeff = new HashMap<>();
+            coeff.put("order", i + 1);
+            coeff.put("value", Math.round(arCoeffs[i] * 10000.0) / 10000.0);
+            coeff.put("description", String.format("AR(%d)系数 φ%d", i + 1, i + 1));
+            arCoeffsList.add(coeff);
+        }
+        details.put("ar_coefficients", arCoeffsList);
+        
+        // MA系数
+        double[] maCoeffs = model.getMACoefficients();
+        List<Map<String, Object>> maCoeffsList = new ArrayList<>();
+        for (int i = 0; i < maCoeffs.length; i++) {
+            Map<String, Object> coeff = new HashMap<>();
+            coeff.put("order", i + 1);
+            coeff.put("value", Math.round(maCoeffs[i] * 10000.0) / 10000.0);
+            coeff.put("description", String.format("MA(%d)系数 θ%d", i + 1, i + 1));
+            maCoeffsList.add(coeff);
+        }
+        details.put("ma_coefficients", maCoeffsList);
+        
+        // 差分过程
+        List<Double> differencedData = model.getDifferencedData();
+        List<Map<String, Object>> differencingSteps = new ArrayList<>();
+        if (params.d > 0) {
+            Map<String, Object> step = new HashMap<>();
+            step.put("step", 1);
+            step.put("description", String.format("进行%d阶差分，消除趋势", params.d));
+            step.put("original_count", data.size());
+            step.put("differenced_count", differencedData.size());
+            differencingSteps.add(step);
+        }
+        details.put("differencing_steps", differencingSteps);
+        
+        // 残差信息
+        double[] residuals = model.getResiduals();
+        if (residuals != null && residuals.length > 0) {
+            double residualMean = 0;
+            double residualStd = 0;
+            for (double res : residuals) {
+                residualMean += res;
+            }
+            residualMean /= residuals.length;
+            for (double res : residuals) {
+                residualStd += Math.pow(res - residualMean, 2);
+            }
+            residualStd = Math.sqrt(residualStd / residuals.length);
+            
+            Map<String, Object> residualInfo = new HashMap<>();
+            residualInfo.put("count", residuals.length);
+            residualInfo.put("mean", Math.round(residualMean * 10000.0) / 10000.0);
+            residualInfo.put("std", Math.round(residualStd * 100.0) / 100.0);
+            details.put("residual_info", residualInfo);
+        }
+        
+        return details;
+    }
+    
+    /**
+     * 根据ARIMA数据判断趋势
+     */
+    private String determineTrendFromARIMA(List<ARIMAModel.Point> data) {
         if (data == null || data.size() < 2) {
             return "波动";
         }

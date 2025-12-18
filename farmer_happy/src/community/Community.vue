@@ -10,11 +10,6 @@
         <h1 class="header-title">专家农户交流平台</h1>
       </div>
       <div class="header-actions">
-        <button class="btn-ai" @click="handleAskAiClick">
-          <span class="ai-icon">🤖</span>
-          <span v-if="!aiLoading">AI农业专家</span>
-          <span v-else>咨询中...</span>
-        </button>
         <button class="btn-publish" @click="handlePublishClick">
           <span class="publish-icon">✎</span>
           发布内容
@@ -50,7 +45,7 @@
       </div>
 
       <!-- AI 农业专家聊天框 -->
-      <div class="ai-chat-container" :class="{ collapsed: !showAiChat }">
+      <div v-if="!isExpert" class="ai-chat-container" :class="{ collapsed: !showAiChat }">
         <div class="ai-chat-header" @click="toggleAiChat">
           <div class="ai-chat-title">
             <span class="ai-icon-header">🤖</span>
@@ -223,6 +218,12 @@ export default {
     const aiChatInput = ref('');
     const aiChatMessages = ref([]);
     const chatMessagesRef = ref(null);
+    const userInfo = ref(null);
+
+    // 判断是否是专家用户
+    const isExpert = computed(() => {
+      return userInfo.value?.userType === 'expert';
+    });
 
     const contentTypes = [
       { value: 'all', label: '全部' },
@@ -484,6 +485,7 @@ export default {
 
     onMounted(() => {
       logger.lifecycle('Community', 'mounted');
+      userInfo.value = getUserInfo();
       loadContentList();
     });
 
@@ -502,6 +504,7 @@ export default {
       aiChatInput,
       aiChatMessages,
       chatMessagesRef,
+      isExpert,
       handleTypeChange,
       handleSortChange,
       handleSearch,

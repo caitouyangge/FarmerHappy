@@ -12,6 +12,7 @@ public class PricePredictionResponseDTO {
     private List<Map<String, Object>> predictedData;
     private Map<String, Double> modelMetrics;
     private String trend;
+    private Map<String, Object> calculationDetails; // 详细计算过程
     
     public List<Map<String, Object>> getHistoricalData() {
         return historicalData;
@@ -44,5 +45,15 @@ public class PricePredictionResponseDTO {
     public void setTrend(String trend) {
         this.trend = trend;
     }
+    
+    public Map<String, Object> getCalculationDetails() {
+        return calculationDetails;
+    }
+    
+    public void setCalculationDetails(Map<String, Object> calculationDetails) {
+        this.calculationDetails = calculationDetails;
+    }
 }
+
+
 

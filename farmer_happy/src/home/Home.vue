@@ -212,6 +212,13 @@ export default {
             icon: '📊',
             route: '/price-prediction'
           },
+          {
+            id: 'price-data',
+            name: '价格数据获取',
+            description: '获取农产品价格数据，导出为Excel文件',
+            icon: '📈',
+            route: '/price-data'
+          },
         ],
         expert: [
           {
@@ -268,7 +275,7 @@ export default {
       });
       
       // 支持路由的模块直接跳转
-      if (module.id === 'trading' || module.id === 'community' || module.id === 'orders' || module.id === 'loan' || module.id === 'price-prediction') {
+      if (module.id === 'trading' || module.id === 'community' || module.id === 'orders' || module.id === 'loan' || module.id === 'price-prediction' || module.id === 'price-data') {
         router.push(module.route);
       } else {
         // 其他模块暂时使用提示
