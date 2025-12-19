@@ -187,8 +187,8 @@ def main():
     print(f"搜索条件：时间范围 {one_year_ago} 至 {today}，品类：苹果")
 
     all_data = crawler.get_limited_price_data(
-        max_pages=2,
-        limit=365,
+        max_pages=10,
+        limit=100,
         pubDateStartTime=one_year_ago,
         pubDateEndTime=today,
         prodName="苹果"
@@ -222,7 +222,7 @@ def main_cli():
 
         # 获取限定页数的数据并保存
         all_data = crawler.get_limited_price_data(
-            max_pages=5,
+            max_pages=10,
             limit=100,
             pubDateStartTime=args.start_time,
             pubDateEndTime=args.end_time,

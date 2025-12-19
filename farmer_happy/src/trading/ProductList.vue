@@ -155,8 +155,8 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, reactive } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted, reactive, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { productService } from '../api/product';
 import logger from '../utils/logger';
 import ProductCard from '../components/ProductCard.vue';
@@ -176,6 +176,7 @@ export default {
   },
   setup() {
     const router = useRouter();
+    const route = useRoute();
     const userInfo = ref({});
     const products = ref([]);
     const loading = ref(false);
@@ -235,7 +236,15 @@ export default {
         try {
           userInfo.value = JSON.parse(storedUser);
           logger.info('PRODUCT_LIST', '加载用户信息成功', { userType: userInfo.value.userType });
-          loadProducts();
+          loadProducts().then(() => {
+            // 检查是否有productId查询参数，如果有则打开商品详情
+            const productId = route.query.productId;
+            if (productId) {
+              handleViewProduct(productId);
+              // 清除查询参数
+              router.replace({ path: '/trading', query: {} });
+            }
+          });
         } catch (error) {
           logger.error('PRODUCT_LIST', '解析用户信息失败', {}, error);
           router.push('/login');
@@ -243,6 +252,15 @@ export default {
       } else {
         logger.warn('PRODUCT_LIST', '未找到用户信息，跳转到登录页');
         router.push('/login');
+      }
+    });
+
+    // 监听路由查询参数变化
+    watch(() => route.query.productId, (newProductId) => {
+      if (newProductId) {
+        handleViewProduct(newProductId);
+        // 清除查询参数
+        router.replace({ path: '/trading', query: {} });
       }
     });
 

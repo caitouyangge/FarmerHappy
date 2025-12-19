@@ -266,21 +266,30 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
-            // 验证用户是否具有农户身份
+            // 检查用户类型
+            boolean isFarmer = false;
+            Long farmerId = null;
             try {
-                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
-                    throw new IllegalArgumentException("只有农户可以操作商品");
+                isFarmer = authService.checkUserTypeExists(user.getUid(), "farmer");
+                if (isFarmer) {
+                    // 如果是农户，获取农户ID，用于验证商品是否属于该农户
+                    farmerId = getFarmerIdByUserId(conn, user.getUid());
                 }
             } catch (SQLException e) {
                 throw new SQLException("验证用户身份失败: " + e.getMessage());
             }
 
-            // 获取农户ID
-            Long farmerId = getFarmerIdByUserId(conn, user.getUid());
-
             // 获取商品详情
             long prodId = Long.parseLong(productId);
-            ProductDetailResponseDTO productDetail = getProductDetailById(conn, prodId, farmerId);
+            ProductDetailResponseDTO productDetail;
+            
+            if (isFarmer && farmerId != null) {
+                // 农户只能查看自己的商品
+                productDetail = getProductDetailById(conn, prodId, farmerId);
+            } else {
+                // 买家可以查看所有在售商品（不限制农户）
+                productDetail = getProductDetailByIdForBuyer(conn, prodId);
+            }
 
             return productDetail;
         } finally {
@@ -361,6 +370,79 @@ public class ProductServiceImpl implements ProductService {
                 productList.add(product);
             }
 
+            return productList;
+        } finally {
+            if (conn != null) {
+                conn.close();
+            }
+        }
+    }
+
+    // 获取所有在售商品（用于广告）
+    @Override
+    public List<ProductListResponseDTO> getAllOnShelfProducts() throws Exception {
+        Connection conn = null;
+        try {
+            conn = databaseManager.getConnection();
+
+            // 构建查询语句 - 查询所有在售商品的基本信息
+            String sql = "SELECT p.product_id, p.title, p.price, p.stock, p.status, p.detailed_description " +
+                    "FROM products p " +
+                    "WHERE p.status = 'on_shelf' AND p.stock > 0 AND p.enable = TRUE " +
+                    "ORDER BY p.created_at DESC";
+
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            ResultSet rs = stmt.executeQuery();
+
+            List<ProductListResponseDTO> productList = new ArrayList<>();
+            while (rs.next()) {
+                ProductListResponseDTO product = new ProductListResponseDTO();
+                long productId = rs.getLong("product_id");
+                product.setProduct_id(String.valueOf(productId));
+                product.setTitle(rs.getString("title"));
+                product.setPrice(rs.getDouble("price"));
+                product.setStock(rs.getInt("stock"));
+                product.setStatus(rs.getString("status"));
+                
+                // 获取商品的所有图片
+                String imgSql = "SELECT image_url FROM product_images WHERE product_id = ? ORDER BY sort_order";
+                PreparedStatement imgStmt = conn.prepareStatement(imgSql);
+                imgStmt.setLong(1, productId);
+                ResultSet imgRs = imgStmt.executeQuery();
+                
+                List<String> images = new ArrayList<>();
+                int imageCount = 0;
+                while (imgRs.next()) {
+                    String imageUrl = imgRs.getString("image_url");
+                    if (imageUrl != null && !imageUrl.trim().isEmpty()) {
+                        images.add(imageUrl);
+                        imageCount++;
+                    }
+                }
+                imgRs.close();
+                imgStmt.close();
+                
+                // 调试日志
+                System.out.println("商品ID: " + productId + ", 查询到的图片数量: " + imageCount + ", 图片列表: " + images);
+                
+                // 设置主图和所有图片
+                if (!images.isEmpty()) {
+                    product.setMain_image_url(images.get(0));
+                    product.setImages(images);
+                } else {
+                    // 如果没有图片，设置空列表
+                    product.setImages(new ArrayList<>());
+                }
+                
+                // 设置详细介绍
+                String detailedDesc = rs.getString("detailed_description");
+                product.setDetailed_description(detailedDesc);
+                
+                productList.add(product);
+            }
+
+            rs.close();
+            stmt.close();
             return productList;
         } finally {
             if (conn != null) {
@@ -835,7 +917,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    // 获取商品详情
+    // 获取商品详情（农户版本：只能查看自己的商品）
     private ProductDetailResponseDTO getProductDetailById(Connection conn, long productId, Long farmerId)
             throws SQLException {
         String sql = "SELECT p.*, pi.image_url FROM products p " +
@@ -873,6 +955,49 @@ public class ProductServiceImpl implements ProductService {
 
         if (productDetail == null) {
             throw new SQLException("商品不存在或不属于该农户");
+        }
+
+        productDetail.setImages(images);
+        return productDetail;
+    }
+
+    // 获取商品详情（买家版本：可以查看所有在售商品）
+    private ProductDetailResponseDTO getProductDetailByIdForBuyer(Connection conn, long productId)
+            throws SQLException {
+        String sql = "SELECT p.*, pi.image_url FROM products p " +
+                "LEFT JOIN product_images pi ON p.product_id = pi.product_id " +
+                "WHERE p.product_id = ? " +
+                "ORDER BY pi.sort_order";
+
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setLong(1, productId);
+        ResultSet rs = stmt.executeQuery();
+
+        ProductDetailResponseDTO productDetail = null;
+        List<String> images = new ArrayList<>();
+
+        while (rs.next()) {
+            if (productDetail == null) {
+                productDetail = new ProductDetailResponseDTO();
+                productDetail.setProduct_id(String.valueOf(rs.getLong("product_id")));
+                productDetail.setTitle(rs.getString("title"));
+                productDetail.setDetailedDescription(rs.getString("detailed_description"));
+                productDetail.setPrice(rs.getDouble("price"));
+                productDetail.setStock(rs.getInt("stock"));
+                productDetail.setDescription(rs.getString("description"));
+                productDetail.setOrigin(rs.getString("origin"));
+                productDetail.setStatus(rs.getString("status"));
+                productDetail.setCreated_at(rs.getTimestamp("created_at").toLocalDateTime());
+            }
+
+            String imageUrl = rs.getString("image_url");
+            if (imageUrl != null) {
+                images.add(imageUrl);
+            }
+        }
+
+        if (productDetail == null) {
+            throw new SQLException("商品不存在");
         }
 
         productDetail.setImages(images);

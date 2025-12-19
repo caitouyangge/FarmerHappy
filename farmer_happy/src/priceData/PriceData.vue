@@ -66,7 +66,7 @@
       <!-- 步骤2: 选择要导出的产品 -->
       <div v-if="step === 2" class="step-section">
         <h2 class="section-title">步骤2: 选择要导出的产品</h2>
-        <p class="section-desc">根据查询条件，共找到 {{ productList.length }} 种不同的产品</p>
+        <p class="section-desc">根据查询条件，共找到 {{ productList.length }} 种不同的产品（将导出为 split 文件夹，优先保存为 .xlsx）</p>
 
         <div class="product-selection">
           <div class="selection-header">
@@ -102,8 +102,8 @@
           <button 
             class="btn-primary" 
             :disabled="selectedProducts.length === 0 || generating"
-            @click="generateExcel">
-            {{ generating ? '生成中...' : '生成Excel文件' }}
+            @click="exportSplitFolder">
+            {{ generating ? '保存中...' : '保存split文件夹（xlsx）' }}
           </button>
         </div>
       </div>
@@ -116,7 +116,6 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { priceDataService } from '../api/priceData';
 import logger from '../utils/logger';
-import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 
 export default {
@@ -135,6 +134,7 @@ export default {
     const selectedProducts = ref([]);
     const selectAll = ref(false);
     const csvFileName = ref('');
+    const splitFiles = ref([]); // 后端拆分后的文件列表（含 variety/file_name 等）
 
     // 最大日期为今天
     const maxDate = computed(() => {
@@ -185,8 +185,21 @@ export default {
         csvFileName.value = result.file_name;
         logger.info('PRICE_DATA', '获取数据成功', { fileName: csvFileName.value });
 
-        // 下载并解析CSV文件
-        await downloadAndParseCsv(csvFileName.value);
+        // 优先使用后端返回的 split_files 构建可选品种列表（不再依赖总数据文件）
+        if (Array.isArray(result.split_files) && result.split_files.length > 0) {
+          splitFiles.value = result.split_files;
+          const products = new Set();
+          splitFiles.value.forEach(f => {
+            if (f && f.variety) products.add(f.variety);
+          });
+          productList.value = Array.from(products).sort();
+          selectedProducts.value = [];
+          selectAll.value = false;
+          step.value = 2;
+        } else {
+          // 兼容旧返回：下载并解析总 CSV，提取品名列表
+          await downloadAndParseCsv(csvFileName.value);
+        }
 
       } catch (error) {
         errorMessage.value = error.message || '获取数据失败，请稍后重试';
@@ -222,6 +235,7 @@ export default {
             });
             
             productList.value = Array.from(products).sort();
+            splitFiles.value = []; // 此模式下没有 split_files 元信息
             selectedProducts.value = [];
             selectAll.value = false;
             
@@ -258,8 +272,8 @@ export default {
       selectAll.value = selectedProducts.value.length === productList.value.length && productList.value.length > 0;
     }, { deep: true });
 
-    // 生成Excel文件
-    const generateExcel = async () => {
+    // 保存 split 文件夹（优先保存选中的拆分 XLSX；若不存在则回退 CSV）
+    const exportSplitFolder = async () => {
       if (selectedProducts.value.length === 0) {
         errorMessage.value = '请至少选择一个产品';
         return;
@@ -269,100 +283,99 @@ export default {
       errorMessage.value = '';
 
       try {
-        // 筛选选中的产品数据
-        const filteredData = csvData.value.filter(row => {
-          return selectedProducts.value.includes(row['品名']);
-        });
-
-        if (filteredData.length === 0) {
-          errorMessage.value = '没有找到匹配的数据';
+        // 必须有 splitFiles 元信息才能按“拆分文件”导出
+        if (!Array.isArray(splitFiles.value) || splitFiles.value.length === 0) {
+          errorMessage.value = '当前没有拆分文件信息，请重新获取数据（后端需返回 split_files）';
           generating.value = false;
           return;
         }
 
-        logger.info('PRICE_DATA', '开始生成Excel文件', {
-          selectedProducts: selectedProducts.value.length,
-          dataRows: filteredData.length
+        // showDirectoryPicker：让用户选择“保存位置（目录）”
+        if (!('showDirectoryPicker' in window)) {
+          errorMessage.value = '当前浏览器不支持文件夹选择器（showDirectoryPicker），请使用新版 Chrome/Edge 桌面端';
+          generating.value = false;
+          return;
+        }
+
+        // 选择目录
+        let dirHandle;
+        try {
+          dirHandle = await window.showDirectoryPicker();
+        } catch (e) {
+          // 用户取消
+          generating.value = false;
+          return;
+        }
+
+        // 在用户选择的目录下创建 split 文件夹
+        const splitDirHandle = await dirHandle.getDirectoryHandle('split', { create: true });
+
+        // 如果后端还没返回 xlsx 信息（旧后端/旧数据），先触发一次批量导出，再刷新 split 列表
+        const shouldTryExportXlsx = selectedProducts.value.some(v => {
+          const f = splitFiles.value.find(x => x && x.variety === v);
+          if (!f) return false;
+          // 列表里没有 xlsx_file_name，但有 csv 文件名：大概率还没生成/没返回 xlsx
+          return !f.xlsx_file_name && !!(f.file_name && /\.csv$/i.test(f.file_name));
         });
 
-        // 创建工作簿
-        const wb = XLSX.utils.book_new();
-
-        // 如果只选择了一个产品，直接使用产品名作为工作表名
-        // 如果选择了多个产品，使用"价格数据"作为工作表名
-        const sheetName = selectedProducts.value.length === 1 
-          ? selectedProducts.value[0].substring(0, 31) // Excel工作表名最多31个字符
-          : '价格数据';
-
-        // 将数据转换为工作表
-        const ws = XLSX.utils.json_to_sheet(filteredData);
-
-        // 设置列宽
-        const colWidths = [
-          { wch: 12 }, // 一级分类
-          { wch: 12 }, // 二级分类
-          { wch: 15 }, // 品名
-          { wch: 10 }, // 最低价
-          { wch: 10 }, // 平均价
-          { wch: 10 }, // 最高价
-          { wch: 10 }, // 规格
-          { wch: 12 }, // 产地
-          { wch: 8 },  // 单位
-          { wch: 20 }  // 发布日期
-        ];
-        ws['!cols'] = colWidths;
-
-        // 添加工作表到工作簿
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-
-        // 生成文件名
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        const fileName = `农产品价格数据_${timestamp}.xlsx`;
-
-        // 尝试使用 File System Access API 让用户选择保存位置
-        if ('showSaveFilePicker' in window) {
+        if (shouldTryExportXlsx) {
           try {
-            // 使用 File System Access API
-            const fileHandle = await window.showSaveFilePicker({
-              suggestedName: fileName,
-              types: [{
-                description: 'Excel文件',
-                accept: {
-                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
-                }
-              }]
-            });
+            await priceDataService.exportSplitXlsx();
+            // 刷新 split 列表，拿到 xlsx_file_name/download_xlsx_url 等字段
+            const refreshed = await priceDataService.listSplitFiles();
+            if (refreshed && Array.isArray(refreshed.files)) {
+              splitFiles.value = refreshed.files;
+            }
+          } catch (e) {
+            // 导出接口失败不阻断流程，后面会回退下载 CSV
+          }
+        }
 
-            // 将工作簿转换为ArrayBuffer
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            
-            // 创建可写流并写入文件
-            const writable = await fileHandle.createWritable();
-            await writable.write(new Uint8Array(wbout));
-            await writable.close();
+        // variety -> 优先 xlsx_file_name，否则回退 file_name
+        const fileNameByVariety = new Map();
+        splitFiles.value.forEach(f => {
+          if (!f || !f.variety || !f.file_name) return;
+          if (!fileNameByVariety.has(f.variety)) {
+            const xlsxName = f.xlsx_file_name || (f.file_name ? f.file_name.replace(/\.csv$/i, '.xlsx') : null);
+            fileNameByVariety.set(f.variety, xlsxName || f.file_name);
+          }
+        });
 
-            logger.info('PRICE_DATA', 'Excel文件保存成功', { fileName: fileHandle.name });
-            alert(`Excel文件已保存：${fileHandle.name}`);
-          } catch (error) {
-            // 如果用户取消选择，不显示错误
-            if (error.name !== 'AbortError') {
-              logger.error('PRICE_DATA', '保存文件失败', {}, error);
-              // 回退到传统下载方式
-              XLSX.writeFile(wb, fileName);
-              alert(`Excel文件已生成并下载：${fileName}`);
-            } else {
-              // 用户取消了保存
-              generating.value = false;
-              return;
+        // 写入每个选中的 split 文件（优先 xlsx）
+        for (const variety of selectedProducts.value) {
+          const preferredName = fileNameByVariety.get(variety);
+          const fallbackName = preferredName && preferredName.toLowerCase().endsWith('.xlsx')
+            ? preferredName.replace(/\.xlsx$/i, '.csv')
+            : preferredName;
+
+          const candidates = [];
+          if (preferredName) candidates.push(preferredName);
+          if (fallbackName && fallbackName !== preferredName) candidates.push(fallbackName);
+
+          let saved = false;
+          for (const name of candidates) {
+            try {
+              const blob = await priceDataService.downloadCsvFile(name, { scope: 'split' });
+              const fileHandle = await splitDirHandle.getFileHandle(name, { create: true });
+              const writable = await fileHandle.createWritable();
+              await writable.write(new Uint8Array(await blob.arrayBuffer()));
+              await writable.close();
+              saved = true;
+              break;
+            } catch (e) {
+              // 尝试下一个候选
             }
           }
-        } else {
-          // 浏览器不支持 File System Access API，使用传统下载方式
-          // 注意：传统方式会使用浏览器的默认下载位置，用户可以在浏览器设置中配置
-          XLSX.writeFile(wb, fileName);
-          logger.info('PRICE_DATA', 'Excel文件生成成功（传统下载）', { fileName });
-          alert(`Excel文件已生成并下载：${fileName}\n\n提示：您可以在浏览器设置中配置默认下载位置`);
+
+          if (!saved) {
+            logger.warn('PRICE_DATA', '保存拆分文件失败（xlsx/csv均失败）', { variety, preferredName });
+          }
         }
+
+        logger.info('PRICE_DATA', 'split文件夹保存成功', {
+          selectedProducts: selectedProducts.value.length
+        });
+        alert('已保存：split 文件夹（优先保存选中的拆分XLSX；若缺失则回退CSV）');
 
         // 重置状态
         step.value = 1;
@@ -373,10 +386,11 @@ export default {
         productList.value = [];
         selectedProducts.value = [];
         selectAll.value = false;
+        splitFiles.value = [];
 
       } catch (error) {
-        logger.error('PRICE_DATA', '生成Excel文件失败', {}, error);
-        errorMessage.value = '生成Excel文件失败，请稍后重试';
+        logger.error('PRICE_DATA', '保存split文件夹失败', {}, error);
+        errorMessage.value = error.message || '保存split文件夹失败，请稍后重试';
       } finally {
         generating.value = false;
       }
@@ -409,7 +423,7 @@ export default {
       goBack,
       fetchPriceData,
       handleSelectAll,
-      generateExcel
+      exportSplitFolder
     };
   }
 };
@@ -675,4 +689,5 @@ export default {
   }
 }
 </style>
+
 

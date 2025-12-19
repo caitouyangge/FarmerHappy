@@ -10,6 +10,7 @@ import java.util.Map;
 public class PricePredictionResponseDTO {
     private List<Map<String, Object>> historicalData;
     private List<Map<String, Object>> predictedData;
+    private List<Map<String, Object>> seriesData; // 多条规格/类型曲线数据
     private Map<String, Double> modelMetrics;
     private String trend;
     private Map<String, Object> calculationDetails; // 详细计算过程
@@ -28,6 +29,14 @@ public class PricePredictionResponseDTO {
     
     public void setPredictedData(List<Map<String, Object>> predictedData) {
         this.predictedData = predictedData;
+    }
+
+    public List<Map<String, Object>> getSeriesData() {
+        return seriesData;
+    }
+
+    public void setSeriesData(List<Map<String, Object>> seriesData) {
+        this.seriesData = seriesData;
     }
     
     public Map<String, Double> getModelMetrics() {

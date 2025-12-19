@@ -96,8 +96,8 @@ public class ExcelParser {
                 dataPoints.add(new DataPoint(date, price));
             }
             
-            if (dataPoints.size() < 10) {
-                throw new IllegalArgumentException("数据量不足，至少需要10条有效数据才能进行预测");
+            if (dataPoints.size() < 2) {
+                throw new IllegalArgumentException("数据量不足，至少需要2条有效数据");
             }
             
             // 按日期排序
