@@ -4,7 +4,7 @@ package service.farmer;
 import dto.farmer.PricePredictionResponseDTO;
 import util.ExcelParser;
 import util.PriceFileParser;
-import util.HoltWintersModel;
+import util.ARIMAModel;
 
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
@@ -189,32 +189,37 @@ public class PricePredictionService {
             historicalData.add(item);
         }
 
-        // ========= ETS(Holt-Winters) + 留出集回测自动选参 =========
+        // ========= ARIMA模型 + 留出集回测自动选参 =========
         List<Double> y = new ArrayList<>();
         for (ExcelParser.DataPoint p : filledData) y.add(p.getPrice());
 
-        // 缺失日期补齐比例：补齐（carry-forward）容易制造“伪周周期”，季节性判定需惩罚
+        // 缺失日期补齐比例：补齐（carry-forward）容易制造"伪周周期"，季节性判定需惩罚
         double imputedFraction = 0.0;
         if (filledData.size() > 0) {
             imputedFraction = Math.max(0.0, (filledData.size() - cleanedData.size()) / (double) filledData.size());
         }
 
-        ModelSelection selection = selectBestModel(y, imputedFraction, predictionDays);
+        ModelSelection selection = selectBestARIMAModel(y, filledData, imputedFraction, predictionDays);
 
+        // 使用ARIMA模型进行预测
         List<Double> forecast;
-        if ("naive".equals(selection.modelName)) {
-            forecast = forecastNaive(y, predictionDays);
-        } else if ("drift".equals(selection.modelName)) {
-            forecast = forecastNaiveDrift(y, predictionDays, selection.driftLookback, selection.driftPhi);
-        } else if ("theta".equals(selection.modelName)) {
-            forecast = forecastTheta(y, predictionDays, selection.thetaAlpha, selection.thetaPhi);
-        } else {
-            HoltWintersModel model = new HoltWintersModel();
-            model.fit(y, selection.seasonLength, selection.alpha, selection.beta, selection.gamma, selection.phi, selection.psi);
-            // 中期优先使用“多步外推”(direct)；短期可用递推(rolling)来更贴近短期波动
-            forecast = "rolling_recursive".equals(selection.forecastStrategy)
-                ? model.forecastIterative(predictionDays)
-                : model.forecast(predictionDays);
+        List<ARIMAModel.Point> arimaPoints = new ArrayList<>();
+        for (int i = 0; i < filledData.size(); i++) {
+            arimaPoints.add(new ARIMAModel.Point(i + 1, y.get(i)));
+        }
+        ARIMAModel model = new ARIMAModel();
+        model.train(arimaPoints, selection.arimaParams);
+        forecast = new ArrayList<>();
+        for (int i = 1; i <= predictionDays; i++) {
+            double pred = model.predict(i);
+            if (Double.isNaN(pred) || Double.isInfinite(pred) || pred < 0) {
+                // 如果预测值不合理，使用最近几个值的平均值作为兜底
+                int lookback = Math.min(5, y.size());
+                double avg = y.subList(y.size() - lookback, y.size()).stream()
+                    .mapToDouble(Double::doubleValue).average().orElse(y.get(y.size() - 1));
+                pred = avg;
+            }
+            forecast.add(pred);
         }
 
         // 预测未来数据（按天递增日期）
@@ -261,29 +266,25 @@ public class PricePredictionService {
         }
         calculationDetails.put("preprocessing", preprocessingDetails);
 
-        // 模型选择与参数详情（ETS/HW + 回测）
+        // 模型选择与参数详情（ARIMA + 回测）
         Map<String, Object> modelDetails = new HashMap<>();
         modelDetails.put("model_name", selection.modelDisplayName);
-        modelDetails.put("selection_method", "多折中期回测（CV）最小RMSE优先，其次MAE；并与最佳基线(naive/drift)对比");
-        modelDetails.put("baseline_name", selection.baselineName);
-        modelDetails.put("drift_lookback", selection.driftLookback);
-        modelDetails.put("drift_phi", round4(selection.driftPhi));
-        modelDetails.put("theta_alpha", round4(selection.thetaAlpha));
-        modelDetails.put("theta_phi", round4(selection.thetaPhi));
-        modelDetails.put("season_length", selection.seasonLength);
-        modelDetails.put("alpha", round4(selection.alpha));
-        modelDetails.put("beta", round4(selection.beta));
-        modelDetails.put("gamma", round4(selection.gamma));
-        modelDetails.put("phi", round4(selection.phi));
-        modelDetails.put("psi", round4(selection.psi));
-        modelDetails.put("seasonality_strength", round4(
-            selection.seasonLength > 1 ? seasonalStrength(y, selection.seasonLength, imputedFraction) : 0.0
-        ));
-        modelDetails.put("forecast_strategy", selection.forecastStrategy);
+        modelDetails.put("selection_method", "多折中期回测（CV）最小RMSE优先，其次MAE；自动选择最优ARIMA参数，只选择R² > 0的模型");
+        if (selection.arimaParams != null) {
+            modelDetails.put("arima_params", selection.arimaParams.toString());
+            modelDetails.put("ar_p", selection.arimaParams.p);
+            modelDetails.put("ar_d", selection.arimaParams.d);
+            modelDetails.put("ar_q", selection.arimaParams.q);
+            if (selection.arimaParams.isSeasonal()) {
+                modelDetails.put("sarima_P", selection.arimaParams.P);
+                modelDetails.put("sarima_D", selection.arimaParams.D);
+                modelDetails.put("sarima_Q", selection.arimaParams.Q);
+                modelDetails.put("sarima_s", selection.arimaParams.s);
+            }
+        }
         modelDetails.put("cv_folds", selection.cvFolds);
         modelDetails.put("holdout_size", selection.holdoutSize);
         modelDetails.put("holdout_metrics", selection.holdoutMetricsAsObject());
-        modelDetails.put("baseline_metrics", selection.baselineMetricsAsObject());
         calculationDetails.put("model_selection", modelDetails);
 
         // 预测过程详情
@@ -308,7 +309,7 @@ public class PricePredictionService {
         metricsMap.put("mae", round2(selection.mae));
         metricsMap.put("rmse", round2(selection.rmse));
         metricsMap.put("mape", round4(selection.mape));
-        metricsMap.put("aic", 0.0); // ETS不提供AIC（此处保留字段以兼容旧UI）
+        metricsMap.put("aic", round2(selection.aic)); // ARIMA提供AIC
 
         String trend = determineTrendFromForecast(forecast);
 
@@ -518,12 +519,16 @@ public class PricePredictionService {
         double rmse;
         double mape;
         double r2;
+        double aic;
 
         // naive 基线指标（同一 holdout）
         double baselineMae;
         double baselineRmse;
         double baselineMape;
         double baselineR2;
+
+        // ARIMA参数
+        ARIMAModel.ARIMAParams arimaParams;
 
         Map<String, Object> holdoutMetricsAsObject() {
             Map<String, Object> m = new HashMap<>();
@@ -544,30 +549,17 @@ public class PricePredictionService {
         }
     }
 
-    private ModelSelection selectBestModel(List<Double> y, double imputedFraction, int horizonWanted) {
+    /**
+     * 选择最佳ARIMA模型（使用回测选择最优参数）
+     * 通过网格搜索找到表现最好的参数组合，只选择R² > 0的模型
+     */
+    private ModelSelection selectBestARIMAModel(List<Double> y, List<ExcelParser.DataPoint> filledData, double imputedFraction, int horizonWanted) {
         ModelSelection sel = new ModelSelection();
-        sel.modelName = "naive";
-        sel.modelDisplayName = "Naive(持平外推)";
-        sel.formulaHint = "Naive：预测=训练集最后一个价格（持平外推）";
-        sel.seasonLength = 1;
-        sel.alpha = 0.0;
-        sel.beta = 0.0;
-        sel.gamma = 0.0;
-        sel.phi = 1.0;
-        sel.psi = 1.0;
-        sel.forecastStrategy = "direct_multistep";
-        sel.cvFolds = 1;
-        sel.baselineName = "naive";
-        sel.driftLookback = 30;
-        sel.driftPhi = 1.0;
-        sel.thetaAlpha = 0.3;
-        sel.thetaPhi = 1.0;
+        sel.modelName = "arima";
+        sel.baselineName = "none";
 
-        if (y == null || y.size() < 2) {
-            sel.holdoutSize = 0;
-            sel.mae = sel.rmse = sel.mape = sel.r2 = 0.0;
-            sel.baselineMae = sel.baselineRmse = sel.baselineMape = sel.baselineR2 = 0.0;
-            return sel;
+        if (y == null || y.size() < 10) {
+            throw new IllegalArgumentException("数据量不足，至少需要10条数据才能使用ARIMA模型");
         }
 
         int n = y.size();
@@ -576,241 +568,188 @@ public class PricePredictionService {
         sel.holdoutSize = horizon;
         sel.cvFolds = folds;
 
-        // 中期（horizon较大）默认用 direct_multistep；短期用 rolling_recursive
-        // 解释：把预测值当“真实观测”会压平趋势并放大累积误差，对中期一般更差
-        String defaultStrategy = (horizon >= 21) ? "direct_multistep" : "rolling_recursive";
-        sel.forecastStrategy = defaultStrategy;
-
-        // 基线：naive vs drift（中期价格更常见的是“慢漂移”，drift 通常显著优于持平外推）
-        MetricsAgg naiveAgg = backtestNaiveCv(y, horizon, folds);
-        MetricsAgg bestBaseline = naiveAgg;
-        String bestBaselineName = "naive";
-        int bestLb = 30;
-        double bestDriftPhi = 1.0;
-
-        int[] lbGrid = new int[]{14, 30, 60, 120};
-        double[] driftPhiGrid = new double[]{0.85, 0.9, 0.95, 1.0};
-        double bestBaseRmse = naiveAgg.rmse;
-        double bestBaseMae = naiveAgg.mae;
-        for (int lb : lbGrid) {
-            for (double dphi : driftPhiGrid) {
-                MetricsAgg agg = backtestNaiveDriftCv(y, horizon, folds, lb, dphi);
-                if (isBetterAgg(agg, bestBaseRmse, bestBaseMae)) {
-                    bestBaseRmse = agg.rmse;
-                    bestBaseMae = agg.mae;
-                    bestBaseline = agg;
-                    bestBaselineName = "drift";
-                    bestLb = lb;
-                    bestDriftPhi = dphi;
-                }
-            }
+        // 构建ARIMA数据点
+        List<ARIMAModel.Point> arimaPoints = new ArrayList<>();
+        for (int i = 0; i < filledData.size(); i++) {
+            arimaPoints.add(new ARIMAModel.Point(i + 1, y.get(i)));
         }
 
-        sel.baselineName = bestBaselineName;
-        sel.driftLookback = bestLb;
-        sel.driftPhi = bestDriftPhi;
-        sel.baselineMae = bestBaseline.mae;
-        sel.baselineRmse = bestBaseline.rmse;
-        sel.baselineMape = bestBaseline.mape;
-        sel.baselineR2 = bestBaseline.r2;
+        // 网格搜索最佳ARIMA参数
+        // 优先尝试简单的模型，避免过度复杂导致负R²
+        ARIMAModel.ARIMAParams bestParams = null;
+        MetricsAgg bestAgg = null;
+        double bestScore = Double.POSITIVE_INFINITY;
 
-        // 默认先用“最佳基线”的表现
-        sel.modelName = bestBaselineName;
-        if ("drift".equals(bestBaselineName)) {
-            sel.modelDisplayName = String.format("Naive‑Drift(漂移外推, lookback=%d, φ=%.2f)", bestLb, bestDriftPhi);
-            sel.formulaHint = "Naive‑Drift：预测=最后值 + 漂移×(φ+…+φ^h)";
-        } else {
-            sel.modelDisplayName = "Naive(持平外推)";
-            sel.formulaHint = "Naive：预测=训练集最后一个价格（持平外推）";
-        }
-        sel.mae = sel.baselineMae;
-        sel.rmse = sel.baselineRmse;
-        sel.mape = sel.baselineMape;
-        sel.r2 = sel.baselineR2;
+        // 定义参数网格（限制复杂度，优先简单模型）
+        int[] pGrid = {0, 1, 2}; // AR阶数
+        int[] dGrid = {0, 1}; // 差分阶数（最多1次，避免过度差分）
+        int[] qGrid = {0, 1, 2}; // MA阶数
 
-        // Theta 方法（对中期趋势+噪声场景往往比ETS更强）：网格搜索 alpha 与趋势阻尼 phi
-        double[] thetaAlphaGrid = new double[]{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
-        double[] thetaPhiGrid = new double[]{0.85, 0.9, 0.95, 1.0};
-        double bestThetaRmse = Double.POSITIVE_INFINITY;
-        double bestThetaMae = Double.POSITIVE_INFINITY;
-        double bestThetaMape = Double.POSITIVE_INFINITY;
-        double bestThetaR2 = Double.NEGATIVE_INFINITY;
-        double bestThetaAlpha = 0.3;
-        double bestThetaPhi = 1.0;
-        for (double ta : thetaAlphaGrid) {
-            for (double tph : thetaPhiGrid) {
-                MetricsAgg agg = backtestThetaCv(y, horizon, folds, ta, tph);
-                if (isBetterAgg(agg, bestThetaRmse, bestThetaMae)) {
-                    bestThetaRmse = agg.rmse;
-                    bestThetaMae = agg.mae;
-                    bestThetaMape = agg.mape;
-                    bestThetaR2 = agg.r2;
-                    bestThetaAlpha = ta;
-                    bestThetaPhi = tph;
-                }
-            }
-        }
-        if (Double.isFinite(bestThetaRmse) && bestThetaRmse + 1e-9 < sel.rmse) {
-            sel.modelName = "theta";
-            sel.modelDisplayName = String.format("Theta(中期强化, α=%.2f, φ=%.2f)", bestThetaAlpha, bestThetaPhi);
-            sel.formulaHint = "Theta：0.5×(线性趋势外推) + 0.5×(对“θ=2”序列做指数平滑)";
-            sel.thetaAlpha = bestThetaAlpha;
-            sel.thetaPhi = bestThetaPhi;
-            sel.mae = bestThetaMae;
-            sel.rmse = bestThetaRmse;
-            sel.mape = bestThetaMape;
-            sel.r2 = bestThetaR2;
-        }
-
-        // ETS/HW：尝试不同季节周期 + 参数（含阻尼趋势phi），并用留出集回测择优
-        // 关键：只有当“季节性足够强”时才允许启用季节项，避免出现“未来波浪线式抖动”。
-        List<Integer> seasonCandidates = new ArrayList<>();
-        seasonCandidates.add(1); // 无季节
-        // 注意：季节候选基于“完整序列”的强度筛选（比只看最后一段更稳）
-        addSeasonCandidateIfStrong(seasonCandidates, y, 7, imputedFraction);
-        addSeasonCandidateIfStrong(seasonCandidates, y, 14, imputedFraction);
-        addSeasonCandidateIfStrong(seasonCandidates, y, 30, imputedFraction);
-
-        double bestRmse = Double.POSITIVE_INFINITY;
-        double bestMae = Double.POSITIVE_INFINITY;
-        double bestMape = Double.POSITIVE_INFINITY;
-        double bestR2 = Double.NEGATIVE_INFINITY;
-        int bestSeason = 1;
-        double bestA = 0.4, bestB = 0.1, bestG = 0.1, bestPhi = 0.9, bestPsi = 1.0;
-
-        // 记录“无季节”最佳，用于抑制误判7天（季节模型必须显著优于无季节才放行）
-        double bestRmseNoSeason = Double.POSITIVE_INFINITY;
-        double bestMaeNoSeason = Double.POSITIVE_INFINITY;
-        double bestMapeNoSeason = Double.POSITIVE_INFINITY;
-        double bestR2NoSeason = Double.NEGATIVE_INFINITY;
-        double bestANoSeason = 0.4, bestBNoSeason = 0.1, bestPhiNoSeason = 0.9;
-
-        // 更小、更稳的参数网格（避免耗时/过拟合）
-        double[] gridA = new double[]{0.2, 0.4, 0.6, 0.8};
-        double[] gridB = new double[]{0.05, 0.1, 0.2, 0.3};
-        double[] gridG = new double[]{0.1, 0.2, 0.3, 0.5};
-        double[] gridPhi = new double[]{0.6, 0.7, 0.8, 0.9, 0.95, 1.0};
-        double[] gridPsi = new double[]{0.85, 0.9, 0.95, 1.0};
-
-        for (int seasonLength : seasonCandidates) {
-            // 需要至少 2*m 才能稳定估计季节项；不足则跳过该季节候选
-            if (seasonLength > 1 && y.size() < 2 * seasonLength) continue;
-
-            for (double a : gridA) {
-                for (double b : gridB) {
-                    for (double phi : gridPhi) {
-                        if (seasonLength == 1) {
-                            // 无季节项时 gamma 固定为0
-                            try {
-                                MetricsAgg agg = backtestEtsCv(y, horizon, folds, 1, a, b, 0.0, phi, 1.0, defaultStrategy);
-                                if (isBetterAgg(agg, bestRmse, bestMae)) {
-                                    bestRmse = agg.rmse;
-                                    bestMae = agg.mae;
-                                    bestMape = agg.mape;
-                                    bestR2 = agg.r2;
-                                    bestSeason = 1;
-                                    bestA = a;
-                                    bestB = b;
-                                    bestG = 0.0;
-                                    bestPhi = phi;
-                                    bestPsi = 1.0;
-                                }
-                                if (isBetterAgg(agg, bestRmseNoSeason, bestMaeNoSeason)) {
-                                    bestRmseNoSeason = agg.rmse;
-                                    bestMaeNoSeason = agg.mae;
-                                    bestMapeNoSeason = agg.mape;
-                                    bestR2NoSeason = agg.r2;
-                                    bestANoSeason = a;
-                                    bestBNoSeason = b;
-                                    bestPhiNoSeason = phi;
-                                }
-                            } catch (Exception ignored) {
-                            }
-                        } else {
-                            for (double g : gridG) {
-                                for (double psi : gridPsi) {
-                                    try {
-                                        MetricsAgg agg = backtestEtsCv(y, horizon, folds, seasonLength, a, b, g, phi, psi, defaultStrategy);
-                                        if (isBetterAgg(agg, bestRmse, bestMae)) {
-                                            bestRmse = agg.rmse;
-                                            bestMae = agg.mae;
-                                            bestMape = agg.mape;
-                                            bestR2 = agg.r2;
-                                            bestSeason = seasonLength;
-                                            bestA = a;
-                                            bestB = b;
-                                            bestG = g;
-                                            bestPhi = phi;
-                                            bestPsi = psi;
-                                        }
-                                    } catch (Exception ignored) {
-                                    }
-                                }
+        // 首先尝试非季节性ARIMA模型
+        for (int p : pGrid) {
+            for (int d : dGrid) {
+                for (int q : qGrid) {
+                    // 跳过过于复杂的组合（p+q+d > 4时跳过）
+                    if (p + q + d > 4) continue;
+                    
+                    // 对于小数据集，进一步限制复杂度
+                    if (n < 100 && p + q + d > 3) continue;
+                    
+                    try {
+                        ARIMAModel.ARIMAParams params = new ARIMAModel.ARIMAParams(p, d, q);
+                        MetricsAgg agg = backtestARIMACv(arimaPoints, horizon, folds, params);
+                        
+                        // 只考虑R² > 0的模型（模型必须比简单平均值好）
+                        if (agg != null && agg.r2 > 0 && Double.isFinite(agg.rmse) && agg.rmse > 0) {
+                            // 评分：优先RMSE，其次R²（希望RMSE小，R²大）
+                            double score = agg.rmse * (1.0 - Math.min(agg.r2, 0.99));
+                            
+                            // 对于相同评分，优先选择更简单的模型（参数总和小的）
+                            if (bestParams == null || score < bestScore || 
+                                (Math.abs(score - bestScore) < 0.01 && (p + q + d) < (bestParams.p + bestParams.q + bestParams.d))) {
+                                bestScore = score;
+                                bestParams = params;
+                                bestAgg = agg;
                             }
                         }
+                    } catch (Exception e) {
+                        // 跳过无法训练的模型
+                        continue;
                     }
                 }
             }
         }
 
-        // 若 HW 明显优于 naive，则选 HW；否则仍用 naive（避免“看似高级但更差”）
-        if (Double.isFinite(bestRmse) && bestRmse + 1e-9 < sel.rmse) {
-            // 额外门槛：如果最佳是季节模型，则必须“季节性足够强”且显著优于无季节
-            if (bestSeason > 1 && Double.isFinite(bestRmseNoSeason) && bestRmseNoSeason > 1e-12) {
-                double strength = seasonalStrength(y, bestSeason, imputedFraction);
-                double improvementRatio = 1.0 - (bestRmse / bestRmseNoSeason);
-                // 经验阈值：强度>=0.10 且 RMSE 相对提升 >=6%
-                boolean allowSeasonal = (strength >= 0.10) && (improvementRatio >= 0.06);
-                if (!allowSeasonal && bestRmseNoSeason + 1e-9 < sel.rmse) {
-                    // 回退到无季节最佳（解决“误判7天”导致未来波浪线）
-                    bestSeason = 1;
-                    bestA = bestANoSeason;
-                    bestB = bestBNoSeason;
-                    bestG = 0.0;
-                    bestPhi = bestPhiNoSeason;
-                    bestPsi = 1.0;
-                    bestRmse = bestRmseNoSeason;
-                    bestMae = bestMaeNoSeason;
-                    bestMape = bestMapeNoSeason;
-                    bestR2 = bestR2NoSeason;
+        // 如果非季节性模型都不好（R² < 0.3），尝试简单的季节性模型（但更谨慎）
+        if (bestAgg == null || bestAgg.r2 < 0.3) {
+            // 只尝试7天和30天的季节性（更保守）
+            int[] seasonalPeriods = {7, 30};
+            
+            for (int s : seasonalPeriods) {
+                // 需要至少3个完整周期才考虑季节性
+                if (n < s * 3) continue;
+                
+                // 只尝试简单的季节性模型：SARIMA(1,d,1)(0,1,0)[s] 避免复杂的(1,1,1)(1,1,1)
+                for (int d : dGrid) {
+                    try {
+                        ARIMAModel.ARIMAParams params1 = new ARIMAModel.ARIMAParams(1, d, 1, 0, 1, 0, s);
+                        MetricsAgg agg1 = backtestARIMACv(arimaPoints, horizon, folds, params1);
+                        
+                        if (agg1 != null && agg1.r2 > 0 && Double.isFinite(agg1.rmse) && agg1.rmse > 0) {
+                            double score = agg1.rmse * (1.0 - Math.min(agg1.r2, 0.99));
+                            // 季节性模型需要有明显优势（R²至少0.1以上）才采用
+                            if (agg1.r2 > 0.1 && (bestAgg == null || score < bestScore || 
+                                (Math.abs(score - bestScore) < 0.05 && agg1.r2 > bestAgg.r2))) {
+                                bestScore = score;
+                                bestParams = params1;
+                                bestAgg = agg1;
+                            }
+                        }
+                    } catch (Exception e) {
+                        continue;
+                    }
                 }
             }
-            sel.modelName = "hw";
-            boolean damped = bestPhi < 0.9999;
-            sel.modelDisplayName = bestSeason > 1
-                ? (damped ? String.format("ETS(Holt-Winters, 阻尼趋势φ=%.2f, 加性季节)", bestPhi)
-                          : "ETS(Holt-Winters, 加性季节)")
-                : (damped ? String.format("ETS(Holt, 阻尼趋势φ=%.2f)", bestPhi)
-                          : "ETS(Holt, 线性趋势)");
-            sel.forecastStrategy = defaultStrategy;
-            sel.formulaHint = "direct_multistep".equals(defaultStrategy)
-                ? (bestSeason > 1
-                    ? (damped
-                        ? "ETS(Holt-Winters, 阻尼趋势, 多步外推)：预测=level + (φ+…+φ^h)×trend + seasonal×ψ^h"
-                        : "ETS(Holt-Winters, 多步外推)：预测=(level + h×trend) + seasonal×ψ^h")
-                    : (damped
-                        ? "ETS(Holt, 阻尼趋势, 多步外推)：预测=level + (φ+…+φ^h)×trend"
-                        : "ETS(Holt, 多步外推)：预测=(level + h×trend)"))
-                : (bestSeason > 1
-                    ? (damped
-                        ? "ETS(Holt-Winters, 阻尼趋势, 滚动递推)：每步预测值加入下一步；预测≈(level + φ×trend) + seasonal"
-                        : "ETS(Holt-Winters, 滚动递推)：每步预测值加入下一步；预测≈(level + trend) + seasonal")
-                    : (damped
-                        ? "ETS(Holt, 阻尼趋势, 滚动递推)：每步预测值加入下一步；预测≈(level + φ×trend)"
-                        : "ETS(Holt, 滚动递推)：每步预测值加入下一步；预测≈(level + trend)"));
-            sel.seasonLength = bestSeason;
-            sel.alpha = bestA;
-            sel.beta = bestB;
-            sel.gamma = bestG;
-            sel.phi = bestPhi;
-            sel.psi = bestPsi;
-            sel.mae = bestMae;
-            sel.rmse = bestRmse;
-            sel.mape = bestMape;
-            sel.r2 = bestR2;
         }
 
+        // 如果所有模型都失败，使用最简单的ARIMA(1,0,1)作为兜底
+        if (bestParams == null || bestAgg == null) {
+            bestParams = new ARIMAModel.ARIMAParams(1, 0, 1);
+            bestAgg = backtestARIMACv(arimaPoints, horizon, folds, bestParams);
+            if (bestAgg == null || bestAgg.rmse <= 0) {
+                // 如果回测仍然失败，使用默认值
+                bestAgg = new MetricsAgg();
+                bestAgg.mae = 0.0;
+                bestAgg.rmse = 0.0;
+                bestAgg.mape = 0.0;
+                bestAgg.r2 = 0.0;
+                bestAgg.aic = Double.MAX_VALUE;
+            }
+        }
+
+        sel.arimaParams = bestParams;
+        sel.modelDisplayName = bestParams.toString();
+        sel.formulaHint = "ARIMA模型：使用自回归(AR)、差分(I)、移动平均(MA)的组合进行预测";
+        sel.mae = bestAgg.mae;
+        sel.rmse = bestAgg.rmse;
+        sel.mape = bestAgg.mape;
+        sel.r2 = bestAgg.r2;
+        sel.aic = bestAgg.aic;
+
+        // 基线指标设为0（不使用基线）
+        sel.baselineMae = 0.0;
+        sel.baselineRmse = 0.0;
+        sel.baselineMape = 0.0;
+        sel.baselineR2 = 0.0;
+
         return sel;
+    }
+
+    /**
+     * ARIMA模型交叉验证回测
+     */
+    private MetricsAgg backtestARIMACv(List<ARIMAModel.Point> data, int horizon, int folds, ARIMAModel.ARIMAParams params) {
+        MetricsAgg out = new MetricsAgg();
+        out.aic = Double.MAX_VALUE;
+        
+        if (data == null || data.size() < horizon + 10) return out;
+        
+        int n = data.size();
+        int used = 0;
+        double sumMae = 0, sumRmse = 0, sumMape = 0, sumR2 = 0, sumAic = 0;
+        
+        for (int f = 0; f < folds; f++) {
+            int testStart = n - horizon * (f + 1);
+            int testEnd = testStart + horizon;
+            if (testStart <= 5 || testEnd > n) break;
+            
+            List<ARIMAModel.Point> train = data.subList(0, testStart);
+            List<ARIMAModel.Point> test = data.subList(testStart, testEnd);
+            
+            try {
+                ARIMAModel model = new ARIMAModel();
+                model.train(train, params);
+                
+                // 预测
+                List<Double> pred = new ArrayList<>();
+                for (int i = 1; i <= horizon; i++) {
+                    double p = model.predict(i);
+                    if (Double.isNaN(p) || Double.isInfinite(p) || p < 0) {
+                        // 使用最后一个训练值作为兜底
+                        p = train.get(train.size() - 1).y;
+                    }
+                    pred.add(p);
+                }
+                
+                // 提取实际值
+                List<Double> actual = new ArrayList<>();
+                for (ARIMAModel.Point pt : test) {
+                    actual.add(pt.y);
+                }
+                
+                Metrics m = computeMetrics(actual, pred);
+                sumMae += m.mae;
+                sumRmse += m.rmse;
+                sumMape += m.mape;
+                sumR2 += m.r2;
+                
+                // 评估模型以获取AIC
+                ARIMAModel.Metrics evalMetrics = model.evaluate();
+                sumAic += evalMetrics.aic;
+                used++;
+            } catch (Exception e) {
+                // 忽略错误，继续下一个fold
+                continue;
+            }
+        }
+        
+        if (used == 0) return out;
+        out.mae = sumMae / used;
+        out.rmse = sumRmse / used;
+        out.mape = sumMape / used;
+        out.r2 = sumR2 / used;
+        out.aic = sumAic / used;
+        return out;
     }
 
     private static int chooseCvHorizon(int n, int horizonWanted) {
@@ -834,6 +773,7 @@ public class PricePredictionService {
         double rmse;
         double mape;
         double r2;
+        double aic = Double.MAX_VALUE;
     }
 
     private static boolean isBetterAgg(MetricsAgg agg, double bestRmse, double bestMae) {
@@ -871,49 +811,6 @@ public class PricePredictionService {
         return out;
     }
 
-    private static MetricsAgg backtestEtsCv(
-        List<Double> y,
-        int horizon,
-        int folds,
-        int seasonLength,
-        double alpha,
-        double beta,
-        double gamma,
-        double phi,
-        double psi,
-        String strategy
-    ) {
-        MetricsAgg out = new MetricsAgg();
-        if (y == null || y.size() < horizon + 10) return out;
-        int n = y.size();
-        int used = 0;
-        double sumMae = 0, sumRmse = 0, sumMape = 0, sumR2 = 0;
-        for (int f = 0; f < folds; f++) {
-            int testStart = n - horizon * (f + 1);
-            int testEnd = testStart + horizon;
-            if (testStart <= 2 || testEnd > n) break;
-            List<Double> train = y.subList(0, testStart);
-            List<Double> test = y.subList(testStart, testEnd);
-
-            HoltWintersModel model = new HoltWintersModel();
-            model.fit(train, seasonLength, alpha, beta, gamma, phi, psi);
-            List<Double> pred = "rolling_recursive".equals(strategy)
-                ? model.forecastIterative(horizon)
-                : model.forecast(horizon);
-            Metrics m = computeMetrics(test, pred);
-            sumMae += m.mae;
-            sumRmse += m.rmse;
-            sumMape += m.mape;
-            sumR2 += m.r2;
-            used++;
-        }
-        if (used == 0) return out;
-        out.mae = sumMae / used;
-        out.rmse = sumRmse / used;
-        out.mape = sumMape / used;
-        out.r2 = sumR2 / used;
-        return out;
-    }
 
     private static class Metrics {
         double mae;

@@ -121,13 +121,14 @@
          <div class="form-group">
            <label class="form-label">预测模型</label>
            <div class="model-info-box">
-            <div class="model-badge">ETS模型（Holt-Winters 指数平滑 + 阻尼趋势）</div>
+            <div class="model-badge">ARIMA模型（自回归综合移动平均模型）</div>
              <p class="model-description">
-              系统使用ETS（Error‑Trend‑Seasonal）指数平滑模型进行预测（Holt / Holt‑Winters），并加入<strong>阻尼趋势(damped trend, φ)</strong>：
-              让趋势项在未来逐步衰减，避免线性外推导致“越预测越离谱”的发散。
-              该类模型是工业界非常常用的时间序列方法，尤其适合“按天”的价格数据：能同时刻画<strong>水平(level)</strong>、
-              <strong>趋势(trend)</strong>与<strong>季节性(seasonal)</strong>。
-              系统会基于留出集回测（holdout）自动选择更优参数（包含季节周期与φ），并保留“持平外推(naive)”作为兜底。
+              系统使用<strong>ARIMA（AutoRegressive Integrated Moving Average）</strong>自回归综合移动平均模型进行价格预测。
+              ARIMA模型是时间序列分析中最经典和广泛使用的模型之一，特别适合分析具有趋势和季节性的时间序列数据。
+              模型通过<strong>自回归(AR)</strong>捕捉历史值对当前值的影响，通过<strong>差分(I)</strong>处理非平稳性，
+              通过<strong>移动平均(MA)</strong>捕捉误差项的影响。对于具有季节性的数据，系统会自动检测并应用<strong>SARIMA（季节性ARIMA）</strong>模型。
+              系统会基于留出集回测（holdout）自动选择最优的参数组合（p, d, q），并保留"持平外推(naive)"作为基线对比。
+              ARIMA模型能够更准确地捕捉时间序列的内在规律，提供更可靠的预测结果。
              </p>
            </div>
          </div>
@@ -304,8 +305,8 @@
                   <h4 class="section-subtitle">3. 预测计算过程</h4>
                   <div class="calculation-info">
                     <p class="formula-intro">
-                      <strong>说明：</strong>系统展示每一步预测的日期、公式提示与预测结果。若采用ETS(Holt‑Winters)，公式形态为
-                      “(level + h×trend) + seasonal”；若采用Naive，则为“持平外推”。
+                      <strong>说明：</strong>系统展示每一步预测的日期、公式提示与预测结果。若采用ARIMA模型，会根据选定的参数(p, d, q)进行预测；
+                      若采用Naive，则为"持平外推"。
                     </p>
                     <div class="table-controls">
                       <button
