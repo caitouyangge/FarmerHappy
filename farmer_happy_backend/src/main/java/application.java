@@ -16,6 +16,7 @@ import dto.community.*;
 import dto.buyer.*;
 import dto.financing.*;
 import dto.crawler.*;
+import dto.expert.*;
 import repository.DatabaseManager;
 
 import java.io.BufferedReader;
@@ -729,8 +730,7 @@ public class application {
                         return serializePartnerItemDTO((PartnerItemDTO) value);
                     }else if (value instanceof LoanApprovalResponseDTO) {
                         return serializeLoanApprovalResponseDTO((LoanApprovalResponseDTO) value);
-                    }
-                    else if (value instanceof LoanDisbursementResponseDTO) {
+                    }else if (value instanceof LoanDisbursementResponseDTO) {
                         return serializeLoanDisbursementResponseDTO((LoanDisbursementResponseDTO) value);
                     }else if (value instanceof RepaymentScheduleResponseDTO) {
                         return serializeRepaymentScheduleResponseDTO((RepaymentScheduleResponseDTO) value);
@@ -738,10 +738,15 @@ public class application {
                         return serializeRepaymentResponseDTO((RepaymentResponseDTO) value);
                     } else if (value instanceof dto.farmer.PricePredictionResponseDTO) {
                         return serializePricePredictionResponseDTO((dto.farmer.PricePredictionResponseDTO) value);
-                    }
-                     else if (value instanceof  PriceCrawlResponseDTO) {
+                    }else if (value instanceof  PriceCrawlResponseDTO) {
                         return  serializePriceCrawlResponseDTO((PriceCrawlResponseDTO) value);
-                    } else {
+                    } else if (value instanceof AppointmentCreateResponseDTO) {
+                        return serializeAppointmentCreateResponseDTO((AppointmentCreateResponseDTO) value);
+                    } else if (value instanceof AppointmentDecisionResponseDTO) {
+                        return serializeAppointmentDecisionResponseDTO((AppointmentDecisionResponseDTO) value);
+                    }
+
+                    else {
                         return "\"" + escapeJsonString(value.toString()) + "\"";
                     }
                 }
@@ -2089,6 +2094,36 @@ public class application {
                     
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                private String serializeAppointmentCreateResponseDTO(AppointmentCreateResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getGroup_id() != null) {
+                        json.append("\"group_id\":\"").append(escapeJsonString(dto.getGroup_id())).append("\",");
+                    }
+                    if (dto.getAppointment_ids() != null) {
+                        json.append("\"appointment_ids\":").append(serializeList(dto.getAppointment_ids())).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                private String serializeAppointmentDecisionResponseDTO(AppointmentDecisionResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getAppointment_id() != null) {
+                        json.append("\"appointment_id\":\"").append(escapeJsonString(dto.getAppointment_id())).append("\",");
+                    }
+                    if (dto.getStatus() != null) {
+                        json.append("\"status\":\"").append(escapeJsonString(dto.getStatus())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
                     }
                     json.append("}");
                     return json.toString();

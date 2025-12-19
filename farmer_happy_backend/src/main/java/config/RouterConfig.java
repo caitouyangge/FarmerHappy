@@ -39,6 +39,7 @@ public class RouterConfig {
     private OrderController orderController;
     private FinancingController financingController;
     private AiController aiController;
+    private controller.ExpertAppointmentController expertAppointmentController;
     private PricePredictionController pricePredictionController;
     private PriceCrawlerController priceCrawlerController;
 
@@ -53,6 +54,7 @@ public class RouterConfig {
         this.aiController = new AiController();
         this.pricePredictionController = new PricePredictionController();
         this.priceCrawlerController = new PriceCrawlerController();
+        this.expertAppointmentController = new controller.ExpertAppointmentController();
     }
 
     public Map<String, Object> handleRequest(String path, String method, Map<String, Object> requestBody,
@@ -85,6 +87,48 @@ public class RouterConfig {
         if ("/api/v1/ai/expert-chat".equals(path) && "POST".equals(method)) {
             String question = requestBody != null ? (String) requestBody.get("question") : null;
             return aiController.chatWithAiExpert(question);
+        }
+
+        // ============= 专家预约相关路由 =============
+
+        // 获取专家列表
+        if ("/api/v1/expert/experts/list".equals(path) && "POST".equals(method)) {
+            return expertAppointmentController.listExperts();
+        }
+
+        // 农户发起预约
+        if ("/api/v1/expert/appointments/apply".equals(path) && "POST".equals(method)) {
+            dto.expert.AppointmentCreateRequestDTO req = parseAppointmentCreateRequest(requestBody);
+            return expertAppointmentController.apply(req);
+        }
+
+        // 专家查看预约请求
+        if ("/api/v1/expert/appointments/expert/list".equals(path) && "POST".equals(method)) {
+            String phone = (String) requestBody.get("phone");
+            return expertAppointmentController.getExpertAppointments(phone);
+        }
+
+        // 农户查看预约结果
+        if ("/api/v1/expert/appointments/farmer/list".equals(path) && "POST".equals(method)) {
+            String phone = (String) requestBody.get("phone");
+            return expertAppointmentController.getFarmerAppointments(phone);
+        }
+
+        // 获取预约详情 - /api/v1/expert/appointments/query/{appointment_id}
+        Pattern apptDetailPattern = Pattern.compile("/api/v1/expert/appointments/query/([^/]+)");
+        Matcher apptDetailMatcher = apptDetailPattern.matcher(path);
+        if (apptDetailMatcher.matches() && "POST".equals(method)) {
+            String appointmentId = apptDetailMatcher.group(1);
+            return expertAppointmentController.getDetail(appointmentId);
+        }
+
+        // 专家处理预约 - /api/v1/expert/appointments/{appointment_id}/decision
+        Pattern apptDecisionPattern = Pattern.compile("/api/v1/expert/appointments/([^/]+)/decision");
+        Matcher apptDecisionMatcher = apptDecisionPattern.matcher(path);
+        if (apptDecisionMatcher.matches() && "POST".equals(method)) {
+            String appointmentId = apptDecisionMatcher.group(1);
+            dto.expert.AppointmentDecisionRequestDTO req = parseAppointmentDecisionRequest(requestBody);
+            return expertAppointmentController.decide(appointmentId, req);
         }
 
         // ============= 融资相关路由 =============
@@ -777,6 +821,43 @@ public class RouterConfig {
         }
 
         return request;
+    }
+
+    private dto.expert.AppointmentCreateRequestDTO parseAppointmentCreateRequest(Map<String, Object> requestBody) {
+        dto.expert.AppointmentCreateRequestDTO req = new dto.expert.AppointmentCreateRequestDTO();
+        req.setFarmer_phone((String) requestBody.get("farmer_phone"));
+        req.setMode((String) requestBody.get("mode"));
+        if (requestBody.get("expert_ids") instanceof List) {
+            List<?> ids = (List<?>) requestBody.get("expert_ids");
+            List<Long> longIds = new ArrayList<>();
+            for (Object o : ids) {
+                if (o instanceof Number) {
+                    longIds.add(((Number) o).longValue());
+                } else if (o instanceof String) {
+                    try { longIds.add(Long.parseLong((String) o)); } catch (Exception ignored) {}
+                }
+            }
+            req.setExpert_ids(longIds);
+        }
+        req.setMessage((String) requestBody.get("message"));
+        return req;
+    }
+
+    private dto.expert.AppointmentDecisionRequestDTO parseAppointmentDecisionRequest(Map<String, Object> requestBody) {
+        dto.expert.AppointmentDecisionRequestDTO req = new dto.expert.AppointmentDecisionRequestDTO();
+        req.setExpert_phone((String) requestBody.get("expert_phone"));
+        req.setAction((String) requestBody.get("action"));
+        req.setExpert_note((String) requestBody.get("expert_note"));
+        Object tsObj = requestBody.get("scheduled_time");
+        if (tsObj instanceof String) {
+            try {
+                req.setScheduled_time(java.sql.Timestamp.valueOf((String) tsObj));
+            } catch (Exception e) {
+                req.setScheduled_time(null);
+            }
+        }
+        req.setLocation((String) requestBody.get("location"));
+        return req;
     }
 
     private ProductStatusUpdateRequestDTO parseProductStatusUpdateRequest(Map<String, Object> requestBody) {
