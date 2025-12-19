@@ -29,5 +29,7 @@ public interface ProductService {
     // 批量操作方法
     ProductBatchActionResultDTO batchActionProducts(ProductBatchActionRequestDTO request) throws Exception;
 
+    // 获取所有在售商品（用于广告）
+    List<ProductListResponseDTO> getAllOnShelfProducts() throws Exception;
 
 }

@@ -641,4 +641,28 @@ public class ProductController {
         return errors;
     }
 
+    // 获取所有在售商品（用于广告）
+    public Map<String, Object> getAllOnShelfProducts() {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 获取所有在售商品
+            List<ProductListResponseDTO> productList = productService.getAllOnShelfProducts();
+
+            response.put("code", 200);
+            response.put("message", "成功");
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("list", productList);
+            response.put("data", data);
+
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return response;
+        }
+    }
+
 }

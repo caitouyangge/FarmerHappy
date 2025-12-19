@@ -21,16 +21,17 @@ public class PricePredictionController {
     }
     
     /**
-     * 上传Excel文件
+     * 上传价格文件（Excel/CSV）
      */
     public Map<String, Object> uploadExcel(InputStream inputStream, String fileName) {
         Map<String, Object> response = new HashMap<>();
         
         try {
             // 验证文件类型
-            if (fileName == null || (!fileName.endsWith(".xls") && !fileName.endsWith(".xlsx"))) {
+            String lower = fileName != null ? fileName.toLowerCase() : null;
+            if (lower == null || (!lower.endsWith(".xls") && !lower.endsWith(".xlsx") && !lower.endsWith(".csv"))) {
                 response.put("code", 400);
-                response.put("message", "不支持的文件格式，仅支持.xls和.xlsx文件");
+                response.put("message", "不支持的文件格式，仅支持.xls、.xlsx、.csv文件");
                 return response;
             }
             

@@ -13,7 +13,7 @@
     <main class="main-content">
       <!-- 步骤1: 文件上传 -->
       <div v-if="step === 1" class="step-section">
-        <h2 class="section-title">步骤1: 上传Excel文件</h2>
+        <h2 class="section-title">步骤1: 上传价格文件（Excel/CSV）</h2>
         <div class="upload-area" 
              :class="{ 'drag-over': isDragOver }"
              @drop="handleDrop"
@@ -23,31 +23,34 @@
           <input 
             ref="fileInput"
             type="file" 
-            accept=".xls,.xlsx"
+            accept=".xls,.xlsx,.csv"
             @change="handleFileSelect"
             style="display: none"
           />
           <div class="upload-content">
             <div class="upload-icon">📊</div>
-            <p class="upload-text">点击或拖拽Excel文件到此处上传</p>
-            <p class="upload-hint">支持 .xls 和 .xlsx 格式，文件大小不超过10MB</p>
+            <p class="upload-text">点击或拖拽文件到此处上传</p>
+            <p class="upload-hint">支持 .xls / .xlsx / .csv，文件大小不超过10MB</p>
             <div class="format-example">
-              <p><strong>Excel格式要求：</strong></p>
+              <p><strong>文件格式要求（任一即可）：</strong></p>
               <table class="example-table">
                 <thead>
                   <tr>
-                    <th>日期</th>
-                    <th>价格</th>
+                    <th>规格/类型</th>
+                    <th>平均价</th>
+                    <th>发布日期</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td>2024-01-01</td>
-                    <td>10.5</td>
+                    <td>活</td>
+                    <td>45.0</td>
+                    <td>2025-12-18</td>
                   </tr>
                   <tr>
-                    <td>2024-01-02</td>
-                    <td>11.2</td>
+                    <td>冰鲜</td>
+                    <td>105.0</td>
+                    <td>2025-12-17</td>
                   </tr>
                 </tbody>
               </table>
@@ -69,19 +72,24 @@
             <table class="preview-table">
               <thead>
                 <tr>
+                  <th>规格/类型</th>
                   <th>日期</th>
                   <th>价格</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(item, index) in previewData" :key="index">
+                  <td>{{ item.type || '默认' }}</td>
                   <td>{{ item.date }}</td>
                   <td>¥{{ item.price }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <p class="preview-total">共 {{ totalRecords }} 条数据</p>
+          <p class="preview-total">
+            <strong>共 {{ totalRecords }} 条数据</strong>
+            <span class="preview-note">（预览仅显示前{{ previewData.length }}条，预测时将处理全部 {{ totalRecords }} 条数据）</span>
+          </p>
         </div>
 
         <div class="action-buttons">
@@ -113,12 +121,13 @@
          <div class="form-group">
            <label class="form-label">预测模型</label>
            <div class="model-info-box">
-             <div class="model-badge">ARIMA模型（自回归综合移动平均）</div>
+            <div class="model-badge">ETS模型（Holt-Winters 指数平滑 + 阻尼趋势）</div>
              <p class="model-description">
-               系统使用ARIMA（AutoRegressive Integrated Moving Average）模型进行预测。
-               ARIMA模型是经典的时间序列预测模型，特别适用于具有明显线性趋势和季节性的农产品价格。
-               模型会自动选择最优参数（p, d, q），并支持季节性ARIMA（SARIMA）以捕捉周期性规律。
-               该模型简单、可解释性强，是时间序列预测的基准模型。
+              系统使用ETS（Error‑Trend‑Seasonal）指数平滑模型进行预测（Holt / Holt‑Winters），并加入<strong>阻尼趋势(damped trend, φ)</strong>：
+              让趋势项在未来逐步衰减，避免线性外推导致“越预测越离谱”的发散。
+              该类模型是工业界非常常用的时间序列方法，尤其适合“按天”的价格数据：能同时刻画<strong>水平(level)</strong>、
+              <strong>趋势(trend)</strong>与<strong>季节性(seasonal)</strong>。
+              系统会基于留出集回测（holdout）自动选择更优参数（包含季节周期与φ），并保留“持平外推(naive)”作为兜底。
              </p>
            </div>
          </div>
@@ -156,6 +165,11 @@
               <div class="metric-item">
                 <div class="metric-label">均方根误差(RMSE)</div>
                 <div class="metric-value">{{ predictionResult.model_metrics.rmse.toFixed(2) }}</div>
+                <div class="metric-desc">越小越好</div>
+              </div>
+              <div v-if="predictionResult.model_metrics.mape !== undefined" class="metric-item">
+                <div class="metric-label">平均百分比误差(MAPE)</div>
+                <div class="metric-value">{{ (predictionResult.model_metrics.mape * 100).toFixed(2) }}%</div>
                 <div class="metric-desc">越小越好</div>
               </div>
               <div v-if="predictionResult.model_metrics.aic" class="metric-item">
@@ -214,250 +228,118 @@
               </div>
               
               <template v-else>
-              <!-- 数据预处理 -->
-              <div v-if="predictionResult.calculation_details.preprocessing" class="calculation-section">
-                <h4 class="section-subtitle">1. 数据预处理</h4>
-                <div class="calculation-info">
-                  <p><strong>原始数据点数量：</strong>{{ predictionResult.calculation_details.preprocessing.original_count }}</p>
-                  <p><strong>清洗后数据点数量：</strong>{{ predictionResult.calculation_details.preprocessing.cleaned_count }}</p>
-                  <p v-if="predictionResult.calculation_details.preprocessing.removed_count > 0">
-                    <strong>去除异常值数量：</strong>{{ predictionResult.calculation_details.preprocessing.removed_count }}
-                  </p>
-                  <p v-if="predictionResult.calculation_details.preprocessing.mean">
-                    <strong>处理方法：</strong>{{ predictionResult.calculation_details.preprocessing.method }}
-                  </p>
-                  <div v-if="predictionResult.calculation_details.preprocessing.mean" class="formula-box">
-                    <p><strong>均值：</strong>{{ predictionResult.calculation_details.preprocessing.mean }}</p>
-                    <p><strong>标准差：</strong>{{ predictionResult.calculation_details.preprocessing.std_dev }}</p>
-                    <p><strong>下界（均值 - 3×标准差）：</strong>{{ predictionResult.calculation_details.preprocessing.lower_bound }}</p>
-                    <p><strong>上界（均值 + 3×标准差）：</strong>{{ predictionResult.calculation_details.preprocessing.upper_bound }}</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- ARIMA模型参数 -->
-              <div v-if="predictionResult.calculation_details.arima_params" class="calculation-section">
-                <h4 class="section-subtitle">2. ARIMA模型参数选择</h4>
-                <div class="calculation-info">
-                  <p class="formula-intro">
-                    <strong>ARIMA模型说明：</strong><br>
-                    • <strong>ARIMA(p,d,q)</strong>：p=自回归阶数，d=差分次数，q=移动平均阶数<br>
-                    • <strong>SARIMA(p,d,q)(P,D,Q,s)</strong>：包含季节性参数，s=季节周期<br>
-                    • <strong>p (AR)</strong>：使用过去p个时间点的值来预测当前值<br>
-                    • <strong>d (差分)</strong>：对数据进行d次差分以消除趋势，使序列平稳<br>
-                    • <strong>q (MA)</strong>：使用过去q个时间点的预测误差来改进预测<br>
-                    <strong>选择方法：</strong>{{ predictionResult.calculation_details.arima_params.method }}
-                  </p>
-                  <p><strong>选择的模型类型：</strong>{{ predictionResult.calculation_details.arima_params.model_type }}</p>
-                  <div class="formula-box">
-                    <p><strong>模型参数：</strong></p>
-                    <p>• p (AR阶数) = {{ predictionResult.calculation_details.arima_params.p }}</p>
-                    <p>• d (差分次数) = {{ predictionResult.calculation_details.arima_params.d }}</p>
-                    <p>• q (MA阶数) = {{ predictionResult.calculation_details.arima_params.q }}</p>
-                    <div v-if="predictionResult.calculation_details.arima_params.is_seasonal">
-                      <p><strong>季节性参数：</strong></p>
-                      <p>• P (季节性AR) = {{ predictionResult.calculation_details.arima_params.P }}</p>
-                      <p>• D (季节性差分) = {{ predictionResult.calculation_details.arima_params.D }}</p>
-                      <p>• Q (季节性MA) = {{ predictionResult.calculation_details.arima_params.Q }}</p>
-                      <p>• s (季节周期) = {{ predictionResult.calculation_details.arima_params.s }}天</p>
+                <!-- 数据预处理 -->
+                <div v-if="predictionResult.calculation_details.preprocessing" class="calculation-section">
+                  <h4 class="section-subtitle">1. 数据预处理</h4>
+                  <div class="calculation-info">
+                    <p><strong>原始数据点数量：</strong>{{ predictionResult.calculation_details.preprocessing.original_count }}</p>
+                    <p><strong>清洗后数据点数量：</strong>{{ predictionResult.calculation_details.preprocessing.cleaned_count }}</p>
+                    <p v-if="predictionResult.calculation_details.preprocessing.filled_count !== undefined">
+                      <strong>补齐缺失日期后点数：</strong>{{ predictionResult.calculation_details.preprocessing.filled_count }}
+                    </p>
+                    <p v-if="predictionResult.calculation_details.preprocessing.removed_count > 0">
+                      <strong>去除异常值数量：</strong>{{ predictionResult.calculation_details.preprocessing.removed_count }}
+                    </p>
+                    <p v-if="predictionResult.calculation_details.preprocessing.method">
+                      <strong>处理方法：</strong>{{ predictionResult.calculation_details.preprocessing.method }}
+                    </p>
+                    <div v-if="predictionResult.calculation_details.preprocessing.mean" class="formula-box">
+                      <p><strong>均值：</strong>{{ predictionResult.calculation_details.preprocessing.mean }}</p>
+                      <p><strong>标准差：</strong>{{ predictionResult.calculation_details.preprocessing.std_dev }}</p>
+                      <p><strong>下界（均值 - 3×标准差）：</strong>{{ predictionResult.calculation_details.preprocessing.lower_bound }}</p>
+                      <p><strong>上界（均值 + 3×标准差）：</strong>{{ predictionResult.calculation_details.preprocessing.upper_bound }}</p>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <!-- ARIMA模型计算 -->
-              <div v-if="predictionResult.calculation_details.model_calculation" class="calculation-section">
-                <h4 class="section-subtitle">3. ARIMA模型计算过程</h4>
-                <p class="formula-intro">
-                  <strong>ARIMA模型公式：</strong>(1-φ₁B-φ₂B²-...-φₚBᵖ)(1-B)ᵈY(t) = (1+θ₁B+θ₂B²+...+θₑBᵉ)ε(t)<br>
-                  <strong>其中：</strong>B是滞后算子，φ是AR系数，θ是MA系数，ε(t)是白噪声误差项<br>
-                  <strong>简化形式：</strong>Y(t) = c + φ₁Y(t-1) + ... + φₚY(t-p) + ε(t) + θ₁ε(t-1) + ... + θₑε(t-q)
-                </p>
-                
-                <!-- AR系数 -->
-                <div v-if="predictionResult.calculation_details.model_calculation.ar_coefficients" class="calculation-info">
-                  <h5 style="margin-top: 1rem; margin-bottom: 0.5rem; color: var(--primary);">AR（自回归）系数：</h5>
-                  <div class="calculation-table-wrapper">
-                    <table class="calculation-table">
-                      <thead>
-                        <tr>
-                          <th>阶数</th>
-                          <th>系数符号</th>
-                          <th>系数值</th>
-                          <th>说明</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="(coeff, index) in predictionResult.calculation_details.model_calculation.ar_coefficients" :key="index">
-                          <td>{{ coeff.order }}</td>
-                          <td>φ{{ coeff.order }}</td>
-                          <td>{{ coeff.value }}</td>
-                          <td>{{ coeff.description }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                <!-- 模型选择（回测） -->
+                <div v-if="predictionResult.calculation_details.model_selection" class="calculation-section">
+                  <h4 class="section-subtitle">2. 模型选择（留出集回测）</h4>
+                  <div class="calculation-info">
+                    <p><strong>最终采用模型：</strong>{{ predictionResult.calculation_details.model_selection.model_name }}</p>
+                    <p><strong>选择方法：</strong>{{ predictionResult.calculation_details.model_selection.selection_method }}</p>
+                    <div class="formula-box">
+                      <p><strong>季节周期：</strong>{{ predictionResult.calculation_details.model_selection.season_length }} 天</p>
+                      <p><strong>参数(α/β/γ)：</strong>
+                        {{ predictionResult.calculation_details.model_selection.alpha }},
+                        {{ predictionResult.calculation_details.model_selection.beta }},
+                        {{ predictionResult.calculation_details.model_selection.gamma }}
+                      </p>
+                      <p v-if="predictionResult.calculation_details.model_selection.phi !== undefined">
+                        <strong>阻尼趋势(φ)：</strong>{{ predictionResult.calculation_details.model_selection.phi }}
+                      </p>
+                      <p v-if="predictionResult.calculation_details.model_selection.psi !== undefined">
+                        <strong>季节衰减(ψ)：</strong>{{ predictionResult.calculation_details.model_selection.psi }}
+                      </p>
+                      <p v-if="predictionResult.calculation_details.model_selection.seasonality_strength !== undefined">
+                        <strong>季节性强度：</strong>{{ predictionResult.calculation_details.model_selection.seasonality_strength }}
+                      </p>
+                      <p v-if="predictionResult.calculation_details.model_selection.forecast_strategy">
+                        <strong>预测策略：</strong>{{ predictionResult.calculation_details.model_selection.forecast_strategy }}
+                      </p>
+                      <p v-if="predictionResult.calculation_details.model_selection.cv_folds !== undefined">
+                        <strong>回测折数：</strong>{{ predictionResult.calculation_details.model_selection.cv_folds }}
+                      </p>
+                      <p><strong>回测留出集大小：</strong>{{ predictionResult.calculation_details.model_selection.holdout_size }}</p>
+                    </div>
+                    <div v-if="predictionResult.calculation_details.model_selection.holdout_metrics" class="formula-box">
+                      <p><strong>回测指标（选中模型）：</strong></p>
+                      <p>MAE = {{ predictionResult.calculation_details.model_selection.holdout_metrics.mae }}</p>
+                      <p>RMSE = {{ predictionResult.calculation_details.model_selection.holdout_metrics.rmse }}</p>
+                      <p>MAPE = {{ (predictionResult.calculation_details.model_selection.holdout_metrics.mape * 100).toFixed(2) }}%</p>
+                      <p>R² = {{ predictionResult.calculation_details.model_selection.holdout_metrics.r_squared }}</p>
+                    </div>
+                    <div v-if="predictionResult.calculation_details.model_selection.baseline_metrics" class="formula-box">
+                      <p><strong>基线指标（Naive持平外推）：</strong></p>
+                      <p>MAE = {{ predictionResult.calculation_details.model_selection.baseline_metrics.mae }}</p>
+                      <p>RMSE = {{ predictionResult.calculation_details.model_selection.baseline_metrics.rmse }}</p>
+                      <p>MAPE = {{ (predictionResult.calculation_details.model_selection.baseline_metrics.mape * 100).toFixed(2) }}%</p>
+                      <p>R² = {{ predictionResult.calculation_details.model_selection.baseline_metrics.r_squared }}</p>
+                    </div>
                   </div>
                 </div>
-                
-                <!-- MA系数 -->
-                <div v-if="predictionResult.calculation_details.model_calculation.ma_coefficients" class="calculation-info">
-                  <h5 style="margin-top: 1rem; margin-bottom: 0.5rem; color: var(--primary);">MA（移动平均）系数：</h5>
-                  <div class="calculation-table-wrapper">
-                    <table class="calculation-table">
-                      <thead>
-                        <tr>
-                          <th>阶数</th>
-                          <th>系数符号</th>
-                          <th>系数值</th>
-                          <th>说明</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="(coeff, index) in predictionResult.calculation_details.model_calculation.ma_coefficients" :key="index">
-                          <td>{{ coeff.order }}</td>
-                          <td>θ{{ coeff.order }}</td>
-                          <td>{{ coeff.value }}</td>
-                          <td>{{ coeff.description }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                
-                <!-- 差分过程 -->
-                <div v-if="predictionResult.calculation_details.model_calculation.differencing_steps" class="calculation-info">
-                  <h5 style="margin-top: 1rem; margin-bottom: 0.5rem; color: var(--primary);">差分过程：</h5>
-                  <div v-for="(step, index) in predictionResult.calculation_details.model_calculation.differencing_steps" :key="index" class="formula-box">
-                    <p><strong>步骤{{ step.step }}：</strong>{{ step.description }}</p>
-                    <p>原始数据点数：{{ step.original_count }}，差分后数据点数：{{ step.differenced_count }}</p>
-                  </div>
-                </div>
-                
-                <!-- 残差信息 -->
-                <div v-if="predictionResult.calculation_details.model_calculation.residual_info" class="calculation-info">
-                  <h5 style="margin-top: 1rem; margin-bottom: 0.5rem; color: var(--primary);">残差统计：</h5>
-                  <div class="formula-box">
-                    <p>残差数量：{{ predictionResult.calculation_details.model_calculation.residual_info.count }}</p>
-                    <p>残差均值：{{ predictionResult.calculation_details.model_calculation.residual_info.mean }}</p>
-                    <p>残差标准差：{{ predictionResult.calculation_details.model_calculation.residual_info.std }}</p>
-                    <p><strong>说明：</strong>残差应该接近白噪声（均值为0，无自相关），这是模型拟合良好的标志</p>
-                  </div>
-                </div>
-              </div>
 
-              <!-- 评估指标计算 -->
-              <div v-if="predictionResult.calculation_details.model_calculation && predictionResult.calculation_details.model_calculation.evaluation_calculation" class="calculation-section">
-                <h4 class="section-subtitle">4. 模型评估指标计算</h4>
-
-              <!-- 预测过程 -->
-              <div v-if="predictionResult.calculation_details.prediction_steps" class="calculation-section">
-                <h4 class="section-subtitle">5. 预测计算过程</h4>
-                <div class="calculation-info">
-                  <p class="formula-intro">
-                    <strong>评估指标说明：</strong><br>
-                    • <strong>R²（决定系数）</strong>：衡量模型对数据变异的解释程度，范围0-1，越接近1越好<br>
-                    • <strong>MAE（平均绝对误差）</strong>：预测值与实际值差的绝对值的平均值，越小越好<br>
-                    • <strong>RMSE（均方根误差）</strong>：预测误差的平方根，越小越好
-                  </p>
-                  <p><strong>实际价格均值（ȳ）：</strong>{{ predictionResult.calculation_details.model_calculation.evaluation_calculation.y_mean }}</p>
-                  <p class="formula-box">
-                    <strong>R²计算公式：</strong>R² = 1 - (SS_res / SS_tot)<br>
-                    {{ predictionResult.calculation_details.model_calculation.evaluation_calculation.r_squared_formula }}
-                  </p>
-                  <p class="formula-box">
-                    <strong>MAE计算公式：</strong>MAE = (1/n) × Σ|实际值 - 预测值|<br>
-                    {{ predictionResult.calculation_details.model_calculation.evaluation_calculation.mae_formula }}
-                  </p>
-                  <p class="formula-box">
-                    <strong>RMSE计算公式：</strong>RMSE = √[(1/n) × Σ(实际值 - 预测值)²]<br>
-                    {{ predictionResult.calculation_details.model_calculation.evaluation_calculation.rmse_formula }}
-                  </p>
-                  <div v-if="predictionResult.calculation_details.model_calculation.evaluation_calculation.steps" class="calculation-table-wrapper">
+                <!-- 预测过程 -->
+                <div v-if="predictionResult.calculation_details.prediction_steps" class="calculation-section">
+                  <h4 class="section-subtitle">3. 预测计算过程</h4>
+                  <div class="calculation-info">
+                    <p class="formula-intro">
+                      <strong>说明：</strong>系统展示每一步预测的日期、公式提示与预测结果。若采用ETS(Holt‑Winters)，公式形态为
+                      “(level + h×trend) + seasonal”；若采用Naive，则为“持平外推”。
+                    </p>
                     <div class="table-controls">
-                      <button 
-                        v-if="predictionResult.calculation_details.model_calculation.evaluation_calculation.steps.length > 20"
-                        @click="showAllEvaluationSteps = !showAllEvaluationSteps"
+                      <button
+                        v-if="predictionResult.calculation_details.prediction_steps.length > 20"
+                        @click="showAllPredictionSteps = !showAllPredictionSteps"
                         class="btn-toggle-table">
-                        {{ showAllEvaluationSteps ? '收起' : '展开全部' }}（共{{ predictionResult.calculation_details.model_calculation.evaluation_calculation.steps.length }}条）
+                        {{ showAllPredictionSteps ? '收起' : '展开全部' }}（共{{ predictionResult.calculation_details.prediction_steps.length }}条）
                       </button>
                     </div>
-                    <p class="table-intro">详细计算步骤：</p>
-                    <table class="calculation-table">
-                      <thead>
-                        <tr>
-                          <th>序号</th>
-                          <th>实际值</th>
-                          <th>预测值</th>
-                          <th>误差 (实际-预测)</th>
-                          <th>误差²</th>
-                          <th>(实际-均值)²</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="(step, index) in (showAllEvaluationSteps ? predictionResult.calculation_details.model_calculation.evaluation_calculation.steps : predictionResult.calculation_details.model_calculation.evaluation_calculation.steps.slice(0, 20))" :key="index">
-                          <td>{{ step.index }}</td>
-                          <td>{{ step.actual }}</td>
-                          <td>{{ step.predicted }}</td>
-                          <td>{{ step.error }}</td>
-                          <td>{{ step.error_squared }}</td>
-                          <td>{{ step.total_squared }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <p v-if="!showAllEvaluationSteps && predictionResult.calculation_details.model_calculation.evaluation_calculation.steps.length > 20" class="table-note">
-                      显示前20条，共{{ predictionResult.calculation_details.model_calculation.evaluation_calculation.steps.length }}条数据，点击"展开全部"查看完整数据
-                    </p>
-                    <p class="table-note">
-                      <strong>汇总结果：</strong><br>
-                      残差平方和(SS_res) = Σ(误差²) = {{ predictionResult.calculation_details.model_calculation.evaluation_calculation.ss_res }}<br>
-                      总平方和(SS_tot) = Σ(实际值-均值)² = {{ predictionResult.calculation_details.model_calculation.evaluation_calculation.ss_tot }}
-                    </p>
+                    <div class="calculation-table-wrapper">
+                      <table class="calculation-table">
+                        <thead>
+                          <tr>
+                            <th>日期</th>
+                            <th>步数</th>
+                            <th>计算公式</th>
+                            <th>预测价格</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(step, index) in (showAllPredictionSteps ? predictionResult.calculation_details.prediction_steps : predictionResult.calculation_details.prediction_steps.slice(0, 20))" :key="index">
+                            <td>{{ step.date }}</td>
+                            <td>{{ step.step }}</td>
+                            <td class="formula-cell">{{ step.formula }}</td>
+                            <td><strong>¥{{ step.predicted_price }}</strong></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <p v-if="!showAllPredictionSteps && predictionResult.calculation_details.prediction_steps.length > 20" class="table-note">
+                        显示前20条，共{{ predictionResult.calculation_details.prediction_steps.length }}条预测数据，点击"展开全部"查看完整数据
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              <!-- 预测过程（已移到上面） -->
-                <p class="formula-intro">
-                  <strong>预测公式：</strong>预测价格 = 最后平滑值 + 趋势 × 预测步数<br>
-                  <strong>其中：</strong>最后平滑值 = 历史数据最后一个时间点的指数平滑值，趋势 = 历史数据的平均变化率，预测步数 = 从最后数据点到预测点的天数差<br>
-                  <strong>说明：</strong>基于历史数据的趋势外推，假设未来价格变化遵循历史趋势
-                </p>
-                <div class="table-controls">
-                  <button 
-                    v-if="predictionResult.calculation_details.prediction_steps.length > 20"
-                    @click="showAllPredictionSteps = !showAllPredictionSteps"
-                    class="btn-toggle-table">
-                    {{ showAllPredictionSteps ? '收起' : '展开全部' }}（共{{ predictionResult.calculation_details.prediction_steps.length }}条）
-                  </button>
-                </div>
-                <div class="calculation-table-wrapper">
-                  <table class="calculation-table">
-                    <thead>
-                      <tr>
-                        <th>日期</th>
-                        <th>预测步数</th>
-                        <th>最后平滑值</th>
-                        <th>趋势</th>
-                        <th>计算公式</th>
-                        <th>预测价格</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(step, index) in (showAllPredictionSteps ? predictionResult.calculation_details.prediction_steps : predictionResult.calculation_details.prediction_steps.slice(0, 20))" :key="index">
-                        <td>{{ step.date }}</td>
-                        <td>{{ step.steps }}</td>
-                        <td>{{ step.last_smoothed }}</td>
-                        <td>{{ step.trend }}</td>
-                        <td class="formula-cell">{{ step.formula }}</td>
-                        <td><strong>¥{{ step.predicted_price }}</strong></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <p v-if="!showAllPredictionSteps && predictionResult.calculation_details.prediction_steps.length > 20" class="table-note">
-                    显示前20条，共{{ predictionResult.calculation_details.prediction_steps.length }}条预测数据，点击"展开全部"查看完整数据
-                  </p>
-                </div>
-              </div>
               </template>
             </div>
           </div>
@@ -537,8 +419,9 @@ export default {
     // 处理文件
     const processFile = async (file) => {
       // 验证文件类型
-      if (!file.name.endsWith('.xls') && !file.name.endsWith('.xlsx')) {
-        errorMessage.value = '不支持的文件格式，仅支持.xls和.xlsx文件';
+      const lowerName = (file.name || '').toLowerCase();
+      if (!lowerName.endsWith('.xls') && !lowerName.endsWith('.xlsx') && !lowerName.endsWith('.csv')) {
+        errorMessage.value = '不支持的文件格式，仅支持 .xls / .xlsx / .csv 文件';
         return;
       }
 
@@ -595,7 +478,7 @@ export default {
     // 开始预测
     const startPrediction = async () => {
       if (!fileId.value) {
-        errorMessage.value = '请先上传Excel文件';
+        errorMessage.value = '请先上传文件';
         return;
       }
 
@@ -633,14 +516,14 @@ export default {
       }
     };
 
-    // 绘制图表（使用简单的Canvas绘制）
+    // 绘制图表（使用简单的Canvas绘制）：支持按规格/类型绘制多条曲线，并标注
     const drawChart = () => {
       if (!chartContainer.value || !predictionResult.value) return;
 
       const container = chartContainer.value;
       const canvas = document.createElement('canvas');
       canvas.width = container.clientWidth;
-      canvas.height = 400;
+      canvas.height = 420;
       container.innerHTML = '';
       container.appendChild(canvas);
 
@@ -649,17 +532,43 @@ export default {
       const chartWidth = canvas.width - padding * 2;
       const chartHeight = canvas.height - padding * 2;
 
-      // 合并历史数据和预测数据
-      const allData = [
-        ...predictionResult.value.historical_data.map(d => ({ ...d, type: 'historical' })),
-        ...predictionResult.value.predicted_data.map(d => ({ ...d, type: 'predicted' }))
-      ];
+      // 统一成多序列结构
+      const seriesList = Array.isArray(predictionResult.value.series_data) && predictionResult.value.series_data.length > 0
+        ? predictionResult.value.series_data
+        : [{
+            type: '默认',
+            historical_data: predictionResult.value.historical_data || [],
+            predicted_data: predictionResult.value.predicted_data || []
+          }];
+
+      // 汇总全量点（用于确定坐标轴范围）
+      const allPoints = [];
+      seriesList.forEach(s => {
+        (s.historical_data || []).forEach(p => allPoints.push({ ...p, __kind: 'historical', __type: s.type }));
+        (s.predicted_data || []).forEach(p => allPoints.push({ ...p, __kind: 'predicted', __type: s.type }));
+      });
+      if (allPoints.length === 0) return;
+
+      // 统一X轴：按日期去重排序
+      const dateSet = new Set(allPoints.map(p => p.date));
+      const dates = Array.from(dateSet).sort((a, b) => new Date(a) - new Date(b));
+      const dateIndex = new Map(dates.map((d, i) => [d, i]));
+      const xCount = dates.length;
 
       // 找到价格的最大值和最小值
-      const prices = allData.map(d => d.price);
+      const prices = allPoints.map(d => d.price);
       const minPrice = Math.min(...prices);
       const maxPrice = Math.max(...prices);
       const priceRange = maxPrice - minPrice || 1;
+
+      // 工具函数：映射坐标
+      const xOf = (dateStr) => {
+        const idx = dateIndex.get(dateStr);
+        if (idx == null) return padding;
+        if (xCount <= 1) return padding + chartWidth / 2;
+        return padding + (idx / (xCount - 1)) * chartWidth;
+      };
+      const yOf = (price) => canvas.height - padding - ((price - minPrice) / priceRange) * chartHeight;
 
       // 绘制坐标轴
       ctx.strokeStyle = '#ccc';
@@ -670,90 +579,152 @@ export default {
       ctx.lineTo(canvas.width - padding, canvas.height - padding);
       ctx.stroke();
 
-      // 绘制历史数据
-      ctx.strokeStyle = '#4CAF50';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      const historicalData = predictionResult.value.historical_data;
-      const totalPoints = historicalData.length + predictionResult.value.predicted_data.length;
-      historicalData.forEach((point, index) => {
-        const x = padding + (index / (totalPoints - 1)) * chartWidth;
-        const y = canvas.height - padding - ((point.price - minPrice) / priceRange) * chartHeight;
-        if (index === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
+      // 颜色盘
+      const palette = ['#4CAF50', '#2196F3', '#9C27B0', '#FF5722', '#009688', '#795548', '#607D8B', '#E91E63'];
+
+      // 画网格/刻度（简单版）
+      ctx.fillStyle = '#666';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      const gridLines = 5;
+      for (let i = 0; i <= gridLines; i++) {
+        const v = minPrice + (priceRange * i) / gridLines;
+        const y = yOf(v);
+        ctx.strokeStyle = '#eee';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(canvas.width - padding, y);
+        ctx.stroke();
+        ctx.fillText(`¥${v.toFixed(2)}`, padding - 8, y);
+      }
+
+      // X轴日期（抽样显示）
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      const xLabelCount = Math.min(6, dates.length);
+      for (let i = 0; i < xLabelCount; i++) {
+        const idx = Math.round((i / (xLabelCount - 1 || 1)) * (dates.length - 1));
+        const d = dates[idx];
+        ctx.fillStyle = '#666';
+        ctx.fillText(d, xOf(d), canvas.height - padding + 10);
+      }
+
+      // 计算“历史-预测分界线”：取所有序列历史最后日期的最大值
+      let dividerDate = null;
+      seriesList.forEach(s => {
+        const hist = s.historical_data || [];
+        if (hist.length === 0) return;
+        const last = hist[hist.length - 1].date;
+        if (!dividerDate || new Date(last) > new Date(dividerDate)) dividerDate = last;
+      });
+      if (dividerDate && dateIndex.has(dividerDate)) {
+        const dividerX = xOf(dividerDate);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(dividerX, padding);
+        ctx.lineTo(dividerX, canvas.height - padding);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // 绘制每条规格曲线：历史(实线) + 预测(虚线)，并在末尾标注规格名
+      const legendX = canvas.width - padding + 10;
+      let legendY = 20;
+      const usedLabelYs = [];
+
+      const placeEndLabel = (x, y, text, color) => {
+        // 简单避让：与已有label y距离太近则下移
+        let yy = y;
+        for (let guard = 0; guard < 20; guard++) {
+          if (usedLabelYs.every(v => Math.abs(v - yy) > 12)) break;
+          yy += 12;
+          if (yy > canvas.height - padding) yy = y - 12;
+        }
+        usedLabelYs.push(yy);
+        ctx.fillStyle = color;
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, Math.min(x + 6, canvas.width - padding + 5), yy);
+      };
+
+      seriesList.forEach((s, idx) => {
+        const color = palette[idx % palette.length];
+        const typeName = s.type || '默认';
+        const hist = (s.historical_data || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+        const pred = (s.predicted_data || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // legend（右侧）
+        ctx.fillStyle = color;
+        ctx.fillRect(legendX, legendY, 12, 12);
+        ctx.fillStyle = '#333';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(typeName, legendX + 18, legendY - 1);
+        legendY += 18;
+
+        // 历史线
+        if (hist.length > 0) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2.2;
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          hist.forEach((p, i) => {
+            const x = xOf(p.date);
+            const y = yOf(p.price);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+
+          // 点
+          ctx.fillStyle = color;
+          hist.forEach((p) => {
+            const x = xOf(p.date);
+            const y = yOf(p.price);
+            ctx.beginPath();
+            ctx.arc(x, y, 2.6, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+
+        // 预测线（从历史最后点延伸）
+        if (pred.length > 0) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2.2;
+          ctx.setLineDash([7, 4]);
+          ctx.beginPath();
+          if (hist.length > 0) {
+            const lastH = hist[hist.length - 1];
+            ctx.moveTo(xOf(lastH.date), yOf(lastH.price));
+          } else {
+            ctx.moveTo(xOf(pred[0].date), yOf(pred[0].price));
+          }
+          pred.forEach((p) => ctx.lineTo(xOf(p.date), yOf(p.price)));
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = color;
+          pred.forEach((p) => {
+            const x = xOf(p.date);
+            const y = yOf(p.price);
+            ctx.beginPath();
+            ctx.arc(x, y, 2.6, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+
+        // 末尾标注（优先预测末尾，否则历史末尾）
+        const endPoint = pred.length > 0 ? pred[pred.length - 1] : (hist.length > 0 ? hist[hist.length - 1] : null);
+        if (endPoint) {
+          placeEndLabel(xOf(endPoint.date), yOf(endPoint.price), typeName, color);
         }
       });
-      ctx.stroke();
-      
-      // 绘制历史数据点
-      ctx.fillStyle = '#4CAF50';
-      historicalData.forEach((point, index) => {
-        const x = padding + (index / (totalPoints - 1)) * chartWidth;
-        const y = canvas.height - padding - ((point.price - minPrice) / priceRange) * chartHeight;
-        ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      // 绘制预测数据（从历史数据最后一个点连续绘制）
-      ctx.strokeStyle = '#FF9800';
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([8, 4]);
-      ctx.beginPath();
-      const predictedData = predictionResult.value.predicted_data;
-      
-      // 从历史数据的最后一个点开始
-      if (historicalData.length > 0) {
-        const lastHistoricalIndex = historicalData.length - 1;
-        const lastX = padding + (lastHistoricalIndex / (totalPoints - 1)) * chartWidth;
-        const lastY = canvas.height - padding - ((historicalData[lastHistoricalIndex].price - minPrice) / priceRange) * chartHeight;
-        ctx.moveTo(lastX, lastY);
-      }
-      
-      predictedData.forEach((point, index) => {
-        const dataIndex = historicalData.length + index;
-        const x = padding + (dataIndex / (totalPoints - 1)) * chartWidth;
-        const y = canvas.height - padding - ((point.price - minPrice) / priceRange) * chartHeight;
-        ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // 绘制预测数据点
-      ctx.fillStyle = '#FF9800';
-      predictedData.forEach((point, index) => {
-        const dataIndex = historicalData.length + index;
-        const x = padding + (dataIndex / (totalPoints - 1)) * chartWidth;
-        const y = canvas.height - padding - ((point.price - minPrice) / priceRange) * chartHeight;
-        ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      // 绘制分隔线（历史与预测的分界）
-      const dividerX = padding + ((historicalData.length - 1) / (totalPoints - 1)) * chartWidth;
-      ctx.strokeStyle = '#999';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(dividerX, padding);
-      ctx.lineTo(dividerX, canvas.height - padding);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // 添加图例
-      ctx.fillStyle = '#4CAF50';
-      ctx.fillRect(canvas.width - 150, 20, 15, 15);
-      ctx.fillStyle = '#333';
-      ctx.font = '12px Arial';
-      ctx.fillText('历史数据', canvas.width - 130, 32);
-
-      ctx.fillStyle = '#FF9800';
-      ctx.fillRect(canvas.width - 150, 40, 15, 15);
-      ctx.fillStyle = '#333';
-      ctx.fillText('预测数据', canvas.width - 130, 52);
     };
 
     // 获取趋势文本
@@ -1031,8 +1002,17 @@ export default {
 
 .preview-total {
   margin-top: 0.5rem;
-  color: var(--gray-500);
+  color: var(--gray-600);
   font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.preview-note {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
 }
 
 .form-group {

@@ -356,6 +356,42 @@ export const productService = {
             }, error);
             throw error.response?.data?.message || error.message || error;
         }
+    },
+
+    // 获取所有在售商品（用于广告）
+    async getAllOnShelfProducts() {
+        try {
+            const url = `${API_URL}/on-shelf/all`;
+            logger.apiRequest('GET', url);
+            logger.info('PRODUCT', '获取所有在售商品', {});
+
+            const response = await axios.get(url);
+
+            logger.apiResponse('GET', url, response.status, {
+                code: response.data.code,
+                count: response.data.data?.list?.length || 0
+            });
+
+            if (response.data.code !== 200) {
+                logger.error('PRODUCT', '获取所有在售商品失败', {
+                    code: response.data.code,
+                    message: response.data.message
+                });
+                throw new Error(response.data.message || '获取所有在售商品失败');
+            }
+
+            logger.info('PRODUCT', '获取所有在售商品成功', {
+                count: response.data.data?.list?.length || 0
+            });
+
+            return response.data.data;
+        } catch (error) {
+            logger.apiError('GET', `${API_URL}/on-shelf/all`, error);
+            logger.error('PRODUCT', '获取所有在售商品失败', {
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+            throw error.response?.data?.message || error.message || error;
+        }
     }
 };
 

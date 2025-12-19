@@ -66,6 +66,21 @@ public class RouterConfig {
         if ("/api/v1/agriculture/price".equals(path) && "POST".equals(method)) {
             return priceCrawlerController.crawlAgriculturalPrices(requestBody);
         }
+
+        // 获取 split 文件列表（动态勾选品种）
+        if ("/api/v1/agriculture/price/split/list".equals(path) && "GET".equals(method)) {
+            return priceCrawlerController.listSplitFiles(queryParams);
+        }
+
+        // 用户勾选品种/文件并选择位置后放置
+        if ("/api/v1/agriculture/price/split/place".equals(path) && "POST".equals(method)) {
+            return priceCrawlerController.placeSplitFiles(requestBody);
+        }
+
+        // 将 split 下的 CSV 批量导出为 XLSX（不需要重新爬取）
+        if ("/api/v1/agriculture/price/split/export_xlsx".equals(path) && "POST".equals(method)) {
+            return priceCrawlerController.exportSplitXlsx(requestBody);
+        }
         // ============= AI 农业专家相关路由 =============
 
         // 与 AI 农业专家对话
@@ -442,6 +457,11 @@ public class RouterConfig {
         // 处理获取商品列表请求
         if ("/api/v1/farmer/products/list_query".equals(path) && "POST".equals(method)) {
             return productController.getProductList(requestBody);
+        }
+
+        // 处理获取所有在售商品请求（用于广告）
+        if ("/api/v1/farmer/products/on-shelf/all".equals(path) && "GET".equals(method)) {
+            return productController.getAllOnShelfProducts();
         }
 
         // 处理批量操作商品请求
@@ -1193,7 +1213,7 @@ public class RouterConfig {
     }
 
     /**
-     * 处理Excel文件上传
+     * 处理价格文件上传（Excel/CSV）
      */
     private Map<String, Object> handleExcelUpload(Map<String, Object> requestBody) {
         Map<String, Object> response = new HashMap<>();
@@ -1212,9 +1232,10 @@ public class RouterConfig {
             String fileName = fileNameObj != null ? fileNameObj.toString() : "upload.xlsx";
             
             // 验证文件类型
-            if (!fileName.endsWith(".xls") && !fileName.endsWith(".xlsx")) {
+            String lower = fileName != null ? fileName.toLowerCase() : null;
+            if (lower == null || (!lower.endsWith(".xls") && !lower.endsWith(".xlsx") && !lower.endsWith(".csv"))) {
                 response.put("code", 400);
-                response.put("message", "不支持的文件格式，仅支持.xls和.xlsx文件");
+                response.put("message", "不支持的文件格式，仅支持.xls、.xlsx、.csv文件");
                 return response;
             }
             

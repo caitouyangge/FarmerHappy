@@ -70,6 +70,15 @@ public class PriceCrawlerServiceImpl implements PriceCrawlerService {
                 // 调用Java方法分割CSV文件
                 splitCsvFile(fileName);
 
+                // 返回 split 文件列表（前端用于动态勾选品种）
+                try {
+                    response.put("split_dir", "result/split");
+                    response.put("split_files", csvSplitterService.listSplitFiles());
+                } catch (Exception e) {
+                    // 不影响主流程
+                    response.put("split_files", new java.util.ArrayList<>());
+                }
+
                 System.out.println("Python output: " + fileName);
                 return response;
             }
@@ -88,15 +97,30 @@ public class PriceCrawlerServiceImpl implements PriceCrawlerService {
     private void cleanResultDirectory() {
         String projectRoot = System.getProperty("user.dir");
         Path resultDir = Paths.get(projectRoot, "result");
+        Path splitDir = Paths.get(projectRoot, "result", "split");
 
         try {
-            // 如果result目录存在，删除整个目录
-            if (Files.exists(resultDir)) {
-                deleteDirectoryRecursively(resultDir);
+            // 确保result目录存在
+            Files.createDirectories(resultDir);
+
+            // 删除 result 目录下的普通文件（保留子目录，例如 placed）
+            try (java.nio.file.DirectoryStream<Path> stream = Files.newDirectoryStream(resultDir)) {
+                for (Path p : stream) {
+                    if (Files.isRegularFile(p)) {
+                        try {
+                            Files.deleteIfExists(p);
+                        } catch (IOException e) {
+                            System.err.println("删除文件失败: " + p + ", 错误: " + e.getMessage());
+                        }
+                    }
+                }
             }
 
-            // 重新创建result目录
-            Files.createDirectories(resultDir);
+            // 清空 split 目录（每次爬取重新生成），但不删除其他目录
+            if (Files.exists(splitDir)) {
+                deleteDirectoryRecursively(splitDir);
+            }
+            Files.createDirectories(splitDir);
         } catch (IOException e) {
             System.err.println("清理或创建result目录失败: " + e.getMessage());
         }
