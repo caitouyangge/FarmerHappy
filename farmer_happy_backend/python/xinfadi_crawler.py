@@ -222,7 +222,7 @@ def main_cli():
 
         # 获取限定页数的数据并保存
         all_data = crawler.get_limited_price_data(
-            max_pages=5,
+            max_pages=10,
             limit=100,
             pubDateStartTime=args.start_time,
             pubDateEndTime=args.end_time,

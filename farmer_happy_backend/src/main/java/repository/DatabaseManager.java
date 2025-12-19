@@ -241,6 +241,29 @@ public class DatabaseManager {
                     ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品审核记录表';";
             dbStatement.executeUpdate(createProductReviewsTable);
 
+            // 创建专家预约表
+            String createExpertAppointmentsTable = "CREATE TABLE IF NOT EXISTS expert_appointments (" +
+                    "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    appointment_id VARCHAR(64) UNIQUE NOT NULL COMMENT '预约ID'," +
+                    "    group_id VARCHAR(64) COMMENT '预约分组ID（多专家时相同）'," +
+                    "    farmer_id BIGINT NOT NULL COMMENT '农户ID'," +
+                    "    expert_id BIGINT NOT NULL COMMENT '专家ID'," +
+                    "    mode ENUM('online','offline') NOT NULL COMMENT '预约方式'," +
+                    "    message TEXT COMMENT '预约说明'," +
+                    "    status ENUM('pending','accepted','rejected') DEFAULT 'pending' COMMENT '预约状态'," +
+                    "    expert_note TEXT COMMENT '专家补充信息'," +
+                    "    scheduled_time DATETIME NULL COMMENT '预约时间（可选）'," +
+                    "    location VARCHAR(200) NULL COMMENT '线下预约地点（可选）'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                    "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'," +
+                    "    INDEX idx_farmer_id (farmer_id)," +
+                    "    INDEX idx_expert_id (expert_id)," +
+                    "    INDEX idx_status (status)," +
+                    "    FOREIGN KEY (farmer_id) REFERENCES user_farmers(farmer_id) ON DELETE CASCADE," +
+                    "    FOREIGN KEY (expert_id) REFERENCES user_experts(expert_id) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='专家预约申请记录表';";
+            dbStatement.executeUpdate(createExpertAppointmentsTable);
+
             // 更新表结构：将specification列改为detailed_description
             try {
                 // 首先检查列是否存在
@@ -1839,6 +1862,270 @@ public class DatabaseManager {
             closeConnection();
         }
         return uid;
+    }
+
+    /**
+     * 根据手机号获取农户ID
+     */
+    public Long getFarmerIdByPhone(String phone) throws SQLException {
+        Connection conn = getConnection();
+        Long farmerId = null;
+        try {
+            String sql = "SELECT uf.farmer_id FROM users u " +
+                    "JOIN user_farmers uf ON u.uid = uf.uid " +
+                    "WHERE u.phone = ? AND uf.enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, phone);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                farmerId = rs.getLong("farmer_id");
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return farmerId;
+    }
+
+    /**
+     * 根据手机号获取专家ID
+     */
+    public Long getExpertIdByPhone(String phone) throws SQLException {
+        Connection conn = getConnection();
+        Long expertId = null;
+        try {
+            String sql = "SELECT ue.expert_id FROM users u " +
+                    "JOIN user_experts ue ON u.uid = ue.uid " +
+                    "WHERE u.phone = ? AND ue.enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, phone);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                expertId = rs.getLong("expert_id");
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return expertId;
+    }
+
+    /**
+     * 获取启用的专家列表
+     */
+    public List<Map<String, Object>> listActiveExperts() throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> experts = new ArrayList<>();
+        try {
+            String sql = "SELECT ue.expert_id, u.uid, u.nickname, u.phone, ue.expertise_field, ue.work_experience, ue.service_area, ue.consultation_fee " +
+                    "FROM user_experts ue JOIN users u ON ue.uid = u.uid WHERE ue.enable = TRUE ORDER BY ue.expert_id DESC";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> expert = new HashMap<>();
+                expert.put("expert_id", rs.getLong("expert_id"));
+                expert.put("uid", rs.getString("uid"));
+                expert.put("nickname", rs.getString("nickname"));
+                expert.put("phone", rs.getString("phone"));
+                expert.put("expertise_field", rs.getString("expertise_field"));
+                expert.put("work_experience", rs.getInt("work_experience"));
+                expert.put("service_area", rs.getString("service_area"));
+                expert.put("consultation_fee", rs.getBigDecimal("consultation_fee"));
+                experts.add(expert);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return experts;
+    }
+
+    /**
+     * 批量创建专家预约记录
+     */
+    public List<String> createExpertAppointments(String groupId, Long farmerId, List<Long> expertIds, String mode, String message) throws SQLException {
+        Connection conn = getConnection();
+        List<String> appointmentIds = new ArrayList<>();
+        try {
+            String sql = "INSERT INTO expert_appointments (appointment_id, group_id, farmer_id, expert_id, mode, message, status, created_at) VALUES (?,?,?,?,?,?, 'pending', CURRENT_TIMESTAMP)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            for (Long expertId : expertIds) {
+                String appointmentId = java.util.UUID.randomUUID().toString();
+                stmt.setString(1, appointmentId);
+                stmt.setString(2, groupId);
+                stmt.setLong(3, farmerId);
+                stmt.setLong(4, expertId);
+                stmt.setString(5, mode);
+                stmt.setString(6, message);
+                stmt.addBatch();
+                appointmentIds.add(appointmentId);
+            }
+            stmt.executeBatch();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return appointmentIds;
+    }
+
+    /**
+     * 专家查看自己的预约请求列表（按创建时间倒序）
+     */
+    public List<Map<String, Object>> getExpertAppointmentsByExpertPhone(String expertPhone) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> list = new ArrayList<>();
+        try {
+            String sql = "SELECT ea.appointment_id, ea.group_id, ea.mode, ea.message, ea.status, ea.expert_note, ea.scheduled_time, ea.location, ea.created_at, " +
+                    "uf.farmer_id, u.nickname AS farmer_name, u.phone AS farmer_phone " +
+                    "FROM expert_appointments ea " +
+                    "JOIN user_experts ue ON ea.expert_id = ue.expert_id " +
+                    "JOIN users ue_u ON ue.uid = ue_u.uid " +
+                    "JOIN user_farmers uf ON ea.farmer_id = uf.farmer_id " +
+                    "JOIN users u ON uf.uid = u.uid " +
+                    "WHERE ue_u.phone = ? " +
+                    "ORDER BY ea.created_at DESC";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, expertPhone);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("appointment_id", rs.getString("appointment_id"));
+                item.put("group_id", rs.getString("group_id"));
+                item.put("mode", rs.getString("mode"));
+                item.put("message", rs.getString("message"));
+                item.put("status", rs.getString("status"));
+                item.put("expert_note", rs.getString("expert_note"));
+                item.put("scheduled_time", rs.getTimestamp("scheduled_time"));
+                item.put("location", rs.getString("location"));
+                item.put("created_at", rs.getTimestamp("created_at"));
+                item.put("farmer_id", rs.getLong("farmer_id"));
+                item.put("farmer_name", rs.getString("farmer_name"));
+                item.put("farmer_phone", rs.getString("farmer_phone"));
+                list.add(item);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return list;
+    }
+
+    /**
+     * 农户查看自己的预约申请列表（按创建时间倒序）
+     */
+    public List<Map<String, Object>> getFarmerAppointmentsByFarmerPhone(String farmerPhone) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> list = new ArrayList<>();
+        try {
+            String sql = "SELECT ea.appointment_id, ea.group_id, ea.mode, ea.message, ea.status, ea.expert_note, ea.scheduled_time, ea.location, ea.created_at, " +
+                    "ue.expert_id, ue_u.nickname AS expert_name, ue_u.phone AS expert_phone, ue.expertise_field " +
+                    "FROM expert_appointments ea " +
+                    "JOIN user_farmers uf ON ea.farmer_id = uf.farmer_id " +
+                    "JOIN users u_f ON uf.uid = u_f.uid " +
+                    "JOIN user_experts ue ON ea.expert_id = ue.expert_id " +
+                    "JOIN users ue_u ON ue.uid = ue_u.uid " +
+                    "WHERE u_f.phone = ? " +
+                    "ORDER BY ea.created_at DESC";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, farmerPhone);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("appointment_id", rs.getString("appointment_id"));
+                item.put("group_id", rs.getString("group_id"));
+                item.put("mode", rs.getString("mode"));
+                item.put("message", rs.getString("message"));
+                item.put("status", rs.getString("status"));
+                item.put("expert_note", rs.getString("expert_note"));
+                item.put("scheduled_time", rs.getTimestamp("scheduled_time"));
+                item.put("location", rs.getString("location"));
+                item.put("created_at", rs.getTimestamp("created_at"));
+                item.put("expert_id", rs.getLong("expert_id"));
+                item.put("expert_name", rs.getString("expert_name"));
+                item.put("expert_phone", rs.getString("expert_phone"));
+                item.put("expertise_field", rs.getString("expertise_field"));
+                list.add(item);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return list;
+    }
+
+    /**
+     * 根据预约ID获取预约详情
+     */
+    public Map<String, Object> getAppointmentByAppointmentId(String appointmentId) throws SQLException {
+        Connection conn = getConnection();
+        Map<String, Object> item = null;
+        try {
+            String sql = "SELECT ea.*, uf.farmer_id, u_f.nickname AS farmer_name, u_f.phone AS farmer_phone, " +
+                    "ue.expert_id, u_e.nickname AS expert_name, u_e.phone AS expert_phone, ue.expertise_field " +
+                    "FROM expert_appointments ea " +
+                    "JOIN user_farmers uf ON ea.farmer_id = uf.farmer_id " +
+                    "JOIN users u_f ON uf.uid = u_f.uid " +
+                    "JOIN user_experts ue ON ea.expert_id = ue.expert_id " +
+                    "JOIN users u_e ON ue.uid = u_e.uid " +
+                    "WHERE ea.appointment_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, appointmentId);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                item = new HashMap<>();
+                item.put("appointment_id", rs.getString("appointment_id"));
+                item.put("group_id", rs.getString("group_id"));
+                item.put("mode", rs.getString("mode"));
+                item.put("message", rs.getString("message"));
+                item.put("status", rs.getString("status"));
+                item.put("expert_note", rs.getString("expert_note"));
+                item.put("scheduled_time", rs.getTimestamp("scheduled_time"));
+                item.put("location", rs.getString("location"));
+                item.put("created_at", rs.getTimestamp("created_at"));
+                item.put("updated_at", rs.getTimestamp("updated_at"));
+                item.put("farmer_id", rs.getLong("farmer_id"));
+                item.put("farmer_name", rs.getString("farmer_name"));
+                item.put("farmer_phone", rs.getString("farmer_phone"));
+                item.put("expert_id", rs.getLong("expert_id"));
+                item.put("expert_name", rs.getString("expert_name"));
+                item.put("expert_phone", rs.getString("expert_phone"));
+                item.put("expertise_field", rs.getString("expertise_field"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return item;
+    }
+
+    /**
+     * 专家对预约进行处理（接受/拒绝），并可填写补充信息
+     */
+    public void updateAppointmentDecision(String appointmentId, String action, String expertNote, Timestamp scheduledTime, String location) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE expert_appointments SET status = ?, expert_note = ?, scheduled_time = ?, location = ?, updated_at = CURRENT_TIMESTAMP WHERE appointment_id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, action);
+            stmt.setString(2, expertNote);
+            if (scheduledTime != null) {
+                stmt.setTimestamp(3, scheduledTime);
+            } else {
+                stmt.setNull(3, Types.TIMESTAMP);
+            }
+            stmt.setString(4, location);
+            stmt.setString(5, appointmentId);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
     }
 
     /**
