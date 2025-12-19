@@ -11,6 +11,7 @@ import OrderDetail from '../orders/OrderDetail.vue';
 import Financing from '../financing/Financing.vue';
 import PricePrediction from '../pricePrediction/PricePrediction.vue';
 import PriceData from '../priceData/PriceData.vue';
+import ExpertAppointment from '../expert/ExpertAppointment.vue';
 
 const routes = [
   {
@@ -55,6 +56,12 @@ const routes = [
     path: '/community/:id',
     name: 'ContentDetail',
     component: ContentDetail,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/expert-appointment',
+    name: 'ExpertAppointment',
+    component: ExpertAppointment,
     meta: { requiresAuth: true }
   },
   {

@@ -314,6 +314,13 @@ export default {
             route: '/orders'
           },
           {
+            id: 'expert-appointment',
+            name: '专家预约',
+            description: '选择专家，提交预约请求',
+            icon: '📅',
+            route: '/expert-appointment'
+          },
+          {
             id: 'community',
             name: '专家农户交流平台',
             description: '与专家和其他农户交流，分享经验与提问',
@@ -349,6 +356,13 @@ export default {
             description: '与农户交流，分享专业知识与解答问题',
             icon: '💬',
             route: '/community'
+          },
+          {
+            id: 'expert-appointment',
+            name: '专家预约',
+            description: '查看并处理农户的预约请求',
+            icon: '📅',
+            route: '/expert-appointment'
           }
         ],
         buyer: [
@@ -598,7 +612,7 @@ export default {
       });
       
       // 支持路由的模块直接跳转
-      if (module.id === 'trading' || module.id === 'community' || module.id === 'orders' || module.id === 'loan' || module.id === 'price-prediction' || module.id === 'price-data') {
+      if (module.id === 'trading' || module.id === 'community' || module.id === 'orders' || module.id === 'loan' || module.id === 'price-prediction' || module.id === 'price-data' || module.id === 'expert-appointment') {
         router.push(module.route);
       } else {
         // 其他模块暂时使用提示
