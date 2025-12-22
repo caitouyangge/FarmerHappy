@@ -1767,9 +1767,6 @@ public class FinancingService {
 
         // 给主借款人账户增加资金
         updateUserBalance(farmerUid, loan.getDisburseAmount());
-
-        // 更新主借款人的信用额度
-        updateCreditLimitUsed(loanApplication.getFarmerId(), loan.getLoanAmount());
     }
 
     /**
@@ -1789,9 +1786,6 @@ public class FinancingService {
 
         // 给主借款人账户增加资金
         updateUserBalance(mainFarmerUid, loan.getDisburseAmount());
-
-        // 更新主借款人的信用额度
-        updateCreditLimitUsed(loanApplication.getFarmerId(), loan.getLoanAmount());
 
         // 计算每个参与者的份额（包括主申请人在内）
         int totalParticipants = partners.size() + 1; // 合作伙伴数量 + 主申请人
@@ -1835,9 +1829,6 @@ public class FinancingService {
 
             // 给伙伴账户增加资金
             updateUserBalance(partnerUid, partnerShareAmount);
-
-            // 更新伙伴的信用额度
-            updateCreditLimitUsed(partnerFarmerId, partnerShareAmount);
 
             // 计算伙伴的利息和总还款金额（与主贷款人使用相同的利率和期限）
             BigDecimal partnerPrincipal = partnerShareAmount;
