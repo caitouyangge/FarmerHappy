@@ -264,6 +264,59 @@
                     <p><strong>模型名称：</strong>{{ predictionResult.calculation_details.model_name || 'AI预测模型' }}</p>
                     <p><strong>预测方法：</strong>{{ predictionResult.calculation_details.prediction_method || 'AI商品价格预测专家' }}</p>
                     
+                    <!-- 历史价格特征分析 -->
+                    <div v-if="predictionResult.calculation_details.historical_features" class="formula-box" style="margin-bottom: var(--spacing-4); background: #e8f4f8; border-left-color: #2196F3;">
+                      <p style="font-size: var(--font-lg); margin-bottom: var(--spacing-3);"><strong>📊 历史价格特征深度分析</strong></p>
+                      
+                      <div style="margin-bottom: var(--spacing-3);">
+                        <p><strong>【基础统计信息】</strong></p>
+                        <p>价格范围：¥{{ predictionResult.calculation_details.historical_features.min_price }} ~ ¥{{ predictionResult.calculation_details.historical_features.max_price }}</p>
+                        <p>平均价格：¥{{ predictionResult.calculation_details.historical_features.avg_price }}</p>
+                        <p>中位数价格：¥{{ predictionResult.calculation_details.historical_features.median_price }}</p>
+                        <p>价格波动幅度：¥{{ predictionResult.calculation_details.historical_features.price_range }}</p>
+                        <p>变异系数（CV）：{{ predictionResult.calculation_details.historical_features.coefficient_of_variation }}（值越大表示波动越大）</p>
+                      </div>
+                      
+                      <div style="margin-bottom: var(--spacing-3);">
+                        <p><strong>【趋势分析】</strong></p>
+                        <p>整体趋势：{{ predictionResult.calculation_details.historical_features.overall_trend }}</p>
+                        <p>趋势强度：{{ predictionResult.calculation_details.historical_features.trend_strength }}（0-1之间，值越大趋势越明显）</p>
+                        <p v-if="predictionResult.calculation_details.historical_features.recent_trend">
+                          近期趋势（最近30%数据）：{{ predictionResult.calculation_details.historical_features.recent_trend }}
+                        </p>
+                      </div>
+                      
+                      <div style="margin-bottom: var(--spacing-3);">
+                        <p><strong>【波动性分析】</strong></p>
+                        <p>标准差：¥{{ predictionResult.calculation_details.historical_features.std_dev }}</p>
+                        <p>波动性评级：{{ predictionResult.calculation_details.historical_features.volatility_level }}</p>
+                        <p v-if="predictionResult.calculation_details.historical_features.peak_price">
+                          历史最高价：¥{{ predictionResult.calculation_details.historical_features.peak_price }}（日期：{{ predictionResult.calculation_details.historical_features.peak_date }}）
+                        </p>
+                        <p v-if="predictionResult.calculation_details.historical_features.trough_price">
+                          历史最低价：¥{{ predictionResult.calculation_details.historical_features.trough_price }}（日期：{{ predictionResult.calculation_details.historical_features.trough_date }}）
+                        </p>
+                      </div>
+                      
+                      <div v-if="predictionResult.calculation_details.historical_features.has_seasonality" style="margin-bottom: var(--spacing-3);">
+                        <p><strong>【季节性特征】</strong></p>
+                        <p>检测到季节性模式，周期长度：{{ predictionResult.calculation_details.historical_features.seasonal_period }}天</p>
+                      </div>
+                      
+                      <div>
+                        <p><strong>【价格分布特征】</strong></p>
+                        <p>价格主要集中在：¥{{ predictionResult.calculation_details.historical_features.q25_price }} ~ ¥{{ predictionResult.calculation_details.historical_features.q75_price }}之间（四分位距）</p>
+                      </div>
+                    </div>
+                    
+                    <!-- 预测理由 -->
+                    <div v-if="predictionResult.calculation_details.prediction_reason" class="formula-box" style="margin-bottom: var(--spacing-4); background: #f0f9ff; border-left-color: #4CAF50;">
+                      <p style="font-size: var(--font-lg); margin-bottom: var(--spacing-3);"><strong>💡 AI预测理由与分析</strong></p>
+                      <div style="white-space: pre-wrap; line-height: 1.8; color: var(--gray-700);">
+                        {{ predictionResult.calculation_details.prediction_reason }}
+                      </div>
+                    </div>
+                    
                     <div v-if="predictionResult.calculation_details.ai_info" class="formula-box">
                       <p><strong>历史数据信息：</strong></p>
                       <p>数据点数：{{ predictionResult.calculation_details.ai_info.historical_data_count }}</p>
@@ -297,17 +350,7 @@
                       </p>
                     </div>
                     
-                    <div class="formula-box" style="margin-top: var(--spacing-4); background: #fff3cd; border-left-color: #ffc107;">
-                      <p><strong>⚠️ 排查提示：</strong></p>
-                      <p>如需查看详细的AI输入输出日志，请查看后端控制台输出。</p>
-                      <p>如果预测结果异常（如所有值相同），请检查：</p>
-                      <ul style="margin-left: var(--spacing-4); margin-top: var(--spacing-2);">
-                        <li>AI返回的JSON格式是否正确</li>
-                        <li>predicted_data数组是否被正确解析</li>
-                        <li>价格数值是否被正确提取</li>
-                        <li>查看后端日志中的"AI预测输入日志"和"AI响应解析日志"</li>
-                      </ul>
-                    </div>
+                  
                   </div>
                 </div>
               </template>

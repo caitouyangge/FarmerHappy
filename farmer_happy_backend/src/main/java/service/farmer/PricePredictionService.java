@@ -157,6 +157,8 @@ public class PricePredictionService {
         Map<String, Double> metrics;
         String trend;
         Map<String, Object> calculationDetails;
+        Map<String, Object> historicalFeatures; // 历史价格特征分析
+        String predictionReason; // 预测理由
 
         Map<String, Object> metricsMapAsObject() {
             Map<String, Object> m = new HashMap<>();
@@ -1179,6 +1181,159 @@ public class PricePredictionService {
     }
 
     /**
+     * 分析历史价格特征（增强版）
+     */
+    private Map<String, Object> analyzeHistoricalPriceFeatures(List<Double> prices, List<Map<String, Object>> historicalData) {
+        Map<String, Object> features = new HashMap<>();
+        
+        if (prices == null || prices.isEmpty()) {
+            return features;
+        }
+        
+        // 基础统计
+        double minPrice = prices.stream().mapToDouble(Double::doubleValue).min().orElse(0);
+        double maxPrice = prices.stream().mapToDouble(Double::doubleValue).max().orElse(0);
+        double avgPrice = prices.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double priceRange = maxPrice - minPrice;
+        
+        // 计算标准差和变异系数
+        double variance = 0.0;
+        for (double price : prices) {
+            variance += Math.pow(price - avgPrice, 2);
+        }
+        variance /= prices.size();
+        double stdDev = Math.sqrt(variance);
+        double coefficientOfVariation = avgPrice > 0 ? stdDev / avgPrice : 0.0;
+        
+        // 计算中位数和四分位数
+        List<Double> sortedPrices = new ArrayList<>(prices);
+        Collections.sort(sortedPrices);
+        double medianPrice = sortedPrices.get(sortedPrices.size() / 2);
+        double q25Price = sortedPrices.get(sortedPrices.size() / 4);
+        double q75Price = sortedPrices.get(sortedPrices.size() * 3 / 4);
+        
+        // 趋势分析（线性回归斜率）
+        double trendSlope = 0.0;
+        if (prices.size() >= 2) {
+            double sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+            for (int i = 0; i < prices.size(); i++) {
+                double x = i;
+                double y = prices.get(i);
+                sumX += x;
+                sumY += y;
+                sumXY += x * y;
+                sumXX += x * x;
+            }
+            double n = prices.size();
+            double denominator = n * sumXX - sumX * sumX;
+            if (Math.abs(denominator) > 1e-12) {
+                trendSlope = (n * sumXY - sumX * sumY) / denominator;
+            }
+        }
+        
+        // 趋势强度和方向
+        double overallTrendValue = prices.get(prices.size() - 1) - prices.get(0);
+        String overallTrend;
+        if (overallTrendValue > avgPrice * 0.05) {
+            overallTrend = "上升";
+        } else if (overallTrendValue < -avgPrice * 0.05) {
+            overallTrend = "下降";
+        } else {
+            overallTrend = "平稳";
+        }
+        
+        // 趋势强度（标准化）
+        double trendStrength = avgPrice > 0 ? Math.abs(overallTrendValue) / avgPrice : 0.0;
+        trendStrength = Math.min(1.0, trendStrength);
+        
+        // 近期趋势（最近30%的数据）
+        String recentTrend = null;
+        if (prices.size() >= 3) {
+            int recentStart = (int) (prices.size() * 0.7);
+            double recentTrendValue = prices.get(prices.size() - 1) - prices.get(recentStart);
+            if (recentTrendValue > avgPrice * 0.05) {
+                recentTrend = "上升";
+            } else if (recentTrendValue < -avgPrice * 0.05) {
+                recentTrend = "下降";
+            } else {
+                recentTrend = "平稳";
+            }
+        }
+        
+        // 波动性评级
+        String volatilityLevel;
+        if (coefficientOfVariation < 0.05) {
+            volatilityLevel = "低波动";
+        } else if (coefficientOfVariation < 0.15) {
+            volatilityLevel = "中等波动";
+        } else {
+            volatilityLevel = "高波动";
+        }
+        
+        // 峰值和谷值
+        int peakIndex = 0, troughIndex = 0;
+        double peakPrice = prices.get(0), troughPrice = prices.get(0);
+        for (int i = 1; i < prices.size(); i++) {
+            if (prices.get(i) > peakPrice) {
+                peakPrice = prices.get(i);
+                peakIndex = i;
+            }
+            if (prices.get(i) < troughPrice) {
+                troughPrice = prices.get(i);
+                troughIndex = i;
+            }
+        }
+        
+        String peakDate = historicalData.size() > peakIndex ? (String) historicalData.get(peakIndex).get("date") : null;
+        String troughDate = historicalData.size() > troughIndex ? (String) historicalData.get(troughIndex).get("date") : null;
+        
+        // 季节性检测（简单检测）
+        boolean hasSeasonality = false;
+        int seasonalPeriod = 0;
+        if (prices.size() >= 14) {
+            // 检测7天和30天周期
+            for (int period : new int[]{7, 30}) {
+                if (prices.size() >= period * 2) {
+                    double strength = seasonalStrength(prices, period, 0.0);
+                    if (strength > 0.1) {
+                        hasSeasonality = true;
+                        seasonalPeriod = period;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 填充特征映射
+        features.put("min_price", round2(minPrice));
+        features.put("max_price", round2(maxPrice));
+        features.put("avg_price", round2(avgPrice));
+        features.put("median_price", round2(medianPrice));
+        features.put("price_range", round2(priceRange));
+        features.put("std_dev", round2(stdDev));
+        features.put("coefficient_of_variation", round4(coefficientOfVariation));
+        features.put("q25_price", round2(q25Price));
+        features.put("q75_price", round2(q75Price));
+        features.put("trend_slope", round4(trendSlope));
+        features.put("overall_trend", overallTrend);
+        features.put("trend_strength", round4(trendStrength));
+        if (recentTrend != null) {
+            features.put("recent_trend", recentTrend);
+        }
+        features.put("volatility_level", volatilityLevel);
+        features.put("peak_price", round2(peakPrice));
+        features.put("peak_date", peakDate);
+        features.put("trough_price", round2(troughPrice));
+        features.put("trough_date", troughDate);
+        features.put("has_seasonality", hasSeasonality);
+        if (hasSeasonality) {
+            features.put("seasonal_period", seasonalPeriod);
+        }
+        
+        return features;
+    }
+
+    /**
      * 使用AI进行价格预测
      */
     private PricePredictionResponseDTO predictWithAI(Map<String, List<ExcelParser.DataPoint>> seriesMap, int predictionDays) {
@@ -1232,7 +1387,8 @@ public class PricePredictionService {
                 dataPrompt.append(item.get("date")).append(": ").append(item.get("price")).append("\n");
             }
             
-            // 分析历史数据的特征
+            // 分析历史数据的特征（增强版）
+            Map<String, Object> historicalFeatures = null;
             if (historicalData.size() >= 3) {
                 List<Double> prices = new ArrayList<>();
                 for (Map<String, Object> item : historicalData) {
@@ -1242,46 +1398,52 @@ public class PricePredictionService {
                     }
                 }
                 
-                // 计算价格波动特征
-                double minPrice = prices.stream().mapToDouble(Double::doubleValue).min().orElse(0);
-                double maxPrice = prices.stream().mapToDouble(Double::doubleValue).max().orElse(0);
-                double avgPrice = prices.stream().mapToDouble(Double::doubleValue).average().orElse(0);
-                double priceRange = maxPrice - minPrice;
-                double volatility = 0;
-                if (prices.size() > 1) {
-                    double sumSqDiff = 0;
-                    for (int i = 1; i < prices.size(); i++) {
-                        double diff = prices.get(i) - prices.get(i - 1);
-                        sumSqDiff += diff * diff;
-                    }
-                    volatility = Math.sqrt(sumSqDiff / (prices.size() - 1));
+                // 执行详细的特征分析
+                historicalFeatures = analyzeHistoricalPriceFeatures(prices, historicalData);
+                
+                // 构建特征分析文本用于AI prompt
+                dataPrompt.append("\n========== 历史价格特征深度分析 ==========\n");
+                dataPrompt.append("【基础统计信息】\n");
+                dataPrompt.append("- 价格范围：").append(String.format("%.2f", historicalFeatures.get("min_price"))).append(" ~ ").append(String.format("%.2f", historicalFeatures.get("max_price"))).append("\n");
+                dataPrompt.append("- 平均价格：").append(String.format("%.2f", historicalFeatures.get("avg_price"))).append("\n");
+                dataPrompt.append("- 中位数价格：").append(String.format("%.2f", historicalFeatures.get("median_price"))).append("\n");
+                dataPrompt.append("- 价格波动幅度：").append(String.format("%.2f", historicalFeatures.get("price_range"))).append("\n");
+                dataPrompt.append("- 变异系数（CV）：").append(String.format("%.4f", historicalFeatures.get("coefficient_of_variation"))).append("（值越大表示波动越大）\n");
+                
+                dataPrompt.append("\n【趋势分析】\n");
+                dataPrompt.append("- 整体趋势：").append(historicalFeatures.get("overall_trend")).append("\n");
+                dataPrompt.append("- 趋势强度：").append(String.format("%.2f", historicalFeatures.get("trend_strength"))).append("（0-1之间，值越大趋势越明显）\n");
+                if (historicalFeatures.get("recent_trend") != null) {
+                    dataPrompt.append("- 近期趋势（最近30%数据）：").append(historicalFeatures.get("recent_trend")).append("\n");
                 }
                 
-                dataPrompt.append("\n历史数据特征分析：\n");
-                dataPrompt.append("- 价格范围：").append(String.format("%.2f", minPrice)).append(" ~ ").append(String.format("%.2f", maxPrice)).append("\n");
-                dataPrompt.append("- 平均价格：").append(String.format("%.2f", avgPrice)).append("\n");
-                dataPrompt.append("- 价格波动幅度：").append(String.format("%.2f", priceRange)).append("\n");
-                dataPrompt.append("- 价格波动性（标准差）：").append(String.format("%.2f", volatility)).append("\n");
-                
-                // 判断数据模式
-                boolean hasVolatility = volatility > avgPrice * 0.05; // 波动性超过5%认为有波动
-                boolean hasTrend = Math.abs(prices.get(prices.size() - 1) - prices.get(0)) > avgPrice * 0.1; // 首尾差异超过10%认为有趋势
-                
-                dataPrompt.append("\n重要提示：\n");
-                if (hasVolatility) {
-                    dataPrompt.append("- 历史数据显示明显的价格波动特征，预测结果应该保持类似的波动模式，而不是简单的递增、递减或持平。\n");
-                    dataPrompt.append("- 预测价格应该在历史价格范围内合理波动，体现价格的不确定性和市场波动性。\n");
-                    dataPrompt.append("- 不要预测单调递增或递减的序列，应该根据历史波动模式生成真实的波动预测。\n");
+                dataPrompt.append("\n【波动性分析】\n");
+                dataPrompt.append("- 标准差：").append(String.format("%.2f", historicalFeatures.get("std_dev"))).append("\n");
+                dataPrompt.append("- 波动性评级：").append(historicalFeatures.get("volatility_level")).append("\n");
+                if (historicalFeatures.get("peak_price") != null && historicalFeatures.get("peak_date") != null) {
+                    dataPrompt.append("- 历史最高价：").append(String.format("%.2f", historicalFeatures.get("peak_price"))).append("（日期：").append(historicalFeatures.get("peak_date")).append("）\n");
                 }
-                if (hasTrend) {
-                    double trendDirection = prices.get(prices.size() - 1) - prices.get(0);
-                    if (trendDirection > 0) {
-                        dataPrompt.append("- 历史数据整体呈上升趋势，但预测时仍应保持波动，而不是持续单调上升。\n");
-                    } else {
-                        dataPrompt.append("- 历史数据整体呈下降趋势，但预测时仍应保持波动，而不是持续单调下降。\n");
-                    }
+                if (historicalFeatures.get("trough_price") != null && historicalFeatures.get("trough_date") != null) {
+                    dataPrompt.append("- 历史最低价：").append(String.format("%.2f", historicalFeatures.get("trough_price"))).append("（日期：").append(historicalFeatures.get("trough_date")).append("）\n");
                 }
-                dataPrompt.append("- 预测价格应该反映市场的真实波动性，包括合理的价格起伏。\n");
+                
+                // 季节性检测
+                if (historicalFeatures.get("has_seasonality") != null && (Boolean) historicalFeatures.get("has_seasonality")) {
+                    dataPrompt.append("\n【季节性特征】\n");
+                    dataPrompt.append("- 检测到季节性模式，周期长度：").append(historicalFeatures.get("seasonal_period")).append("天\n");
+                }
+                
+                dataPrompt.append("\n【价格分布特征】\n");
+                dataPrompt.append("- 价格主要集中在：").append(String.format("%.2f", historicalFeatures.get("q25_price"))).append(" ~ ").append(String.format("%.2f", historicalFeatures.get("q75_price"))).append("之间（四分位距）\n");
+                
+                dataPrompt.append("\n========================================\n");
+                dataPrompt.append("\n【预测指导原则】\n");
+                dataPrompt.append("基于以上历史特征分析，请在进行价格预测时：\n");
+                dataPrompt.append("1. 充分考虑历史价格的波动模式和趋势特征\n");
+                dataPrompt.append("2. 如果历史数据显示明显的波动性，预测结果应该保持类似的波动幅度\n");
+                dataPrompt.append("3. 趋势方向应该与历史数据保持一致，但要考虑市场的不确定性\n");
+                dataPrompt.append("4. 预测价格应该在历史价格范围内合理波动，避免极端值\n");
+                dataPrompt.append("5. 不要生成单调递增、递减或完全持平的价格序列\n");
             }
             
             dataPrompt.append("\n请预测未来").append(predictionDays).append("天的商品价格。");
@@ -1292,6 +1454,7 @@ public class PricePredictionService {
             dataPrompt.append("    ...\n");
             dataPrompt.append("  ],\n");
             dataPrompt.append("  \"trend\": \"上升/下降/平稳/波动\",\n");
+            dataPrompt.append("  \"prediction_reason\": \"详细的预测理由，说明你做出这些预测的原因和依据，包括对历史特征的分析、趋势判断、波动性考虑等，至少200字\",\n");
             dataPrompt.append("  \"model_metrics\": {\n");
             dataPrompt.append("    \"r_squared\": 数值,\n");
             dataPrompt.append("    \"mae\": 数值,\n");
@@ -1304,6 +1467,7 @@ public class PricePredictionService {
             dataPrompt.append("3. 如果历史数据是波动的，预测结果也必须是波动的，不要生成单调递增、递减或完全持平的价格序列。\n");
             dataPrompt.append("4. 预测价格应该反映历史数据的波动特征，包括合理的价格起伏和不确定性。\n");
             dataPrompt.append("5. 预测价格应该在历史价格范围内或合理延伸范围内，保持真实性和可信度。\n");
+            dataPrompt.append("6. prediction_reason字段必须提供详细的预测理由，说明你是如何基于历史数据特征做出预测的，这是增强预测信服力的关键。\n");
 
             String promptText = dataPrompt.toString();
             System.out.println("========== AI预测输入日志 ==========");
@@ -1336,7 +1500,7 @@ public class PricePredictionService {
                 bodyBuilder.append("\"model\":\"gpt-4o-mini\",");
                 bodyBuilder.append("\"temperature\":0.3,");
                 bodyBuilder.append("\"messages\":[");
-                bodyBuilder.append("{\"role\":\"system\",\"content\":\"你是一名商品价格预测专家，擅长分析时间序列数据并预测未来价格。你需要根据历史数据的真实波动模式进行预测，而不是简单的趋势外推。如果历史数据是波动的，预测结果也必须是波动的，体现市场的真实不确定性和价格起伏。预测结果应该真实可信，反映商品价格的实际变化规律，不要生成单调递增、递减或完全持平的价格序列。\"},");
+                bodyBuilder.append("{\"role\":\"system\",\"content\":\"你是一名商品价格预测专家，擅长分析时间序列数据并预测未来价格。你需要根据历史数据的真实波动模式进行预测，而不是简单的趋势外推。如果历史数据是波动的，预测结果也必须是波动的，体现市场的真实不确定性和价格起伏。预测结果应该真实可信，反映商品价格的实际变化规律，不要生成单调递增、递减或完全持平的价格序列。你必须为每次预测提供详细的预测理由（prediction_reason字段），说明你是如何基于历史数据特征、趋势分析、波动性等因素做出预测判断的，以增强预测结果的可信度和说服力。\"},");
                 bodyBuilder.append("{\"role\":\"user\",\"content\":");
                 bodyBuilder.append("\"").append(escapeJson(dataPrompt.toString())).append("\"");
                 bodyBuilder.append("}");
@@ -1387,7 +1551,7 @@ public class PricePredictionService {
                     System.out.println("====================================");
                     
                     // 解析AI返回的JSON数据
-                    SeriesPrediction sp = parseAIResponse(aiResponse, historicalData, dataPoints, predictionDays);
+                    SeriesPrediction sp = parseAIResponse(aiResponse, historicalData, dataPoints, predictionDays, historicalFeatures);
                     
                     System.out.println("========== AI解析结果日志 ==========");
                     System.out.println("解析后的预测数据点数: " + (sp.predictedData != null ? sp.predictedData.size() : 0));
@@ -1465,10 +1629,12 @@ public class PricePredictionService {
      * 解析AI返回的JSON响应
      */
     private SeriesPrediction parseAIResponse(String aiResponse, List<Map<String, Object>> historicalData, 
-                                             List<ExcelParser.DataPoint> dataPoints, int predictionDays) {
+                                             List<ExcelParser.DataPoint> dataPoints, int predictionDays,
+                                             Map<String, Object> historicalFeatures) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
         SeriesPrediction sp = new SeriesPrediction();
         sp.historicalData = historicalData;
+        sp.historicalFeatures = historicalFeatures;
 
         System.out.println("========== 开始解析AI响应 ==========");
         System.out.println("AI响应内容长度: " + aiResponse.length());
@@ -1478,6 +1644,7 @@ public class PricePredictionService {
         // 查找predicted_data数组
         List<Map<String, Object>> predictedData = new ArrayList<>();
         String trend = "平稳";
+        String predictionReason = "基于历史价格数据的分析进行预测。";
         Map<String, Double> metrics = new HashMap<>();
         metrics.put("r_squared", 0.0);
         metrics.put("mae", 0.0);
@@ -1527,6 +1694,44 @@ public class PricePredictionService {
                 }
             }
 
+            // 查找prediction_reason
+            int reasonIndex = aiResponse.indexOf("\"prediction_reason\"");
+            if (reasonIndex == -1) {
+                reasonIndex = aiResponse.indexOf("\"predictionReason\"");
+            }
+            if (reasonIndex != -1) {
+                int colonIndex = aiResponse.indexOf(":", reasonIndex);
+                if (colonIndex != -1) {
+                    // 跳过空白字符
+                    int valueStart = colonIndex + 1;
+                    while (valueStart < aiResponse.length() && Character.isWhitespace(aiResponse.charAt(valueStart))) {
+                        valueStart++;
+                    }
+                    if (valueStart < aiResponse.length() && aiResponse.charAt(valueStart) == '"') {
+                        // 提取字符串值（支持转义字符）
+                        int quoteStart = valueStart + 1;
+                        int quoteEnd = quoteStart;
+                        boolean escape = false;
+                        while (quoteEnd < aiResponse.length()) {
+                            char c = aiResponse.charAt(quoteEnd);
+                            if (escape) {
+                                escape = false;
+                            } else if (c == '\\') {
+                                escape = true;
+                            } else if (c == '"') {
+                                break;
+                            }
+                            quoteEnd++;
+                        }
+                        if (quoteEnd < aiResponse.length()) {
+                            predictionReason = aiResponse.substring(quoteStart, quoteEnd);
+                            // 处理转义字符
+                            predictionReason = predictionReason.replace("\\n", "\n").replace("\\\"", "\"").replace("\\\\", "\\");
+                        }
+                    }
+                }
+            }
+
             // 查找model_metrics
             int metricsIndex = aiResponse.indexOf("\"model_metrics\"");
             if (metricsIndex != -1) {
@@ -1566,11 +1771,20 @@ public class PricePredictionService {
         sp.predictedData = predictedData;
         sp.trend = trend;
         sp.metrics = metrics;
+        sp.predictionReason = predictionReason;
 
         // 构建计算详情（包含AI输入输出信息，便于前端显示和排查问题）
         Map<String, Object> calculationDetails = new HashMap<>();
         calculationDetails.put("model_name", "AI预测模型");
         calculationDetails.put("prediction_method", "AI商品价格预测专家");
+        
+        // 添加历史价格特征分析
+        if (historicalFeatures != null && !historicalFeatures.isEmpty()) {
+            calculationDetails.put("historical_features", historicalFeatures);
+        }
+        
+        // 添加预测理由
+        calculationDetails.put("prediction_reason", predictionReason);
         
         // 添加AI输入输出信息
         Map<String, Object> aiInfo = new HashMap<>();
