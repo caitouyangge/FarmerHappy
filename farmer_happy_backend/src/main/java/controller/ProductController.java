@@ -324,20 +324,8 @@ public class ProductController {
                 return response;
             }
 
-            // 验证用户是否具有农户身份
-            try {
-                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
-                    response.put("code", 403);
-                    response.put("message", "只有农户可以查看商品列表");
-                    return response;
-                }
-            } catch (SQLException e) {
-                response.put("code", 500);
-                response.put("message", "服务器内部错误: " + e.getMessage());
-                return response;
-            }
-
             // 获取商品列表，注意这里传入的是手机号而不是user.getUid()
+            // 允许买家和农户都能查看商品列表
             String status = (String) requestBody.get("status");
             String title = (String) requestBody.get("title");
 

@@ -312,36 +312,46 @@ public class ProductServiceImpl implements ProductService {
                 throw new IllegalArgumentException("用户不存在");
             }
 
-            // 验证用户是否具有农户身份
+            // 检查用户类型
+            boolean isFarmer = false;
+            Long farmerId = null;
             try {
-                if (!authService.checkUserTypeExists(user.getUid(), "farmer")) {
-                    throw new IllegalArgumentException("只有农户可以操作商品");
+                isFarmer = authService.checkUserTypeExists(user.getUid(), "farmer");
+                if (isFarmer) {
+                    // 如果是农户，获取农户ID，用于查询该农户自己的商品
+                    farmerId = getFarmerIdByUserId(conn, user.getUid());
                 }
             } catch (SQLException e) {
                 throw new SQLException("验证用户身份失败: " + e.getMessage());
             }
-
-            // 获取农户ID
-            Long farmerId = getFarmerIdByUserId(conn, user.getUid());
 
             // 构建查询语句
             StringBuilder sqlBuilder = new StringBuilder();
             sqlBuilder
                     .append("SELECT p.product_id, p.title, p.price, p.stock, p.status, pi.image_url as main_image_url ")
                     .append("FROM products p ")
-                    .append("LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.sort_order = 0 ")
-                    .append("WHERE p.farmer_id = ? ");
+                    .append("LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.sort_order = 0 ");
 
             List<Object> params = new ArrayList<>();
-            params.add(farmerId);
 
-            // 添加状态筛选条件
-            if (status != null && !status.isEmpty()) {
-                sqlBuilder.append("AND p.status = ? ");
-                params.add(status);
+            if (isFarmer && farmerId != null) {
+                // 农户：查看自己的所有商品（包括所有状态）
+                sqlBuilder.append("WHERE p.farmer_id = ? ");
+                params.add(farmerId);
+
+                // 添加状态筛选条件
+                if (status != null && !status.isEmpty()) {
+                    sqlBuilder.append("AND p.status = ? ");
+                    params.add(status);
+                }
+            } else {
+                // 买家：只能查看所有在售商品
+                sqlBuilder.append("WHERE p.status = 'on_shelf' AND p.stock > 0 AND p.enable = TRUE ");
+                
+                // 买家不支持状态筛选（只能看on_shelf），但可以搜索标题
             }
 
-            // 添加标题搜索条件
+            // 添加标题搜索条件（买家和农户都支持）
             if (title != null && !title.isEmpty()) {
                 sqlBuilder.append("AND p.title LIKE ? ");
                 params.add("%" + title + "%");
