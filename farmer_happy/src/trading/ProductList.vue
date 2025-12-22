@@ -63,10 +63,7 @@
 
     <!-- 产品列表 -->
     <div class="products-section">
-      <div v-if="loading" class="loading-container">
-        <div class="loading-spinner"></div>
-        <p>加载中...</p>
-      </div>
+      <Skeleton v-if="loading" type="product-list" :count="6" />
 
       <div v-else-if="products.length === 0" class="empty-container">
         <div class="empty-icon">🌾</div>
@@ -164,6 +161,7 @@ import ProductForm from '../components/ProductForm.vue';
 import ProductDetail from '../components/ProductDetail.vue';
 import BatchActionModal from '../components/BatchActionModal.vue';
 import OrderForm from '../components/OrderForm.vue';
+import Skeleton from '../components/Skeleton.vue';
 
 export default {
   name: 'ProductList',
@@ -172,7 +170,8 @@ export default {
     ProductForm,
     ProductDetail,
     BatchActionModal,
-    OrderForm
+    OrderForm,
+    Skeleton
   },
   setup() {
     const router = useRouter();
@@ -508,6 +507,7 @@ export default {
 
 <style scoped>
 @import '../assets/styles/theme.css';
+@import '../assets/styles/loading.css';
 
 .product-list-container {
   min-height: 100vh;
@@ -711,7 +711,8 @@ export default {
   margin: 0 auto;
 }
 
-.loading-container, .empty-container {
+/* 加载状态样式已移至 loading.css */
+.empty-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -720,21 +721,6 @@ export default {
   background: var(--white);
   border-radius: 16px;
   box-shadow: 0 4px 12px rgba(107, 70, 193, 0.08);
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid var(--gray-200);
-  border-top: 4px solid var(--primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 1rem;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
 
 .empty-icon {

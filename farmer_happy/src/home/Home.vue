@@ -63,10 +63,7 @@
             </div>
             <span class="ad-subtitle">发现优质农产品</span>
           </div>
-          <div v-if="loadingAds" class="ad-loading">
-            <div class="loading-spinner"></div>
-            <p>加载广告中...</p>
-          </div>
+          <Skeleton v-if="loadingAds" type="ad-carousel" />
           <div v-else-if="adProducts.length > 0" class="ad-carousel">
             <div class="carousel-container" @click="handleAdClick(currentAdIndex)">
               <div class="carousel-slide" :style="{ transform: `translateX(-${currentAdIndex * 100}%)` }">
@@ -187,9 +184,13 @@ import { useRouter } from 'vue-router';
 import { authService } from '../api/auth';
 import { productService } from '../api/product';
 import logger from '../utils/logger';
+import Skeleton from '../components/Skeleton.vue';
 
 export default {
   name: 'Home',
+  components: {
+    Skeleton
+  },
   setup() {
     const router = useRouter();
     const userInfo = ref({});
@@ -680,6 +681,7 @@ export default {
 
 <style scoped>
 @import '../assets/styles/theme.css';
+@import '../assets/styles/loading.css';
 
 .home-container {
   min-height: 100vh;
@@ -1272,27 +1274,7 @@ export default {
   color: var(--gray-500);
 }
 
-.ad-loading {
-  background: var(--white);
-  padding: var(--spacing-12);
-  border-radius: var(--radius-2xl);
-  text-align: center;
-  box-shadow: var(--shadow-card);
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid var(--gray-200);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 1rem;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+/* 加载状态样式已移至 loading.css */
 
 .ad-carousel {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
