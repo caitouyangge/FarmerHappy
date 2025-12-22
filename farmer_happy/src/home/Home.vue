@@ -4,23 +4,34 @@
     <header class="header">
       <!-- 左侧用户信息 -->
       <div class="user-info">
-        <div class="avatar">{{ userInitial }}</div>
+        <div class="avatar-wrapper">
+          <div class="avatar">{{ userInitial }}</div>
+          <div class="avatar-ring"></div>
+        </div>
         <div class="user-details">
-          <div class="user-name">{{ userInfo.nickname || '用户' }}</div>
-          <div class="user-phone">{{ userInfo.phone }}</div>
-          <div class="user-role">{{ userRoleText }}</div>
-          <div v-if="shouldShowBalance" class="user-balance">
-            <span class="balance-label">余额：</span>
-            <span v-if="loadingBalance" class="balance-loading">加载中...</span>
-            <span v-else class="balance-amount">¥{{ formattedBalance }}</span>
+          <div class="user-name-row">
+            <span class="user-name">{{ userInfo.nickname || '用户' }}</span>
+            <span class="user-role-badge">{{ userRoleText }}</span>
+          </div>
+          <div class="user-meta">
+            <span class="user-phone">{{ userInfo.phone }}</span>
+            <span v-if="shouldShowBalance" class="user-balance">
+              <span class="balance-label">余额</span>
+              <span v-if="loadingBalance" class="balance-loading">加载中...</span>
+              <span v-else class="balance-amount">¥{{ formattedBalance }}</span>
+            </span>
           </div>
         </div>
       </div>
 
       <!-- 右侧登出按钮 -->
       <button class="btn-logout" @click="handleLogout">
-        <span class="logout-icon">⎋</span>
-        登出
+        <svg class="logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+        <span>登出</span>
       </button>
     </header>
 
@@ -29,8 +40,18 @@
       <div class="content-wrapper">
         <!-- 欢迎标题 -->
         <div class="welcome-section">
-          <h1 class="welcome-title">{{ welcomeMessage }}</h1>
-          <p class="welcome-subtitle">{{ subtitleMessage }}</p>
+          <div class="welcome-content">
+            <div class="welcome-greeting">
+              <span class="greeting-icon">👋</span>
+              <h1 class="welcome-title">{{ welcomeMessage }}</h1>
+            </div>
+            <p class="welcome-subtitle">{{ subtitleMessage }}</p>
+          </div>
+          <div class="welcome-decoration">
+            <div class="decoration-circle circle-1"></div>
+            <div class="decoration-circle circle-2"></div>
+            <div class="decoration-circle circle-3"></div>
+          </div>
         </div>
 
         <!-- 广告轮播区域（仅买家显示） -->
@@ -138,10 +159,20 @@
               class="module-card"
               @click="handleModuleClick(module)"
             >
-              <div class="module-icon">{{ module.icon }}</div>
-              <h3 class="module-name">{{ module.name }}</h3>
-              <p class="module-desc">{{ module.description }}</p>
-              <div class="module-arrow">→</div>
+              <div class="module-card-background"></div>
+              <div class="module-icon-wrapper">
+                <div class="module-icon">{{ module.icon }}</div>
+                <div class="module-icon-glow"></div>
+              </div>
+              <div class="module-content">
+                <h3 class="module-name">{{ module.name }}</h3>
+                <p class="module-desc">{{ module.description }}</p>
+              </div>
+              <div class="module-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </div>
             </div>
           </div>
         </div>
@@ -652,77 +683,169 @@ export default {
 
 .home-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 50%, #f0f4ff 100%);
+  position: relative;
+  overflow-x: hidden;
+}
+
+.home-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 400px;
+  background: radial-gradient(circle at 20% 50%, rgba(107, 70, 193, 0.06) 0%, transparent 50%),
+              radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.home-container::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 300px;
+  background: radial-gradient(circle at 50% 0%, rgba(107, 70, 193, 0.04) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* 顶部导航栏 */
 .header {
-  background: var(--white);
-  padding: 1rem 2rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 1.25rem 2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 8px rgba(107, 70, 193, 0.1);
+  box-shadow: 0 4px 20px rgba(107, 70, 193, 0.08);
   position: sticky;
   top: 0;
   z-index: 100;
+  border-bottom: 1px solid rgba(107, 70, 193, 0.1);
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
+}
+
+.avatar-wrapper {
+  position: relative;
 }
 
 .avatar {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
   color: var(--white);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(107, 70, 193, 0.3);
+  font-size: 1.375rem;
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(107, 70, 193, 0.3);
+  position: relative;
+  z-index: 2;
+  transition: transform 0.3s ease;
+}
+
+.avatar-wrapper:hover .avatar {
+  transform: scale(1.05);
+}
+
+.avatar-ring {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(107, 70, 193, 0.2);
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
 }
 
 .user-details {
   display: flex;
   flex-direction: column;
+  gap: 0.5rem;
+}
+
+.user-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .user-name {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.125rem;
+  font-weight: 700;
   color: #1a202c;
+  letter-spacing: -0.01em;
 }
 
-.user-role {
-  font-size: 0.875rem;
+.user-role-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: linear-gradient(135deg, rgba(107, 70, 193, 0.1) 0%, rgba(159, 122, 234, 0.1) 100%);
   color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 12px;
+  border: 1px solid rgba(107, 70, 193, 0.2);
+}
+
+.user-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.user-phone {
+  font-size: 0.8125rem;
+  color: var(--gray-600);
   font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .user-balance {
-  font-size: 0.875rem;
-  color: #10b981;
-  font-weight: 600;
-  margin-top: 0.25rem;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
+  padding: 0.375rem 0.875rem;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .balance-label {
-  color: var(--gray-500);
-  font-weight: 400;
+  color: var(--gray-600);
+  font-weight: 500;
+  font-size: 0.75rem;
 }
 
 .balance-amount {
   color: #10b981;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 0.875rem;
 }
 
 .balance-loading {
@@ -733,134 +856,379 @@ export default {
 .btn-logout {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
+  gap: 0.625rem;
+  padding: 0.75rem 1.5rem;
   background: transparent;
-  border: 1px solid var(--gray-300);
-  border-radius: 8px;
-  color: var(--gray-500);
+  border: 1.5px solid var(--gray-300);
+  border-radius: 12px;
+  color: var(--gray-600);
   font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
 }
 
 .btn-logout:hover {
-  background: var(--gray-100);
-  border-color: var(--primary-light);
+  background: rgba(107, 70, 193, 0.05);
+  border-color: var(--primary);
   color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.15);
 }
 
 .logout-icon {
-  font-size: 1.125rem;
+  width: 18px;
+  height: 18px;
+  transition: transform 0.3s ease;
+}
+
+.btn-logout:hover .logout-icon {
+  transform: translateX(2px);
 }
 
 /* 主内容区域 */
 .main-content {
-  padding: 2rem;
+  padding: 1.5rem 2rem;
+  position: relative;
+  z-index: 1;
 }
 
 .content-wrapper {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 欢迎区域 */
 .welcome-section {
-  background: var(--white);
-  padding: 2rem;
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.08);
-  margin-bottom: 2rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.95) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 1.5rem 2rem;
+  border-radius: 18px;
+  box-shadow: 0 4px 24px rgba(107, 70, 193, 0.1), 0 0 0 1px rgba(107, 70, 193, 0.05);
+  margin-bottom: 1.5rem;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(107, 70, 193, 0.08);
 }
 
-.welcome-title {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--primary);
+.welcome-content {
+  position: relative;
+  z-index: 2;
+  animation: fadeIn 0.8s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.welcome-greeting {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   margin-bottom: 0.5rem;
 }
 
-.welcome-subtitle {
-  font-size: 1rem;
-  color: var(--gray-500);
+.greeting-icon {
+  font-size: 1.75rem;
+  animation: wave 2s ease-in-out infinite;
+  transform-origin: 70% 70%;
+}
+
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  10%, 30% { transform: rotate(14deg); }
+  20% { transform: rotate(-8deg); }
+  40%, 60% { transform: rotate(-4deg); }
+  50% { transform: rotate(10deg); }
+}
+
+.welcome-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.welcome-subtitle {
+  font-size: 0.9375rem;
+  color: var(--gray-600);
+  margin: 0;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.welcome-decoration {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.decoration-circle {
+  position: absolute;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(107, 70, 193, 0.1) 0%, rgba(159, 122, 234, 0.05) 100%);
+  animation: float 6s ease-in-out infinite;
+}
+
+.circle-1 {
+  width: 120px;
+  height: 120px;
+  top: -40px;
+  right: 10%;
+  animation-delay: 0s;
+}
+
+.circle-2 {
+  width: 80px;
+  height: 80px;
+  bottom: -20px;
+  right: 20%;
+  animation-delay: 2s;
+}
+
+.circle-3 {
+  width: 60px;
+  height: 60px;
+  top: 50%;
+  right: 5%;
+  animation-delay: 4s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  50% { transform: translateY(-20px) translateX(10px); }
 }
 
 /* 功能模块区域 */
 .modules-section {
-  margin-top: 2rem;
+  margin-top: 1.5rem;
+  position: relative;
 }
 
 .section-title {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: 1.625rem;
+  font-weight: 700;
   color: #1a202c;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  letter-spacing: -0.01em;
+}
+
+.section-title::before {
+  content: '';
+  width: 4px;
+  height: 22px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  border-radius: 2px;
 }
 
 .modules-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.25rem;
 }
 
 .module-card {
-  background: var(--white);
-  padding: 2rem;
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.08);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.95) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 1.75rem 1.5rem;
+  border-radius: 18px;
+  box-shadow: 0 2px 16px rgba(107, 70, 193, 0.08), 0 0 0 1px rgba(107, 70, 193, 0.05);
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  border: 2px solid transparent;
+  border: 1px solid rgba(107, 70, 193, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.module-card-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(107, 70, 193, 0.04) 0%, rgba(159, 122, 234, 0.02) 100%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 0;
+}
+
+.module-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 2;
+}
+
+.module-card:hover::before {
+  opacity: 1;
 }
 
 .module-card:hover {
   transform: translateY(-6px);
-  box-shadow: 0 12px 24px rgba(107, 70, 193, 0.15);
-  border-color: var(--primary-light);
+  box-shadow: 0 12px 32px rgba(107, 70, 193, 0.15), 0 0 0 1px rgba(107, 70, 193, 0.1);
+  border-color: rgba(107, 70, 193, 0.2);
+}
+
+.module-card:hover .module-card-background {
+  opacity: 1;
+}
+
+.module-icon-wrapper {
+  position: relative;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 1;
 }
 
 .module-icon {
-  font-size: 3.5rem;
-  margin-bottom: 1.25rem;
+  font-size: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 80px;
+  position: relative;
+  z-index: 2;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(107, 70, 193, 0.08) 0%, rgba(159, 122, 234, 0.08) 100%);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.05));
+}
+
+.module-icon-glow {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: 56px;
+  height: 56px;
+  background: radial-gradient(circle, rgba(107, 70, 193, 0.15) 0%, transparent 70%);
+  border-radius: 14px;
+  opacity: 0;
+  transition: opacity 0.4s ease, transform 0.4s ease, width 0.4s ease, height 0.4s ease;
+  z-index: 1;
+}
+
+.module-card:hover .module-icon {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, rgba(107, 70, 193, 0.12) 0%, rgba(159, 122, 234, 0.12) 100%);
+  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.15);
+}
+
+.module-card:hover .module-icon-glow {
+  opacity: 1;
+  transform: translateY(-50%) scale(1.15);
+  width: 62px;
+  height: 62px;
+}
+
+.module-content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .module-name {
-  font-size: 1.375rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 700;
   color: #1a202c;
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.625rem 0;
+  letter-spacing: -0.01em;
+  transition: color 0.3s ease;
+  line-height: 1.3;
+}
+
+.module-card:hover .module-name {
+  color: var(--primary);
 }
 
 .module-desc {
-  font-size: 0.9375rem;
-  color: var(--gray-500);
-  line-height: 1.6;
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  line-height: 1.5;
   margin: 0;
-  min-height: 2.8rem;
+  transition: color 0.3s ease;
+}
+
+.module-card:hover .module-desc {
+  color: var(--gray-700);
 }
 
 .module-arrow {
   position: absolute;
   bottom: 1.5rem;
   right: 1.5rem;
-  font-size: 1.5rem;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(107, 70, 193, 0.08);
+  border-radius: 7px;
   color: var(--primary);
-  transition: transform 0.3s;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+}
+
+.module-arrow svg {
+  width: 14px;
+  height: 14px;
 }
 
 .module-card:hover .module-arrow {
-  transform: translateX(6px);
+  transform: translateX(4px);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: var(--white);
+  box-shadow: 0 2px 8px rgba(107, 70, 193, 0.25);
 }
 
 /* 广告轮播区域 */
 .ad-banner-section {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .ad-section-header {
@@ -888,14 +1256,15 @@ export default {
 }
 
 .ad-section-title {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.375rem;
+  font-weight: 800;
   color: #1a202c;
   margin: 0;
   background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  letter-spacing: -0.01em;
 }
 
 .ad-subtitle {
@@ -937,7 +1306,7 @@ export default {
 .carousel-container {
   position: relative;
   width: 100%;
-  height: 360px;
+  height: 210px;
   overflow: hidden;
   cursor: pointer;
 }
@@ -960,13 +1329,13 @@ export default {
 
 .ad-badge-hot {
   position: absolute;
-  top: 1.5rem;
-  left: 1.5rem;
+  top: 1rem;
+  left: 1rem;
   background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
   color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 16px;
+  font-size: 0.6875rem;
   font-weight: 700;
   z-index: 10;
   box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
@@ -1027,7 +1396,7 @@ export default {
 
 .ad-image-indicators {
   position: absolute;
-  bottom: 50%;
+  bottom: 10%;
   left: 50%;
   transform: translate(-50%, 50%);
   display: flex;
@@ -1070,7 +1439,7 @@ export default {
 
 .ad-content {
   flex: 1;
-  padding: 2.5rem;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1088,53 +1457,53 @@ export default {
   display: inline-block;
   background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
   color: white;
-  padding: 0.375rem 0.875rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.6875rem;
   font-weight: 600;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   width: fit-content;
   box-shadow: 0 2px 8px rgba(107, 70, 193, 0.3);
 }
 
 .ad-title {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 800;
   color: #1a202c;
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.5rem 0;
   line-height: 1.2;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
   .ad-description {
-    font-size: 1rem;
+    font-size: 0.875rem;
     color: var(--gray-600);
-    line-height: 1.6;
-    margin: 0 0 1.5rem 0;
+    line-height: 1.5;
+    margin: 0 0 1rem 0;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-height: 4.8rem;
+    max-height: 2.625rem;
   }
 
 .ad-price-section {
   display: flex;
   align-items: baseline;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .ad-price-label {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: var(--gray-500);
   font-weight: 500;
 }
 
 .ad-price {
-  font-size: 2.25rem;
+  font-size: 1.75rem;
   font-weight: 800;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   -webkit-background-clip: text;
@@ -1146,12 +1515,12 @@ export default {
 .ad-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
   background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
   color: white;
-  padding: 0.875rem 1.75rem;
-  border-radius: 12px;
-  font-size: 1rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
   font-weight: 600;
   width: fit-content;
   box-shadow: 0 4px 16px rgba(107, 70, 193, 0.4);
@@ -1259,37 +1628,121 @@ export default {
 /* 响应式设计 */
 @media (max-width: 768px) {
   .header {
-    padding: 1rem;
+    padding: 1rem 1.25rem;
+    flex-wrap: wrap;
+    gap: 1rem;
   }
 
-  .main-content {
-    padding: 1rem;
+  .user-info {
+    gap: 0.875rem;
   }
 
-  .welcome-section {
-    padding: 1.5rem;
+  .avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 1.25rem;
   }
 
-  .welcome-title {
-    font-size: 1.5rem;
+  .user-name {
+    font-size: 1rem;
   }
 
-  .modules-grid {
-    grid-template-columns: 1fr;
+  .user-role-badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.625rem;
   }
 
-  .module-card {
-    padding: 1.5rem;
-  }
-
-  .ad-section-header {
+  .user-meta {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
 
+  .user-balance {
+    padding: 0.25rem 0.75rem;
+  }
+
+  .btn-logout {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.8125rem;
+  }
+
+  .main-content {
+    padding: 1.25rem;
+  }
+
+  .welcome-section {
+    padding: 2rem 1.75rem;
+    border-radius: 20px;
+  }
+
+  .welcome-greeting {
+    flex-wrap: wrap;
+  }
+
+  .greeting-icon {
+    font-size: 2rem;
+  }
+
+  .welcome-title {
+    font-size: 1.75rem;
+  }
+
+  .welcome-subtitle {
+    font-size: 1rem;
+  }
+
+  .section-title {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .modules-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .module-card {
+    padding: 1.75rem 1.5rem;
+    border-radius: 18px;
+  }
+
+  .module-icon {
+    font-size: 2rem;
+    width: 56px;
+    height: 56px;
+  }
+
+  .module-icon-wrapper {
+    margin-bottom: 1rem;
+  }
+
+  .module-icon-glow {
+    width: 56px;
+    height: 56px;
+  }
+
+  .module-card:hover .module-icon-glow {
+    width: 62px;
+    height: 62px;
+  }
+
+  .module-name {
+    font-size: 1.25rem;
+  }
+
+  .ad-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .ad-section-title {
+    font-size: 1.5rem;
+  }
+
   .carousel-container {
-    height: 320px;
+    height: 200px;
   }
 
   .ad-slide {
@@ -1335,6 +1788,40 @@ export default {
 
   .carousel-btn.next {
     right: 1rem;
+  }
+
+  .decoration-circle {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .welcome-section {
+    padding: 1.5rem;
+  }
+
+  .welcome-title {
+    font-size: 1.5rem;
+  }
+
+  .module-card {
+    padding: 1.5rem 1.25rem;
+  }
+
+  .module-icon {
+    font-size: 2rem;
+    width: 52px;
+    height: 52px;
+  }
+
+  .module-icon-glow {
+    width: 52px;
+    height: 52px;
+  }
+
+  .module-card:hover .module-icon-glow {
+    width: 58px;
+    height: 58px;
   }
 }
 </style>
