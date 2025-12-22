@@ -360,10 +360,11 @@
 </template>
 
 <script>
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { pricePredictionService } from '../api/pricePrediction';
 import logger from '../utils/logger';
+import * as echarts from 'echarts';
 
 export default {
   name: 'PricePrediction',
@@ -371,6 +372,8 @@ export default {
     const router = useRouter();
     const fileInput = ref(null);
     const chartContainer = ref(null);
+    let chartInstance = null;
+    let resizeHandler = null;
     
     const step = ref(1);
     const isDragOver = ref(false);
@@ -517,21 +520,18 @@ export default {
       }
     };
 
-    // 绘制图表（使用简单的Canvas绘制）：支持按规格/类型绘制多条曲线，并标注
+    // 绘制图表（使用 ECharts）：支持按规格/类型绘制多条曲线，并支持交互式工具提示
     const drawChart = () => {
       if (!chartContainer.value || !predictionResult.value) return;
 
-      const container = chartContainer.value;
-      const canvas = document.createElement('canvas');
-      canvas.width = container.clientWidth;
-      canvas.height = 420;
-      container.innerHTML = '';
-      container.appendChild(canvas);
+      // 销毁旧图表实例
+      if (chartInstance) {
+        chartInstance.dispose();
+        chartInstance = null;
+      }
 
-      const ctx = canvas.getContext('2d');
-      const padding = 60;
-      const chartWidth = canvas.width - padding * 2;
-      const chartHeight = canvas.height - padding * 2;
+      // 创建新的图表实例
+      chartInstance = echarts.init(chartContainer.value);
 
       // 统一成多序列结构
       const seriesList = Array.isArray(predictionResult.value.series_data) && predictionResult.value.series_data.length > 0
@@ -553,66 +553,15 @@ export default {
       // 统一X轴：按日期去重排序
       const dateSet = new Set(allPoints.map(p => p.date));
       const dates = Array.from(dateSet).sort((a, b) => new Date(a) - new Date(b));
-      const dateIndex = new Map(dates.map((d, i) => [d, i]));
-      const xCount = dates.length;
 
       // 找到价格的最大值和最小值
       const prices = allPoints.map(d => d.price);
       const minPrice = Math.min(...prices);
       const maxPrice = Math.max(...prices);
       const priceRange = maxPrice - minPrice || 1;
+      const pricePadding = priceRange * 0.1; // 上下留10%的边距
 
-      // 工具函数：映射坐标
-      const xOf = (dateStr) => {
-        const idx = dateIndex.get(dateStr);
-        if (idx == null) return padding;
-        if (xCount <= 1) return padding + chartWidth / 2;
-        return padding + (idx / (xCount - 1)) * chartWidth;
-      };
-      const yOf = (price) => canvas.height - padding - ((price - minPrice) / priceRange) * chartHeight;
-
-      // 绘制坐标轴
-      ctx.strokeStyle = '#ccc';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(padding, padding);
-      ctx.lineTo(padding, canvas.height - padding);
-      ctx.lineTo(canvas.width - padding, canvas.height - padding);
-      ctx.stroke();
-
-      // 颜色盘
-      const palette = ['#4CAF50', '#2196F3', '#9C27B0', '#FF5722', '#009688', '#795548', '#607D8B', '#E91E63'];
-
-      // 画网格/刻度（简单版）
-      ctx.fillStyle = '#666';
-      ctx.font = '12px Arial';
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      const gridLines = 5;
-      for (let i = 0; i <= gridLines; i++) {
-        const v = minPrice + (priceRange * i) / gridLines;
-        const y = yOf(v);
-        ctx.strokeStyle = '#eee';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(padding, y);
-        ctx.lineTo(canvas.width - padding, y);
-        ctx.stroke();
-        ctx.fillText(`¥${v.toFixed(2)}`, padding - 8, y);
-      }
-
-      // X轴日期（抽样显示）
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      const xLabelCount = Math.min(6, dates.length);
-      for (let i = 0; i < xLabelCount; i++) {
-        const idx = Math.round((i / (xLabelCount - 1 || 1)) * (dates.length - 1));
-        const d = dates[idx];
-        ctx.fillStyle = '#666';
-        ctx.fillText(d, xOf(d), canvas.height - padding + 10);
-      }
-
-      // 计算“历史-预测分界线”：取所有序列历史最后日期的最大值
+      // 计算"历史-预测分界线"：取所有序列历史最后日期的最大值
       let dividerDate = null;
       seriesList.forEach(s => {
         const hist = s.historical_data || [];
@@ -620,112 +569,277 @@ export default {
         const last = hist[hist.length - 1].date;
         if (!dividerDate || new Date(last) > new Date(dividerDate)) dividerDate = last;
       });
-      if (dividerDate && dateIndex.has(dividerDate)) {
-        const dividerX = xOf(dividerDate);
-        ctx.strokeStyle = '#999';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.moveTo(dividerX, padding);
-        ctx.lineTo(dividerX, canvas.height - padding);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
 
-      // 绘制每条规格曲线：历史(实线) + 预测(虚线)，并在末尾标注规格名
-      const legendX = canvas.width - padding + 10;
-      let legendY = 20;
-      const usedLabelYs = [];
+      // 颜色盘
+      const palette = ['#4CAF50', '#2196F3', '#9C27B0', '#FF5722', '#009688', '#795548', '#607D8B', '#E91E63'];
 
-      const placeEndLabel = (x, y, text, color) => {
-        // 简单避让：与已有label y距离太近则下移
-        let yy = y;
-        for (let guard = 0; guard < 20; guard++) {
-          if (usedLabelYs.every(v => Math.abs(v - yy) > 12)) break;
-          yy += 12;
-          if (yy > canvas.height - padding) yy = y - 12;
-        }
-        usedLabelYs.push(yy);
-        ctx.fillStyle = color;
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(text, Math.min(x + 6, canvas.width - padding + 5), yy);
-      };
+      // 构建 ECharts 系列数据
+      const series = [];
+      const legendData = [];
 
       seriesList.forEach((s, idx) => {
         const color = palette[idx % palette.length];
         const typeName = s.type || '默认';
+        legendData.push(typeName);
+
         const hist = (s.historical_data || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
         const pred = (s.predicted_data || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        // legend（右侧）
-        ctx.fillStyle = color;
-        ctx.fillRect(legendX, legendY, 12, 12);
-        ctx.fillStyle = '#333';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText(typeName, legendX + 18, legendY - 1);
-        legendY += 18;
-
-        // 历史线
+        // 历史数据系列
         if (hist.length > 0) {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 2.2;
-          ctx.setLineDash([]);
-          ctx.beginPath();
-          hist.forEach((p, i) => {
-            const x = xOf(p.date);
-            const y = yOf(p.price);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+          // 将历史数据转换为按日期索引的数组
+          const histData = dates.map(date => {
+            const point = hist.find(p => p.date === date);
+            return point ? point.price : null;
           });
-          ctx.stroke();
-
-          // 点
-          ctx.fillStyle = color;
-          hist.forEach((p) => {
-            const x = xOf(p.date);
-            const y = yOf(p.price);
-            ctx.beginPath();
-            ctx.arc(x, y, 2.6, 0, Math.PI * 2);
-            ctx.fill();
+          series.push({
+            name: `${typeName}（历史）`,
+            type: 'line',
+            data: histData,
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 6,
+            lineStyle: {
+              color: color,
+              width: 2.5
+            },
+            itemStyle: {
+              color: color
+            },
+            emphasis: {
+              focus: 'series',
+              itemStyle: {
+                color: color,
+                borderColor: '#fff',
+                borderWidth: 2,
+                shadowBlur: 10,
+                shadowColor: color
+              }
+            },
+            markPoint: {
+              data: [
+                { type: 'max', name: '最大值' },
+                { type: 'min', name: '最小值' }
+              ],
+              itemStyle: {
+                color: color
+              }
+            },
+            // 添加历史-预测分界线（只在第一个历史系列中添加）
+            ...(idx === 0 && dividerDate && dates.includes(dividerDate) ? {
+              markLine: {
+                silent: true,
+                lineStyle: {
+                  color: '#999',
+                  type: 'dashed',
+                  width: 1.5
+                },
+                label: {
+                  show: true,
+                  position: 'insideEndTop',
+                  formatter: '历史/预测分界',
+                  color: '#999',
+                  fontSize: 10
+                },
+                data: [{
+                  xAxis: dividerDate
+                }]
+              }
+            } : {})
           });
         }
 
-        // 预测线（从历史最后点延伸）
+        // 预测数据系列
         if (pred.length > 0) {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 2.2;
-          ctx.setLineDash([7, 4]);
-          ctx.beginPath();
-          if (hist.length > 0) {
-            const lastH = hist[hist.length - 1];
-            ctx.moveTo(xOf(lastH.date), yOf(lastH.price));
-          } else {
-            ctx.moveTo(xOf(pred[0].date), yOf(pred[0].price));
-          }
-          pred.forEach((p) => ctx.lineTo(xOf(p.date), yOf(p.price)));
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          ctx.fillStyle = color;
-          pred.forEach((p) => {
-            const x = xOf(p.date);
-            const y = yOf(p.price);
-            ctx.beginPath();
-            ctx.arc(x, y, 2.6, 0, Math.PI * 2);
-            ctx.fill();
+          // 将预测数据转换为按日期索引的数组
+          const predData = dates.map(date => {
+            const point = pred.find(p => p.date === date);
+            return point ? point.price : null;
           });
-        }
-
-        // 末尾标注（优先预测末尾，否则历史末尾）
-        const endPoint = pred.length > 0 ? pred[pred.length - 1] : (hist.length > 0 ? hist[hist.length - 1] : null);
-        if (endPoint) {
-          placeEndLabel(xOf(endPoint.date), yOf(endPoint.price), typeName, color);
+          series.push({
+            name: `${typeName}（预测）`,
+            type: 'line',
+            data: predData,
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 6,
+            lineStyle: {
+              color: color,
+              width: 2.5,
+              type: 'dashed'
+            },
+            itemStyle: {
+              color: color
+            },
+            emphasis: {
+              focus: 'series',
+              itemStyle: {
+                color: color,
+                borderColor: '#fff',
+                borderWidth: 2,
+                shadowBlur: 10,
+                shadowColor: color
+              }
+            }
+          });
         }
       });
+
+      // 配置选项
+      const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {
+            type: 'cross',
+            label: {
+              backgroundColor: '#6a7985'
+            },
+            crossStyle: {
+              color: '#999'
+            }
+          },
+          formatter: function(params) {
+            let result = `<div style="margin-bottom: 4px; font-weight: 600; color: #333;">${params[0].axisValue}</div>`;
+            params.forEach(param => {
+              if (param.value === null || param.value === undefined) return;
+              const isPredicted = param.seriesName.includes('预测');
+              const typeName = param.seriesName.replace('（历史）', '').replace('（预测）', '');
+              const price = Array.isArray(param.value) ? param.value[1] : param.value;
+              result += `
+                <div style="margin: 4px 0; display: flex; align-items: center;">
+                  <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; border-radius: 50%; margin-right: 8px;"></span>
+                  <span style="color: #666;">${typeName}${isPredicted ? '（预测）' : '（历史）'}:</span>
+                  <span style="margin-left: 8px; font-weight: 600; color: ${param.color};">¥${price.toFixed(2)}</span>
+                </div>
+              `;
+            });
+            return result;
+          },
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          borderColor: '#e0e0e0',
+          borderWidth: 1,
+          padding: [10, 15],
+          textStyle: {
+            fontSize: 12,
+            color: '#333'
+          },
+          extraCssText: 'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); border-radius: 8px;'
+        },
+        legend: {
+          data: legendData,
+          top: 10,
+          right: 20,
+          textStyle: {
+            fontSize: 12,
+            color: '#666'
+          },
+          itemGap: 20,
+          itemWidth: 14,
+          itemHeight: 14
+        },
+        grid: {
+          left: '10%',
+          right: '10%',
+          top: '15%',
+          bottom: '15%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: dates,
+          axisLine: {
+            lineStyle: {
+              color: '#ccc'
+            }
+          },
+          axisLabel: {
+            color: '#666',
+            fontSize: 11,
+            rotate: 45,
+            formatter: function(value) {
+              // 如果日期字符串格式为 YYYY-MM-DD，只显示月/日
+              if (value && value.length >= 10) {
+                return value.substring(5, 10).replace('-', '/');
+              }
+              return value;
+            }
+          },
+          splitLine: {
+            show: false
+          }
+        },
+        yAxis: {
+          type: 'value',
+          name: '价格（元）',
+          nameLocation: 'middle',
+          nameGap: 50,
+          nameTextStyle: {
+            color: '#666',
+            fontSize: 12
+          },
+          min: minPrice - pricePadding,
+          max: maxPrice + pricePadding,
+          axisLine: {
+            lineStyle: {
+              color: '#ccc'
+            }
+          },
+          axisLabel: {
+            color: '#666',
+            fontSize: 11,
+            formatter: function(value) {
+              return '¥' + value.toFixed(2);
+            }
+          },
+          splitLine: {
+            lineStyle: {
+              color: '#f0f0f0',
+              type: 'dashed'
+            }
+          }
+        },
+        dataZoom: [
+          {
+            type: 'inside',
+            start: 0,
+            end: 100
+          },
+          {
+            type: 'slider',
+            start: 0,
+            end: 100,
+            height: 20,
+            bottom: 10,
+            handleStyle: {
+              color: '#6b73ff'
+            },
+            dataBackground: {
+              areaStyle: {
+                color: 'rgba(107, 115, 255, 0.1)'
+              }
+            },
+            selectedDataBackground: {
+              areaStyle: {
+                color: 'rgba(107, 115, 255, 0.2)'
+              }
+            }
+          }
+        ],
+        series: series
+      };
+
+      // 设置配置并渲染
+      chartInstance.setOption(option);
+
+      // 响应式调整
+      resizeHandler = () => {
+        if (chartInstance) {
+          chartInstance.resize();
+        }
+      };
+      window.addEventListener('resize', resizeHandler);
     };
 
     // 获取趋势文本
@@ -773,7 +887,25 @@ export default {
       if (fileInput.value) {
         fileInput.value.value = '';
       }
+      // 清理图表实例
+      if (chartInstance) {
+        chartInstance.dispose();
+        chartInstance = null;
+      }
     };
+
+    // 组件卸载时清理资源
+    onBeforeUnmount(() => {
+      if (chartInstance) {
+        chartInstance.dispose();
+        chartInstance = null;
+      }
+      // 移除窗口resize事件监听器
+      if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler);
+        resizeHandler = null;
+      }
+    });
 
     return {
       fileInput,
@@ -1191,10 +1323,11 @@ export default {
 
 .chart-container {
   width: 100%;
-  height: 400px;
+  height: 500px;
   background: white;
   border-radius: 8px;
   padding: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .data-table-wrapper {
