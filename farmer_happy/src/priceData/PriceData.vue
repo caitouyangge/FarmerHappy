@@ -586,7 +586,7 @@ export default {
 
 .product-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.75rem;
   max-height: 400px;
   overflow-y: auto;
@@ -666,6 +666,18 @@ export default {
 }
 
 /* 响应式设计 */
+@media (max-width: 1200px) {
+  .product-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .product-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .main-content {
     padding: 1rem;
@@ -676,7 +688,7 @@ export default {
   }
 
   .product-list {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .action-buttons {

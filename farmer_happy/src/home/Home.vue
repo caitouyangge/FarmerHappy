@@ -334,7 +334,7 @@ export default {
           {
             id: 'trading',
             name: '农产品交易',
-            description: '发布和管理您的农产品，查看交易订单',
+            description: '发布和管理您的农产品',
             icon: '🌾',
             route: '/trading'
           },
@@ -1056,7 +1056,7 @@ export default {
 
 .modules-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--spacing-5);
 }
 
@@ -1608,6 +1608,18 @@ export default {
 }
 
 /* 响应式设计 */
+@media (max-width: 1200px) {
+  .modules-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .modules-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .header {
     padding: 1rem 1.25rem;
@@ -1680,7 +1692,7 @@ export default {
   }
 
   .modules-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
   }
 
