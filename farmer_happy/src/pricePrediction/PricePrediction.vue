@@ -736,8 +736,16 @@ export default {
 
         // 预测数据系列
         if (pred.length > 0) {
+          // 获取历史数据的最后一个点（用于连接）
+          const lastHistPoint = hist.length > 0 ? hist[hist.length - 1] : null;
+          const lastHistDate = lastHistPoint ? lastHistPoint.date : null;
+          
           // 将预测数据转换为按日期索引的数组
           const predData = dates.map(date => {
+            // 如果是历史数据的最后一个日期，且预测数据中没有这个日期，使用历史数据的最后一个价格值来连接
+            if (date === lastHistDate && !pred.find(p => p.date === date)) {
+              return lastHistPoint.price;
+            }
             const point = pred.find(p => p.date === date);
             return point ? point.price : null;
           });
