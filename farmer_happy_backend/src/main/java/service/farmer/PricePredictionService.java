@@ -6,7 +6,13 @@ import util.ExcelParser;
 import util.PriceFileParser;
 import util.ARIMAModel;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -88,6 +94,11 @@ public class PricePredictionService {
         // 限制预测天数
         if (predictionDays < 1 || predictionDays > 90) {
             throw new IllegalArgumentException("预测天数必须在1-90天之间");
+        }
+
+        // 如果使用AI预测
+        if ("ai".equals(modelType)) {
+            return predictWithAI(seriesMap, predictionDays);
         }
 
         // 按"规格/类型"分别预测，并在响应里返回 series_data
@@ -1165,6 +1176,723 @@ public class PricePredictionService {
 
     private static double round4(double v) {
         return Math.round(v * 10000.0) / 10000.0;
+    }
+
+    /**
+     * 使用AI进行价格预测
+     */
+    private PricePredictionResponseDTO predictWithAI(Map<String, List<ExcelParser.DataPoint>> seriesMap, int predictionDays) {
+        // AI API配置
+        String API_KEY = "sk-QfccpUybEFZ3iGB9rzzukWekBgb0fkaS8Skcy4tyuM8TY5Yf";
+        String BASE_URL = "https://chatapi.zjt66.top/v1";
+        
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        List<Map<String, Object>> seriesData = new ArrayList<>();
+        String primaryType = seriesMap.keySet().stream().sorted().findFirst().orElse("默认");
+        SeriesPrediction primary = null;
+
+        // 遍历所有规格/类型
+        for (Map.Entry<String, List<ExcelParser.DataPoint>> entry : seriesMap.entrySet()) {
+            String type = entry.getKey() != null ? entry.getKey() : "默认";
+            List<ExcelParser.DataPoint> points = entry.getValue();
+            if (points == null || points.isEmpty()) continue;
+
+            // 统一按天聚合
+            List<ExcelParser.DataPoint> dataPoints = normalizeDaily(points);
+            if (dataPoints.size() < 2) {
+                // 数据太少，使用naive预测
+                SeriesPrediction sp = naivePredict(dataPoints, predictionDays);
+                if (type.equals(primaryType)) {
+                    primary = sp;
+                }
+                Map<String, Object> one = new HashMap<>();
+                one.put("type", type);
+                one.put("historical_data", sp.historicalData);
+                one.put("predicted_data", sp.predictedData);
+                one.put("trend", sp.trend);
+                one.put("model_metrics", sp.metricsMapAsObject());
+                seriesData.add(one);
+                continue;
+            }
+
+            // 构建历史数据
+            List<Map<String, Object>> historicalData = new ArrayList<>();
+            for (ExcelParser.DataPoint point : dataPoints) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("date", sdf.format(point.getDate()));
+                item.put("price", point.getPrice());
+                historicalData.add(item);
+            }
+
+            // 准备AI提示词：格式化时间-价格数据
+            StringBuilder dataPrompt = new StringBuilder();
+            dataPrompt.append("你是一名商品价格预测专家，擅长分析时间序列数据并预测未来价格。\n\n");
+            dataPrompt.append("以下是历史价格数据（日期-价格）：\n");
+            for (Map<String, Object> item : historicalData) {
+                dataPrompt.append(item.get("date")).append(": ").append(item.get("price")).append("\n");
+            }
+            
+            // 分析历史数据的特征
+            if (historicalData.size() >= 3) {
+                List<Double> prices = new ArrayList<>();
+                for (Map<String, Object> item : historicalData) {
+                    Object priceObj = item.get("price");
+                    if (priceObj instanceof Number) {
+                        prices.add(((Number) priceObj).doubleValue());
+                    }
+                }
+                
+                // 计算价格波动特征
+                double minPrice = prices.stream().mapToDouble(Double::doubleValue).min().orElse(0);
+                double maxPrice = prices.stream().mapToDouble(Double::doubleValue).max().orElse(0);
+                double avgPrice = prices.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+                double priceRange = maxPrice - minPrice;
+                double volatility = 0;
+                if (prices.size() > 1) {
+                    double sumSqDiff = 0;
+                    for (int i = 1; i < prices.size(); i++) {
+                        double diff = prices.get(i) - prices.get(i - 1);
+                        sumSqDiff += diff * diff;
+                    }
+                    volatility = Math.sqrt(sumSqDiff / (prices.size() - 1));
+                }
+                
+                dataPrompt.append("\n历史数据特征分析：\n");
+                dataPrompt.append("- 价格范围：").append(String.format("%.2f", minPrice)).append(" ~ ").append(String.format("%.2f", maxPrice)).append("\n");
+                dataPrompt.append("- 平均价格：").append(String.format("%.2f", avgPrice)).append("\n");
+                dataPrompt.append("- 价格波动幅度：").append(String.format("%.2f", priceRange)).append("\n");
+                dataPrompt.append("- 价格波动性（标准差）：").append(String.format("%.2f", volatility)).append("\n");
+                
+                // 判断数据模式
+                boolean hasVolatility = volatility > avgPrice * 0.05; // 波动性超过5%认为有波动
+                boolean hasTrend = Math.abs(prices.get(prices.size() - 1) - prices.get(0)) > avgPrice * 0.1; // 首尾差异超过10%认为有趋势
+                
+                dataPrompt.append("\n重要提示：\n");
+                if (hasVolatility) {
+                    dataPrompt.append("- 历史数据显示明显的价格波动特征，预测结果应该保持类似的波动模式，而不是简单的递增、递减或持平。\n");
+                    dataPrompt.append("- 预测价格应该在历史价格范围内合理波动，体现价格的不确定性和市场波动性。\n");
+                    dataPrompt.append("- 不要预测单调递增或递减的序列，应该根据历史波动模式生成真实的波动预测。\n");
+                }
+                if (hasTrend) {
+                    double trendDirection = prices.get(prices.size() - 1) - prices.get(0);
+                    if (trendDirection > 0) {
+                        dataPrompt.append("- 历史数据整体呈上升趋势，但预测时仍应保持波动，而不是持续单调上升。\n");
+                    } else {
+                        dataPrompt.append("- 历史数据整体呈下降趋势，但预测时仍应保持波动，而不是持续单调下降。\n");
+                    }
+                }
+                dataPrompt.append("- 预测价格应该反映市场的真实波动性，包括合理的价格起伏。\n");
+            }
+            
+            dataPrompt.append("\n请预测未来").append(predictionDays).append("天的商品价格。");
+            dataPrompt.append("请以JSON格式返回预测结果，格式如下：\n");
+            dataPrompt.append("{\n");
+            dataPrompt.append("  \"predicted_data\": [\n");
+            dataPrompt.append("    {\"date\": \"YYYY-MM-DD\", \"price\": 数值},\n");
+            dataPrompt.append("    ...\n");
+            dataPrompt.append("  ],\n");
+            dataPrompt.append("  \"trend\": \"上升/下降/平稳/波动\",\n");
+            dataPrompt.append("  \"model_metrics\": {\n");
+            dataPrompt.append("    \"r_squared\": 数值,\n");
+            dataPrompt.append("    \"mae\": 数值,\n");
+            dataPrompt.append("    \"rmse\": 数值\n");
+            dataPrompt.append("  }\n");
+            dataPrompt.append("}\n");
+            dataPrompt.append("\n关键要求：\n");
+            dataPrompt.append("1. 日期从历史数据的最后一天开始连续递增。\n");
+            dataPrompt.append("2. 价格数值必须为合理的正数。\n");
+            dataPrompt.append("3. 如果历史数据是波动的，预测结果也必须是波动的，不要生成单调递增、递减或完全持平的价格序列。\n");
+            dataPrompt.append("4. 预测价格应该反映历史数据的波动特征，包括合理的价格起伏和不确定性。\n");
+            dataPrompt.append("5. 预测价格应该在历史价格范围内或合理延伸范围内，保持真实性和可信度。\n");
+
+            String promptText = dataPrompt.toString();
+            System.out.println("========== AI预测输入日志 ==========");
+            System.out.println("规格/类型: " + type);
+            System.out.println("历史数据点数: " + historicalData.size());
+            System.out.println("预测天数: " + predictionDays);
+            System.out.println("历史数据:");
+            for (Map<String, Object> item : historicalData) {
+                System.out.println("  " + item.get("date") + ": " + item.get("price"));
+            }
+            System.out.println("发送给AI的提示词:");
+            System.out.println(promptText);
+            System.out.println("====================================");
+
+            // 调用AI接口
+            try {
+                String url = BASE_URL + "/chat/completions";
+                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                conn.setRequestMethod("POST");
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(60000);
+                conn.setDoOutput(true);
+
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                conn.setRequestProperty("Authorization", "Bearer " + API_KEY);
+
+                // 构造请求体
+                StringBuilder bodyBuilder = new StringBuilder();
+                bodyBuilder.append("{");
+                bodyBuilder.append("\"model\":\"gpt-4o-mini\",");
+                bodyBuilder.append("\"temperature\":0.3,");
+                bodyBuilder.append("\"messages\":[");
+                bodyBuilder.append("{\"role\":\"system\",\"content\":\"你是一名商品价格预测专家，擅长分析时间序列数据并预测未来价格。你需要根据历史数据的真实波动模式进行预测，而不是简单的趋势外推。如果历史数据是波动的，预测结果也必须是波动的，体现市场的真实不确定性和价格起伏。预测结果应该真实可信，反映商品价格的实际变化规律，不要生成单调递增、递减或完全持平的价格序列。\"},");
+                bodyBuilder.append("{\"role\":\"user\",\"content\":");
+                bodyBuilder.append("\"").append(escapeJson(dataPrompt.toString())).append("\"");
+                bodyBuilder.append("}");
+                bodyBuilder.append("]");
+                bodyBuilder.append("}");
+
+                String requestBody = bodyBuilder.toString();
+                System.out.println("========== AI API请求日志 ==========");
+                System.out.println("请求URL: " + url);
+                System.out.println("请求体长度: " + requestBody.length() + " 字符");
+                System.out.println("请求体内容:");
+                System.out.println(requestBody);
+                System.out.println("====================================");
+                
+                try (OutputStream os = conn.getOutputStream()) {
+                    byte[] input = requestBody.getBytes(StandardCharsets.UTF_8);
+                    os.write(input, 0, input.length);
+                }
+
+                int statusCode = conn.getResponseCode();
+                System.out.println("========== AI API响应日志 ==========");
+                System.out.println("HTTP状态码: " + statusCode);
+                BufferedReader reader;
+                if (statusCode >= 200 && statusCode < 300) {
+                    reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                } else {
+                    reader = new BufferedReader(new InputStreamReader(conn.getErrorStream(), StandardCharsets.UTF_8));
+                }
+
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line);
+                }
+                reader.close();
+
+                String apiResp = sb.toString();
+                System.out.println("API原始响应长度: " + apiResp.length() + " 字符");
+                System.out.println("API原始响应内容:");
+                System.out.println(apiResp);
+                System.out.println("====================================");
+                
+                if (statusCode >= 200 && statusCode < 300) {
+                    String aiResponse = extractFirstMessageContent(apiResp);
+                    System.out.println("========== AI响应解析日志 ==========");
+                    System.out.println("提取的AI响应内容:");
+                    System.out.println(aiResponse);
+                    System.out.println("====================================");
+                    
+                    // 解析AI返回的JSON数据
+                    SeriesPrediction sp = parseAIResponse(aiResponse, historicalData, dataPoints, predictionDays);
+                    
+                    System.out.println("========== AI解析结果日志 ==========");
+                    System.out.println("解析后的预测数据点数: " + (sp.predictedData != null ? sp.predictedData.size() : 0));
+                    if (sp.predictedData != null && !sp.predictedData.isEmpty()) {
+                        System.out.println("前5条预测数据:");
+                        for (int i = 0; i < Math.min(5, sp.predictedData.size()); i++) {
+                            Map<String, Object> pred = sp.predictedData.get(i);
+                            System.out.println("  " + pred.get("date") + ": " + pred.get("price"));
+                        }
+                    }
+                    System.out.println("趋势: " + sp.trend);
+                    System.out.println("指标: " + sp.metrics);
+                    System.out.println("====================================");
+                    if (type.equals(primaryType)) {
+                        primary = sp;
+                    }
+
+                    Map<String, Object> one = new HashMap<>();
+                    one.put("type", type);
+                    one.put("historical_data", sp.historicalData);
+                    one.put("predicted_data", sp.predictedData);
+                    one.put("trend", sp.trend);
+                    one.put("model_metrics", sp.metricsMapAsObject());
+                    seriesData.add(one);
+                } else {
+                    // AI调用失败，使用naive预测作为兜底
+                    System.err.println("AI预测失败，使用naive预测: " + apiResp);
+                    SeriesPrediction sp = naivePredict(dataPoints, predictionDays);
+                    if (type.equals(primaryType)) {
+                        primary = sp;
+                    }
+                    Map<String, Object> one = new HashMap<>();
+                    one.put("type", type);
+                    one.put("historical_data", sp.historicalData);
+                    one.put("predicted_data", sp.predictedData);
+                    one.put("trend", sp.trend);
+                    one.put("model_metrics", sp.metricsMapAsObject());
+                    seriesData.add(one);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                // AI调用异常，使用naive预测作为兜底
+                SeriesPrediction sp = naivePredict(dataPoints, predictionDays);
+                if (type.equals(primaryType)) {
+                    primary = sp;
+                }
+                Map<String, Object> one = new HashMap<>();
+                one.put("type", type);
+                one.put("historical_data", sp.historicalData);
+                one.put("predicted_data", sp.predictedData);
+                one.put("trend", sp.trend);
+                one.put("model_metrics", sp.metricsMapAsObject());
+                seriesData.add(one);
+            }
+        }
+
+        seriesData.sort(Comparator.comparing(m -> (String) m.get("type")));
+
+        if (primary == null) {
+            throw new IllegalArgumentException("文件中没有可用的数据序列");
+        }
+
+        PricePredictionResponseDTO response = new PricePredictionResponseDTO();
+        response.setSeriesData(seriesData);
+        response.setHistoricalData(primary.historicalData);
+        response.setPredictedData(primary.predictedData);
+        response.setModelMetrics(primary.metrics);
+        response.setTrend(primary.trend);
+        response.setCalculationDetails(primary.calculationDetails);
+
+        return response;
+    }
+
+    /**
+     * 解析AI返回的JSON响应
+     */
+    private SeriesPrediction parseAIResponse(String aiResponse, List<Map<String, Object>> historicalData, 
+                                             List<ExcelParser.DataPoint> dataPoints, int predictionDays) {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        SeriesPrediction sp = new SeriesPrediction();
+        sp.historicalData = historicalData;
+
+        System.out.println("========== 开始解析AI响应 ==========");
+        System.out.println("AI响应内容长度: " + aiResponse.length());
+        System.out.println("AI响应前500字符: " + (aiResponse.length() > 500 ? aiResponse.substring(0, 500) : aiResponse));
+
+        // 尝试从AI响应中提取JSON数据
+        // 查找predicted_data数组
+        List<Map<String, Object>> predictedData = new ArrayList<>();
+        String trend = "平稳";
+        Map<String, Double> metrics = new HashMap<>();
+        metrics.put("r_squared", 0.0);
+        metrics.put("mae", 0.0);
+        metrics.put("rmse", 0.0);
+        metrics.put("mape", 0.0);
+        metrics.put("aic", 0.0);
+
+        try {
+            // 查找predicted_data数组
+            int dataIndex = aiResponse.indexOf("\"predicted_data\"");
+            System.out.println("查找predicted_data位置: " + dataIndex);
+            if (dataIndex != -1) {
+                int arrayStart = aiResponse.indexOf("[", dataIndex);
+                System.out.println("找到数组开始位置: " + arrayStart);
+                if (arrayStart != -1) {
+                    int arrayEnd = findMatchingBracket(aiResponse, arrayStart);
+                    System.out.println("找到数组结束位置: " + arrayEnd);
+                    if (arrayEnd != -1) {
+                        String arrayContent = aiResponse.substring(arrayStart + 1, arrayEnd);
+                        System.out.println("数组内容长度: " + arrayContent.length());
+                        System.out.println("数组内容前200字符: " + (arrayContent.length() > 200 ? arrayContent.substring(0, 200) : arrayContent));
+                        // 解析数组中的对象
+                        predictedData = parsePredictedDataArray(arrayContent, dataPoints, predictionDays, sdf);
+                        System.out.println("解析后预测数据数量: " + predictedData.size());
+                    } else {
+                        System.out.println("警告: 未找到数组结束位置");
+                    }
+                } else {
+                    System.out.println("警告: 未找到数组开始位置");
+                }
+            } else {
+                System.out.println("警告: 未找到predicted_data字段");
+            }
+
+            // 查找trend
+            int trendIndex = aiResponse.indexOf("\"trend\"");
+            if (trendIndex != -1) {
+                int colonIndex = aiResponse.indexOf(":", trendIndex);
+                if (colonIndex != -1) {
+                    int quoteStart = aiResponse.indexOf("\"", colonIndex);
+                    if (quoteStart != -1) {
+                        int quoteEnd = aiResponse.indexOf("\"", quoteStart + 1);
+                        if (quoteEnd != -1) {
+                            trend = aiResponse.substring(quoteStart + 1, quoteEnd);
+                        }
+                    }
+                }
+            }
+
+            // 查找model_metrics
+            int metricsIndex = aiResponse.indexOf("\"model_metrics\"");
+            if (metricsIndex != -1) {
+                int objStart = aiResponse.indexOf("{", metricsIndex);
+                if (objStart != -1) {
+                    int objEnd = findMatchingBrace(aiResponse, objStart);
+                    if (objEnd != -1) {
+                        String metricsContent = aiResponse.substring(objStart, objEnd + 1);
+                        metrics = parseMetricsObject(metricsContent);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("解析AI响应时发生异常: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        System.out.println("解析完成 - 预测数据数量: " + predictedData.size() + ", 需要: " + predictionDays);
+
+        // 如果AI没有返回足够的预测数据，使用naive预测补充
+        if (predictedData.size() < predictionDays) {
+            System.out.println("警告: AI返回的预测数据不足，使用naive预测补充");
+            Date lastDate = dataPoints.get(dataPoints.size() - 1).getDate();
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(lastDate);
+            double lastPrice = dataPoints.get(dataPoints.size() - 1).getPrice();
+            
+            for (int i = predictedData.size(); i < predictionDays; i++) {
+                cal.add(Calendar.DAY_OF_MONTH, 1);
+                Map<String, Object> item = new HashMap<>();
+                item.put("date", sdf.format(cal.getTime()));
+                item.put("price", Math.round(lastPrice * 100.0) / 100.0);
+                predictedData.add(item);
+            }
+        }
+
+        sp.predictedData = predictedData;
+        sp.trend = trend;
+        sp.metrics = metrics;
+
+        // 构建计算详情（包含AI输入输出信息，便于前端显示和排查问题）
+        Map<String, Object> calculationDetails = new HashMap<>();
+        calculationDetails.put("model_name", "AI预测模型");
+        calculationDetails.put("prediction_method", "AI商品价格预测专家");
+        
+        // 添加AI输入输出信息
+        Map<String, Object> aiInfo = new HashMap<>();
+        aiInfo.put("historical_data_count", historicalData.size());
+        aiInfo.put("prediction_days", predictionDays);
+        if (historicalData.size() > 0) {
+            aiInfo.put("first_date", historicalData.get(0).get("date"));
+            aiInfo.put("last_date", historicalData.get(historicalData.size() - 1).get("date"));
+            aiInfo.put("first_price", historicalData.get(0).get("price"));
+            aiInfo.put("last_price", historicalData.get(historicalData.size() - 1).get("price"));
+        }
+        aiInfo.put("parsed_predicted_count", predictedData.size());
+        calculationDetails.put("ai_info", aiInfo);
+        
+        sp.calculationDetails = calculationDetails;
+
+        return sp;
+    }
+
+    /**
+     * 解析predicted_data数组
+     */
+    private List<Map<String, Object>> parsePredictedDataArray(String arrayContent, 
+                                                              List<ExcelParser.DataPoint> dataPoints, 
+                                                              int predictionDays, 
+                                                              SimpleDateFormat sdf) {
+        System.out.println("========== 解析predicted_data数组 ==========");
+        System.out.println("数组内容长度: " + arrayContent.length());
+        
+        List<Map<String, Object>> result = new ArrayList<>();
+        Date lastDate = dataPoints.get(dataPoints.size() - 1).getDate();
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(lastDate);
+
+        // 查找所有对象
+        int objStart = 0;
+        int count = 0;
+        while (count < predictionDays && objStart < arrayContent.length()) {
+            int braceStart = arrayContent.indexOf("{", objStart);
+            if (braceStart == -1) {
+                System.out.println("未找到更多对象，已解析 " + count + " 个");
+                break;
+            }
+            
+            int braceEnd = findMatchingBrace(arrayContent, braceStart);
+            if (braceEnd == -1) {
+                System.out.println("未找到对象结束位置");
+                break;
+            }
+
+            String objContent = arrayContent.substring(braceStart + 1, braceEnd);
+            System.out.println("对象 " + (count + 1) + " 内容: " + objContent);
+            
+            // 提取date和price
+            String date = extractStringValue(objContent, "date");
+            String priceStr = extractStringValue(objContent, "price");
+            
+            System.out.println("  提取的date: " + date);
+            System.out.println("  提取的price: " + priceStr);
+            
+            if (date == null || priceStr == null) {
+                System.out.println("  警告: date或price为空，使用默认值");
+                // 如果解析失败，使用递增日期和最后一个价格
+                cal.add(Calendar.DAY_OF_MONTH, 1);
+                date = sdf.format(cal.getTime());
+                priceStr = String.valueOf(dataPoints.get(dataPoints.size() - 1).getPrice());
+            }
+
+            try {
+                double price = Double.parseDouble(priceStr);
+                if (price < 0) {
+                    System.out.println("  警告: 价格为负数，使用最后一个价格");
+                    price = dataPoints.get(dataPoints.size() - 1).getPrice();
+                }
+                
+                Map<String, Object> item = new HashMap<>();
+                item.put("date", date);
+                item.put("price", Math.round(price * 100.0) / 100.0);
+                result.add(item);
+                System.out.println("  成功添加: " + date + " -> " + item.get("price"));
+                
+                // 更新日期
+                try {
+                    Date parsedDate = sdf.parse(date);
+                    cal.setTime(parsedDate);
+                } catch (Exception e) {
+                    System.out.println("  日期解析失败，使用递增日期");
+                    cal.add(Calendar.DAY_OF_MONTH, 1);
+                }
+            } catch (NumberFormatException e) {
+                System.out.println("  价格解析失败: " + e.getMessage() + "，使用最后一个价格");
+                // 价格解析失败，使用最后一个价格
+                cal.add(Calendar.DAY_OF_MONTH, 1);
+                Map<String, Object> item = new HashMap<>();
+                item.put("date", sdf.format(cal.getTime()));
+                item.put("price", Math.round(dataPoints.get(dataPoints.size() - 1).getPrice() * 100.0) / 100.0);
+                result.add(item);
+            }
+
+            objStart = braceEnd + 1;
+            count++;
+        }
+
+        System.out.println("解析完成，共解析 " + result.size() + " 条数据");
+        System.out.println("====================================");
+        return result;
+    }
+
+    /**
+     * 从对象字符串中提取字符串值
+     */
+    private String extractStringValue(String objContent, String key) {
+        int keyIndex = objContent.indexOf("\"" + key + "\"");
+        if (keyIndex == -1) return null;
+        
+        int colonIndex = objContent.indexOf(":", keyIndex);
+        if (colonIndex == -1) return null;
+        
+        // 跳过空白字符
+        int valueStart = colonIndex + 1;
+        while (valueStart < objContent.length() && Character.isWhitespace(objContent.charAt(valueStart))) {
+            valueStart++;
+        }
+        
+        if (valueStart >= objContent.length()) return null;
+        
+        // 检查是否是字符串值（以引号开始）
+        if (objContent.charAt(valueStart) == '"') {
+            int quoteStart = valueStart + 1;
+            int quoteEnd = quoteStart;
+            boolean escape = false;
+            while (quoteEnd < objContent.length()) {
+                char c = objContent.charAt(quoteEnd);
+                if (escape) {
+                    escape = false;
+                } else if (c == '\\') {
+                    escape = true;
+                } else if (c == '"') {
+                    break;
+                }
+                quoteEnd++;
+            }
+            if (quoteEnd < objContent.length()) {
+                return objContent.substring(quoteStart, quoteEnd);
+            }
+        } else {
+            // 可能是数字值，提取到逗号或结束
+            int valueEnd = valueStart;
+            while (valueEnd < objContent.length() && 
+                   objContent.charAt(valueEnd) != ',' && 
+                   objContent.charAt(valueEnd) != '}') {
+                valueEnd++;
+            }
+            return objContent.substring(valueStart, valueEnd).trim();
+        }
+        
+        return null;
+    }
+
+    /**
+     * 解析metrics对象
+     */
+    private Map<String, Double> parseMetricsObject(String metricsContent) {
+        Map<String, Double> metrics = new HashMap<>();
+        metrics.put("r_squared", 0.0);
+        metrics.put("mae", 0.0);
+        metrics.put("rmse", 0.0);
+        metrics.put("mape", 0.0);
+        metrics.put("aic", 0.0);
+
+        String[] keys = {"r_squared", "mae", "rmse", "mape", "aic"};
+        for (String key : keys) {
+            String valueStr = extractStringValue(metricsContent, key);
+            if (valueStr != null) {
+                try {
+                    double value = Double.parseDouble(valueStr);
+                    metrics.put(key, value);
+                } catch (NumberFormatException e) {
+                    // 忽略解析错误
+                }
+            }
+        }
+
+        return metrics;
+    }
+
+    /**
+     * 查找匹配的右括号
+     */
+    private int findMatchingBracket(String str, int start) {
+        int depth = 0;
+        for (int i = start; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (c == '[') depth++;
+            else if (c == ']') {
+                depth--;
+                if (depth == 0) return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 查找匹配的右花括号
+     */
+    private int findMatchingBrace(String str, int start) {
+        int depth = 0;
+        for (int i = start; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (c == '{') depth++;
+            else if (c == '}') {
+                depth--;
+                if (depth == 0) return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 提取AI响应中的第一条消息内容
+     */
+    private String extractFirstMessageContent(String json) {
+        if (json == null || json.isEmpty()) {
+            return "";
+        }
+        try {
+            int contentIndex = json.indexOf("\"content\"");
+            if (contentIndex == -1) {
+                return json;
+            }
+
+            int firstQuote = json.indexOf('"', contentIndex + 9);
+            if (firstQuote == -1) {
+                return json;
+            }
+            StringBuilder sb = new StringBuilder();
+            boolean escape = false;
+            for (int i = firstQuote + 1; i < json.length(); i++) {
+                char c = json.charAt(i);
+                if (escape) {
+                    switch (c) {
+                        case 'n':
+                            sb.append('\n');
+                            break;
+                        case 'r':
+                            sb.append('\r');
+                            break;
+                        case 't':
+                            sb.append('\t');
+                            break;
+                        case '"':
+                            sb.append('"');
+                            break;
+                        case '\\':
+                            sb.append('\\');
+                            break;
+                        default:
+                            sb.append(c);
+                            break;
+                    }
+                    escape = false;
+                } else {
+                    if (c == '\\') {
+                        escape = true;
+                    } else if (c == '"') {
+                        break;
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+            String result = sb.toString().trim();
+            if (result.isEmpty()) {
+                return json;
+            }
+            return result;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return json;
+        }
+    }
+
+    /**
+     * JSON转义
+     */
+    private String escapeJson(String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (char c : text.toCharArray()) {
+            switch (c) {
+                case '"':
+                    sb.append("\\\"");
+                    break;
+                case '\\':
+                    sb.append("\\\\");
+                    break;
+                case '\b':
+                    sb.append("\\b");
+                    break;
+                case '\f':
+                    sb.append("\\f");
+                    break;
+                case '\n':
+                    sb.append("\\n");
+                    break;
+                case '\r':
+                    sb.append("\\r");
+                    break;
+                case '\t':
+                    sb.append("\\t");
+                    break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        return sb.toString();
     }
 }
 

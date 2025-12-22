@@ -120,7 +120,27 @@
 
          <div class="form-group">
            <label class="form-label">预测模型</label>
-           <div class="model-info-box">
+           <div class="model-selector">
+             <label class="radio-option">
+               <input 
+                 type="radio" 
+                 v-model="modelType" 
+                 value="timeseries"
+                 class="radio-input"
+               />
+               <span class="radio-label">ARIMA模型</span>
+             </label>
+             <label class="radio-option">
+               <input 
+                 type="radio" 
+                 v-model="modelType" 
+                 value="ai"
+                 class="radio-input"
+               />
+               <span class="radio-label">AI预测</span>
+             </label>
+           </div>
+           <div class="model-info-box" v-if="modelType === 'timeseries'">
             <div class="model-badge">ARIMA模型（自回归综合移动平均模型）</div>
              <p class="model-description">
               系统使用<strong>ARIMA（AutoRegressive Integrated Moving Average）</strong>自回归综合移动平均模型进行价格预测。
@@ -129,6 +149,14 @@
               通过<strong>移动平均(MA)</strong>捕捉误差项的影响。对于具有季节性的数据，系统会自动检测并应用<strong>SARIMA（季节性ARIMA）</strong>模型。
               系统会基于留出集回测（holdout）自动选择最优的参数组合（p, d, q），并保留"持平外推(naive)"作为基线对比。
               ARIMA模型能够更准确地捕捉时间序列的内在规律，提供更可靠的预测结果。
+             </p>
+           </div>
+           <div class="model-info-box" v-if="modelType === 'ai'">
+            <div class="model-badge">AI预测模型</div>
+             <p class="model-description">
+              系统使用<strong>AI商品价格预测专家</strong>进行价格预测。AI模型基于深度学习和大数据分析，
+              能够综合分析历史价格数据、市场趋势、季节性因素等多种信息，提供智能化的价格预测。
+              AI模型能够识别复杂的价格模式和非线性关系，对于波动较大的商品价格具有更好的适应性。
              </p>
            </div>
          </div>
@@ -216,18 +244,75 @@
             </div>
           </div>
 
-          <!-- 详细计算过程 -->
+          <!-- AI预测详情 / 详细计算过程 -->
           <div class="calculation-card">
             <h3 class="calculation-title" @click="toggleCalculationDetails">
-              <span>详细计算过程</span>
+              <span>{{ modelType === 'ai' ? 'AI预测详情' : '详细计算过程' }}</span>
               <span class="toggle-icon">{{ showCalculationDetails ? '▼' : '▶' }}</span>
             </h3>
             
             <div v-if="showCalculationDetails" class="calculation-content">
               <div v-if="!predictionResult.calculation_details" class="calculation-info">
-                <p style="color: var(--gray-500);">计算详情正在加载中...</p>
+                <p style="color: var(--gray-500);">详情正在加载中...</p>
               </div>
               
+              <!-- AI预测详情 -->
+              <template v-else-if="modelType === 'ai' && predictionResult.calculation_details">
+                <div class="calculation-section">
+                  <h4 class="section-subtitle">AI预测信息</h4>
+                  <div class="calculation-info">
+                    <p><strong>模型名称：</strong>{{ predictionResult.calculation_details.model_name || 'AI预测模型' }}</p>
+                    <p><strong>预测方法：</strong>{{ predictionResult.calculation_details.prediction_method || 'AI商品价格预测专家' }}</p>
+                    
+                    <div v-if="predictionResult.calculation_details.ai_info" class="formula-box">
+                      <p><strong>历史数据信息：</strong></p>
+                      <p>数据点数：{{ predictionResult.calculation_details.ai_info.historical_data_count }}</p>
+                      <p>起始日期：{{ predictionResult.calculation_details.ai_info.first_date }}</p>
+                      <p>结束日期：{{ predictionResult.calculation_details.ai_info.last_date }}</p>
+                      <p>起始价格：¥{{ predictionResult.calculation_details.ai_info.first_price }}</p>
+                      <p>结束价格：¥{{ predictionResult.calculation_details.ai_info.last_price }}</p>
+                      <p><strong>预测信息：</strong></p>
+                      <p>预测天数：{{ predictionResult.calculation_details.ai_info.prediction_days }}</p>
+                      <p>解析的预测数据点数：{{ predictionResult.calculation_details.ai_info.parsed_predicted_count }}</p>
+                    </div>
+                    
+                    <div v-if="predictionResult.predicted_data && predictionResult.predicted_data.length > 0" class="formula-box" style="margin-top: var(--spacing-4);">
+                      <p><strong>预测数据预览（前10条）：</strong></p>
+                      <table class="preview-table" style="width: 100%; margin-top: var(--spacing-2);">
+                        <thead>
+                          <tr>
+                            <th>日期</th>
+                            <th>预测价格</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(item, index) in predictionResult.predicted_data.slice(0, 10)" :key="index">
+                            <td>{{ item.date }}</td>
+                            <td>¥{{ item.price }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <p v-if="predictionResult.predicted_data.length > 10" style="margin-top: var(--spacing-2); color: var(--gray-500);">
+                        共{{ predictionResult.predicted_data.length }}条预测数据，仅显示前10条
+                      </p>
+                    </div>
+                    
+                    <div class="formula-box" style="margin-top: var(--spacing-4); background: #fff3cd; border-left-color: #ffc107;">
+                      <p><strong>⚠️ 排查提示：</strong></p>
+                      <p>如需查看详细的AI输入输出日志，请查看后端控制台输出。</p>
+                      <p>如果预测结果异常（如所有值相同），请检查：</p>
+                      <ul style="margin-left: var(--spacing-4); margin-top: var(--spacing-2);">
+                        <li>AI返回的JSON格式是否正确</li>
+                        <li>predicted_data数组是否被正确解析</li>
+                        <li>价格数值是否被正确提取</li>
+                        <li>查看后端日志中的"AI预测输入日志"和"AI响应解析日志"</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              
+              <!-- ARIMA模型详细计算过程 -->
               <template v-else>
                 <!-- 数据预处理 -->
                 <div v-if="predictionResult.calculation_details.preprocessing" class="calculation-section">
@@ -384,7 +469,7 @@ export default {
     const uploading = ref(false);
     const predicting = ref(false);
     const predictionDays = ref(30);
-    const modelType = ref('timeseries'); // 固定使用时间序列模型
+    const modelType = ref('timeseries'); // 支持timeseries和ai两种模型
     const predictionResult = ref(null);
     const errorMessage = ref('');
     const showCalculationDetails = ref(false);
@@ -1196,6 +1281,51 @@ export default {
    color: var(--gray-600);
    line-height: var(--leading-relaxed);
    margin: 0;
+ }
+
+ .model-selector {
+   display: flex;
+   gap: var(--spacing-4);
+   margin-bottom: var(--spacing-4);
+ }
+
+ .radio-option {
+   display: flex;
+   align-items: center;
+   gap: var(--spacing-2);
+   padding: var(--spacing-3) var(--spacing-4);
+   border: 2px solid var(--gray-300);
+   border-radius: var(--radius-md);
+   cursor: pointer;
+   transition: all 0.2s;
+   background: var(--white);
+ }
+
+ .radio-option:hover {
+   border-color: var(--primary);
+   background: var(--primary-light);
+ }
+
+ .radio-option input[type="radio"]:checked + .radio-label {
+   color: var(--primary);
+   font-weight: var(--font-semibold);
+ }
+
+ .radio-option:has(input[type="radio"]:checked) {
+   border-color: var(--primary);
+   background: var(--primary-light);
+ }
+
+ .radio-input {
+   margin: 0;
+   cursor: pointer;
+ }
+
+ .radio-label {
+   font-size: var(--font-base);
+   color: var(--gray-700);
+   cursor: pointer;
+   user-select: none;
  }
 
 .action-buttons {

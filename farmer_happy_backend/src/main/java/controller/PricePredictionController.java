@@ -71,8 +71,11 @@ public class PricePredictionController {
             }
             
             int predictionDays = request.getPredictionDays() != null ? request.getPredictionDays() : 30;
-            // 统一使用时间序列模型，忽略用户指定的modelType
-            String modelType = "timeseries";
+            // 支持timeseries和ai两种模型类型
+            String modelType = request.getModelType() != null ? request.getModelType() : "timeseries";
+            if (!"timeseries".equals(modelType) && !"ai".equals(modelType)) {
+                modelType = "timeseries"; // 默认使用timeseries
+            }
             
             PricePredictionResponseDTO result = pricePredictionService.predict(
                 request.getFileId(),
