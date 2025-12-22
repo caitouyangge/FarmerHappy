@@ -718,11 +718,11 @@ export default {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 1.25rem 2rem;
+  padding: var(--spacing-5) var(--spacing-8);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 4px 20px rgba(107, 70, 193, 0.08);
+  box-shadow: var(--shadow-card);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -732,7 +732,7 @@ export default {
 .user-info {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: var(--spacing-5);
 }
 
 .avatar-wrapper {
@@ -742,15 +742,15 @@ export default {
 .avatar {
   width: 56px;
   height: 56px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
   color: var(--white);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.375rem;
-  font-weight: 700;
-  box-shadow: 0 4px 16px rgba(107, 70, 193, 0.3);
+  font-size: var(--font-xl);
+  font-weight: var(--font-bold);
+  box-shadow: var(--shadow-lg);
   position: relative;
   z-index: 2;
   transition: transform 0.3s ease;
@@ -762,11 +762,11 @@ export default {
 
 .avatar-ring {
   position: absolute;
-  top: -4px;
-  left: -4px;
-  right: -4px;
-  bottom: -4px;
-  border-radius: 50%;
+  top: calc(-1 * var(--spacing-1));
+  left: calc(-1 * var(--spacing-1));
+  right: calc(-1 * var(--spacing-1));
+  bottom: calc(-1 * var(--spacing-1));
+  border-radius: var(--radius-full);
   border: 2px solid rgba(107, 70, 193, 0.2);
   animation: pulse-ring 2s ease-out infinite;
 }
@@ -785,85 +785,85 @@ export default {
 .user-details {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .user-name-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .user-name {
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: #1a202c;
+  font-size: var(--font-lg);
+  font-weight: var(--font-bold);
+  color: var(--gray-900);
   letter-spacing: -0.01em;
 }
 
 .user-role-badge {
   display: inline-block;
-  padding: 0.25rem 0.75rem;
+  padding: var(--spacing-1) var(--spacing-3);
   background: linear-gradient(135deg, rgba(107, 70, 193, 0.1) 0%, rgba(159, 122, 234, 0.1) 100%);
   color: var(--primary);
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 12px;
+  font-size: var(--font-xs);
+  font-weight: var(--font-semibold);
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(107, 70, 193, 0.2);
 }
 
 .user-meta {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-4);
   flex-wrap: wrap;
 }
 
 .user-phone {
-  font-size: 0.8125rem;
+  font-size: var(--font-sm);
   color: var(--gray-600);
-  font-weight: 500;
+  font-weight: var(--font-medium);
   letter-spacing: 0.02em;
 }
 
 .user-balance {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.875rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-1) var(--spacing-3);
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .balance-label {
   color: var(--gray-600);
-  font-weight: 500;
-  font-size: 0.75rem;
+  font-weight: var(--font-medium);
+  font-size: var(--font-xs);
 }
 
 .balance-amount {
-  color: #10b981;
-  font-weight: 700;
-  font-size: 0.875rem;
+  color: var(--success);
+  font-weight: var(--font-bold);
+  font-size: var(--font-sm);
 }
 
 .balance-loading {
   color: var(--gray-500);
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
 }
 
 .btn-logout {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0.75rem 1.5rem;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-6);
   background: transparent;
   border: 1.5px solid var(--gray-300);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--gray-600);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: var(--font-sm);
+  font-weight: var(--font-semibold);
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -873,7 +873,7 @@ export default {
   border-color: var(--primary);
   color: var(--primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.15);
+  box-shadow: var(--shadow-md);
 }
 
 .logout-icon {
@@ -888,7 +888,7 @@ export default {
 
 /* 主内容区域 */
 .main-content {
-  padding: 1.5rem 2rem;
+  padding: var(--spacing-6) var(--spacing-8);
   position: relative;
   z-index: 1;
 }
@@ -915,10 +915,10 @@ export default {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.95) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 1.5rem 2rem;
-  border-radius: 18px;
-  box-shadow: 0 4px 24px rgba(107, 70, 193, 0.1), 0 0 0 1px rgba(107, 70, 193, 0.05);
-  margin-bottom: 1.5rem;
+  padding: var(--spacing-6) var(--spacing-8);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  margin-bottom: var(--spacing-6);
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(107, 70, 193, 0.08);
@@ -942,12 +942,12 @@ export default {
 .welcome-greeting {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-2);
 }
 
 .greeting-icon {
-  font-size: 1.75rem;
+  font-size: var(--font-2xl);
   animation: wave 2s ease-in-out infinite;
   transform-origin: 70% 70%;
 }
@@ -961,23 +961,23 @@ export default {
 }
 
 .welcome-title {
-  font-size: 1.75rem;
-  font-weight: 800;
+  font-size: var(--font-2xl);
+  font-weight: var(--font-extrabold);
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin: 0;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: var(--leading-tight);
 }
 
 .welcome-subtitle {
-  font-size: 0.9375rem;
+  font-size: var(--font-base);
   color: var(--gray-600);
   margin: 0;
-  line-height: 1.5;
-  font-weight: 500;
+  line-height: var(--leading-normal);
+  font-weight: var(--font-medium);
 }
 
 .welcome-decoration {
@@ -1029,42 +1029,42 @@ export default {
 
 /* 功能模块区域 */
 .modules-section {
-  margin-top: 1.5rem;
+  margin-top: var(--spacing-6);
   position: relative;
 }
 
 .section-title {
-  font-size: 1.625rem;
-  font-weight: 700;
-  color: #1a202c;
-  margin-bottom: 1.75rem;
+  font-size: var(--font-2xl);
+  font-weight: var(--font-bold);
+  color: var(--gray-900);
+  margin-bottom: var(--spacing-6);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   letter-spacing: -0.01em;
 }
 
 .section-title::before {
   content: '';
-  width: 4px;
+  width: var(--spacing-1);
   height: 22px;
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-  border-radius: 2px;
+  border-radius: var(--spacing-1);
 }
 
 .modules-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1.25rem;
+  gap: var(--spacing-5);
 }
 
 .module-card {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.95) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 1.75rem 1.5rem;
-  border-radius: 18px;
-  box-shadow: 0 2px 16px rgba(107, 70, 193, 0.08), 0 0 0 1px rgba(107, 70, 193, 0.05);
+  padding: var(--spacing-6) var(--spacing-6);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -1105,7 +1105,7 @@ export default {
 
 .module-card:hover {
   transform: translateY(-6px);
-  box-shadow: 0 12px 32px rgba(107, 70, 193, 0.15), 0 0 0 1px rgba(107, 70, 193, 0.1);
+  box-shadow: var(--shadow-card-hover);
   border-color: rgba(107, 70, 193, 0.2);
 }
 
@@ -1115,7 +1115,7 @@ export default {
 
 .module-icon-wrapper {
   position: relative;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-4);
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -1123,7 +1123,7 @@ export default {
 }
 
 .module-icon {
-  font-size: 2rem;
+  font-size: var(--font-2xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1131,7 +1131,7 @@ export default {
   z-index: 2;
   width: 56px;
   height: 56px;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: linear-gradient(135deg, rgba(107, 70, 193, 0.08) 0%, rgba(159, 122, 234, 0.08) 100%);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.05));
@@ -1145,7 +1145,7 @@ export default {
   width: 56px;
   height: 56px;
   background: radial-gradient(circle, rgba(107, 70, 193, 0.15) 0%, transparent 70%);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   opacity: 0;
   transition: opacity 0.4s ease, transform 0.4s ease, width 0.4s ease, height 0.4s ease;
   z-index: 1;
@@ -1173,13 +1173,13 @@ export default {
 }
 
 .module-name {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1a202c;
-  margin: 0 0 0.625rem 0;
+  font-size: var(--font-xl);
+  font-weight: var(--font-bold);
+  color: var(--gray-900);
+  margin: 0 0 var(--spacing-2) 0;
   letter-spacing: -0.01em;
   transition: color 0.3s ease;
-  line-height: 1.3;
+  line-height: var(--leading-tight);
 }
 
 .module-card:hover .module-name {
@@ -1187,9 +1187,9 @@ export default {
 }
 
 .module-desc {
-  font-size: 0.875rem;
+  font-size: var(--font-sm);
   color: var(--gray-600);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
   margin: 0;
   transition: color 0.3s ease;
 }
@@ -1200,15 +1200,15 @@ export default {
 
 .module-arrow {
   position: absolute;
-  bottom: 1.5rem;
-  right: 1.5rem;
+  bottom: var(--spacing-6);
+  right: var(--spacing-6);
   width: 26px;
   height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(107, 70, 193, 0.08);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: var(--primary);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1;
@@ -1220,33 +1220,33 @@ export default {
 }
 
 .module-card:hover .module-arrow {
-  transform: translateX(4px);
+  transform: translateX(var(--spacing-1));
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
   color: var(--white);
-  box-shadow: 0 2px 8px rgba(107, 70, 193, 0.25);
+  box-shadow: var(--shadow-md);
 }
 
 /* 广告轮播区域 */
 .ad-banner-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .ad-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding: 0 0.5rem;
+  margin-bottom: var(--spacing-4);
+  padding: 0 var(--spacing-2);
 }
 
 .ad-header-left {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
 }
 
 .ad-badge {
-  font-size: 1.5rem;
+  font-size: var(--font-2xl);
   animation: pulse 2s ease-in-out infinite;
 }
 
@@ -1256,9 +1256,9 @@ export default {
 }
 
 .ad-section-title {
-  font-size: 1.375rem;
-  font-weight: 800;
-  color: #1a202c;
+  font-size: var(--font-xl);
+  font-weight: var(--font-extrabold);
+  color: var(--gray-900);
   margin: 0;
   background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
   -webkit-background-clip: text;
@@ -1268,16 +1268,16 @@ export default {
 }
 
 .ad-subtitle {
-  font-size: 0.875rem;
+  font-size: var(--font-sm);
   color: var(--gray-500);
 }
 
 .ad-loading {
   background: var(--white);
-  padding: 3rem;
-  border-radius: 20px;
+  padding: var(--spacing-12);
+  border-radius: var(--radius-2xl);
   text-align: center;
-  box-shadow: 0 4px 20px rgba(107, 70, 193, 0.1);
+  box-shadow: var(--shadow-card);
 }
 
 .loading-spinner {
@@ -1296,8 +1296,8 @@ export default {
 
 .ad-carousel {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(107, 70, 193, 0.25);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card-elevated);
   overflow: hidden;
   position: relative;
   border: 3px solid rgba(255, 255, 255, 0.2);
@@ -1329,16 +1329,16 @@ export default {
 
 .ad-badge-hot {
   position: absolute;
-  top: 1rem;
-  left: 1rem;
+  top: var(--spacing-4);
+  left: var(--spacing-4);
   background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
   color: white;
-  padding: 0.375rem 0.75rem;
-  border-radius: 16px;
-  font-size: 0.6875rem;
-  font-weight: 700;
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-xl);
+  font-size: var(--font-xs);
+  font-weight: var(--font-bold);
   z-index: 10;
-  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+  box-shadow: var(--shadow-md);
   animation: bounce 2s ease-in-out infinite;
 }
 
@@ -1439,7 +1439,7 @@ export default {
 
 .ad-content {
   flex: 1;
-  padding: 1.5rem;
+  padding: var(--spacing-6);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1457,29 +1457,29 @@ export default {
   display: inline-block;
   background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
   color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 10px;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  margin-bottom: 0.75rem;
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--spacing-3);
   width: fit-content;
-  box-shadow: 0 2px 8px rgba(107, 70, 193, 0.3);
+  box-shadow: var(--shadow-sm);
 }
 
 .ad-title {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #1a202c;
-  margin: 0 0 0.5rem 0;
-  line-height: 1.2;
+  font-size: var(--font-2xl);
+  font-weight: var(--font-extrabold);
+  color: var(--gray-900);
+  margin: 0 0 var(--spacing-2) 0;
+  line-height: var(--leading-tight);
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
   .ad-description {
-    font-size: 0.875rem;
+    font-size: var(--font-sm);
     color: var(--gray-600);
-    line-height: 1.5;
-    margin: 0 0 1rem 0;
+    line-height: var(--leading-normal);
+    margin: 0 0 var(--spacing-4) 0;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -1492,20 +1492,20 @@ export default {
 .ad-price-section {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-4);
 }
 
 .ad-price-label {
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   color: var(--gray-500);
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 .ad-price {
-  font-size: 1.75rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  font-size: var(--font-3xl);
+  font-weight: var(--font-extrabold);
+  background: linear-gradient(135deg, var(--success) 0%, var(--success-dark) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1515,21 +1515,21 @@ export default {
 .ad-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--spacing-1);
   background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
   color: white;
-  padding: 0.625rem 1.25rem;
-  border-radius: 10px;
-  font-size: 0.875rem;
-  font-weight: 600;
+  padding: var(--spacing-2) var(--spacing-5);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: var(--font-semibold);
   width: fit-content;
-  box-shadow: 0 4px 16px rgba(107, 70, 193, 0.4);
+  box-shadow: var(--shadow-lg);
   transition: all 0.3s ease;
 }
 
 .ad-action-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(107, 70, 193, 0.5);
+  box-shadow: var(--shadow-xl);
 }
 
 .btn-text {
@@ -1542,20 +1542,20 @@ export default {
 }
 
 .ad-action-btn:hover .btn-arrow {
-  transform: translateX(4px);
+  transform: translateX(var(--spacing-1));
 }
 
 .carousel-indicators {
   position: absolute;
-  bottom: 1.5rem;
+  bottom: var(--spacing-6);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 0.75rem;
+  gap: var(--spacing-3);
   z-index: 10;
   background: rgba(0, 0, 0, 0.2);
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-2xl);
   backdrop-filter: blur(10px);
 }
 
@@ -1618,10 +1618,10 @@ export default {
 
 .ad-empty {
   background: var(--white);
-  padding: 3rem;
-  border-radius: 16px;
+  padding: var(--spacing-12);
+  border-radius: var(--radius-xl);
   text-align: center;
-  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.08);
+  box-shadow: var(--shadow-card);
   color: var(--gray-500);
 }
 

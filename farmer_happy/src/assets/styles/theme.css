@@ -1,17 +1,161 @@
 :root {
+    /* ========== 颜色系统 ========== */
+    /* 主色调 */
     --primary: #6B46C1;
     --primary-light: #9F7AEA;
     --primary-dark: #553C9A;
+    
+    /* 中性色 */
     --white: #FFFFFF;
-    --gray-100: #F7FAFC;
-    --gray-200: #EDF2F7;
-    --gray-300: #E2E8F0;
-    --gray-400: #CBD5E0;
-    --gray-500: #A0AEC0;
-    --error: #E53E3E;
-    --success: #48BB78;
+    --gray-50: #F9FAFB;
+    --gray-100: #F3F4F6;
+    --gray-200: #E5E7EB;
+    --gray-300: #D1D5DB;
+    --gray-400: #9CA3AF;
+    --gray-500: #6B7280;
+    --gray-600: #4B5563;
+    --gray-700: #374151;
+    --gray-800: #1F2937;
+    --gray-900: #111827;
+    
+    /* 语义色 */
+    --error: #EF4444;
+    --error-light: #FEE2E2;
+    --error-dark: #DC2626;
+    --success: #10B981;
+    --success-light: #D1FAE5;
+    --success-dark: #059669;
+    --warning: #F59E0B;
+    --warning-light: #FEF3C7;
+    --warning-dark: #D97706;
+    --info: #3B82F6;
+    --info-light: #DBEAFE;
+    --info-dark: #2563EB;
+    
+    /* ========== 间距系统（4px基准） ========== */
+    --spacing-1: 4px;    /* 0.25rem */
+    --spacing-2: 8px;    /* 0.5rem */
+    --spacing-3: 12px;   /* 0.75rem */
+    --spacing-4: 16px;   /* 1rem */
+    --spacing-5: 20px;   /* 1.25rem */
+    --spacing-6: 24px;   /* 1.5rem */
+    --spacing-8: 32px;   /* 2rem */
+    --spacing-10: 40px;  /* 2.5rem */
+    --spacing-12: 48px;  /* 3rem */
+    --spacing-16: 64px;  /* 4rem */
+    
+    /* ========== 圆角系统（4px基准） ========== */
+    --radius-sm: 4px;    /* 0.25rem - 小元素 */
+    --radius-md: 8px;     /* 0.5rem - 按钮、输入框 */
+    --radius-lg: 12px;    /* 0.75rem - 卡片 */
+    --radius-xl: 16px;    /* 1rem - 大卡片 */
+    --radius-2xl: 20px;   /* 1.25rem - 特殊卡片 */
+    --radius-3xl: 24px;   /* 1.5rem - 超大卡片 */
+    --radius-full: 9999px; /* 圆形 */
+    
+    /* ========== 阴影系统 ========== */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    
+    /* 卡片专用阴影（主色调） */
+    --shadow-card: 0 4px 12px rgba(107, 70, 193, 0.08), 0 0 0 1px rgba(107, 70, 193, 0.05);
+    --shadow-card-hover: 0 12px 32px rgba(107, 70, 193, 0.15), 0 0 0 1px rgba(107, 70, 193, 0.1);
+    --shadow-card-elevated: 0 20px 40px rgba(107, 70, 193, 0.12), 0 0 0 1px rgba(107, 70, 193, 0.08);
+    
+    /* ========== 字体大小层级（4px基准） ========== */
+    --font-xs: 12px;      /* 0.75rem - 辅助文字 */
+    --font-sm: 14px;      /* 0.875rem - 小号文字 */
+    --font-base: 16px;    /* 1rem - 基础文字 */
+    --font-lg: 18px;      /* 1.125rem - 大号文字 */
+    --font-xl: 20px;     /* 1.25rem - 标题 */
+    --font-2xl: 24px;     /* 1.5rem - 大标题 */
+    --font-3xl: 30px;     /* 1.875rem - 超大标题 */
+    --font-4xl: 36px;     /* 2.25rem - 特大标题 */
+    
+    /* 字体粗细 */
+    --font-normal: 400;
+    --font-medium: 500;
+    --font-semibold: 600;
+    --font-bold: 700;
+    --font-extrabold: 800;
+    
+    /* 行高 */
+    --leading-tight: 1.25;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.75;
 }
 
+/* ========== 工具类 ========== */
+/* 卡片基础样式 */
+.card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: var(--spacing-6);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: var(--shadow-card-hover);
+}
+
+.card-elevated {
+    box-shadow: var(--shadow-card-elevated);
+}
+
+/* 按钮基础样式 */
+.btn {
+    padding: var(--spacing-3) var(--spacing-4);
+    border-radius: var(--radius-md);
+    font-size: var(--font-base);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    color: var(--white);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-dark);
+}
+
+.btn-secondary {
+    background-color: var(--gray-200);
+    color: var(--gray-700);
+}
+
+.btn-secondary:hover {
+    background-color: var(--gray-300);
+}
+
+/* 输入框基础样式 */
+.form-input {
+    width: 100%;
+    padding: var(--spacing-3);
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-md);
+    font-size: var(--font-base);
+    transition: all 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.1);
+}
+
+/* ========== 原有样式（更新为使用新变量） ========== */
 .auth-container {
     min-height: 100vh;
     display: flex;
@@ -22,83 +166,50 @@
 
 .auth-card {
     background: var(--white);
-    border-radius: 12px;
-    padding: 2rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-8);
+    box-shadow: var(--shadow-card);
     width: 100%;
     max-width: 400px;
 }
 
 .auth-title {
     color: var(--primary);
-    font-size: 1.5rem;
-    font-weight: 600;
+    font-size: var(--font-2xl);
+    font-weight: var(--font-semibold);
     text-align: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: var(--spacing-6);
 }
 
 .form-group {
-    margin-bottom: 1rem;
+    margin-bottom: var(--spacing-4);
 }
 
 .form-label {
     display: block;
-    margin-bottom: 0.5rem;
-    color: var(--gray-500);
-    font-size: 0.875rem;
-}
-
-.form-input {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid var(--gray-300);
-    border-radius: 6px;
-    font-size: 1rem;
-    transition: all 0.2s;
-}
-
-.form-input:focus {
-    outline: none;
-    border-color: var(--primary-light);
-    box-shadow: 0 0 0 3px rgba(159, 122, 234, 0.2);
+    margin-bottom: var(--spacing-2);
+    color: var(--gray-600);
+    font-size: var(--font-sm);
+    font-weight: var(--font-medium);
 }
 
 .form-error {
     color: var(--error);
-    font-size: 0.875rem;
-    margin-top: 0.25rem;
-}
-
-.btn {
-    width: 100%;
-    padding: 0.75rem;
-    border: none;
-    border-radius: 6px;
-    font-size: 1rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-primary {
-    background-color: var(--primary);
-    color: var(--white);
-}
-
-.btn-primary:hover {
-    background-color: var(--primary-dark);
+    font-size: var(--font-sm);
+    margin-top: var(--spacing-1);
 }
 
 .auth-switch {
     text-align: center;
-    margin-top: 1rem;
+    margin-top: var(--spacing-4);
     color: var(--gray-500);
+    font-size: var(--font-sm);
 }
 
 .auth-switch a {
     color: var(--primary);
     text-decoration: none;
-    font-weight: 500;
+    font-weight: var(--font-medium);
 }
 
 .auth-switch a:hover {
