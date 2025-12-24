@@ -703,7 +703,13 @@ public class FinancingService {
                 throw new IllegalArgumentException("您当前无可用贷款额度");
             }
 
-            // 检查可用额度是否足够
+            // 检查用户的信用额度是否满足产品的最低信用额度要求
+            if (farmerCreditLimit.getAvailableLimit().compareTo(loanProduct.getMinCreditLimit()) < 0) {
+                throw new IllegalArgumentException("您的可用额度" + farmerCreditLimit.getAvailableLimit() + 
+                        "元低于产品最低额度要求" + loanProduct.getMinCreditLimit() + "元，无法申请该产品");
+            }
+
+            // 检查申请金额是否超过用户可用额度
             if (request.getApply_amount().compareTo(farmerCreditLimit.getAvailableLimit()) > 0) {
                 throw new IllegalArgumentException("申请金额" + request.getApply_amount() + "元超过可用额度" +
                         farmerCreditLimit.getAvailableLimit() + "元，请先申请提高额度或减少申请金额");
@@ -792,10 +798,16 @@ public class FinancingService {
                 throw new IllegalArgumentException("您当前无可用贷款额度");
             }
 
+            // 检查发起者的信用额度是否满足产品的最低信用额度要求
+            if (initiatorCreditLimit.getAvailableLimit().compareTo(loanProduct.getMinCreditLimit()) < 0) {
+                throw new IllegalArgumentException("您的可用额度" + initiatorCreditLimit.getAvailableLimit() + 
+                        "元低于产品最低额度要求" + loanProduct.getMinCreditLimit() + "元，无法申请该产品");
+            }
+
             // 计算发起者应承担的份额（平均分配）
             BigDecimal shareAmount = request.getApply_amount().divide(BigDecimal.valueOf(request.getPartner_phones().size() + 1), 2, BigDecimal.ROUND_HALF_UP);
 
-            // 检查发起者额度是否足够
+            // 检查发起者额度是否足够承担其份额
             if (shareAmount.compareTo(initiatorCreditLimit.getAvailableLimit()) > 0) {
                 throw new IllegalArgumentException("您当前可用额度" + initiatorCreditLimit.getAvailableLimit() +
                         "元，不足以承担联合贷款" + shareAmount + "元的份额，请先申请提高额度");
@@ -819,6 +831,18 @@ public class FinancingService {
                 CreditLimit partnerCreditLimit = getCreditLimitByFarmerId(((Long) partnerFarmerInfo.get("farmer_id")).longValue());
                 if (partnerCreditLimit == null || !"active".equals(partnerCreditLimit.getStatus())) {
                     throw new IllegalArgumentException("伙伴" + partnerPhone + "无可用贷款额度，无法参与联合贷款");
+                }
+
+                // 检查伙伴的信用额度是否满足产品的最低信用额度要求
+                if (partnerCreditLimit.getAvailableLimit().compareTo(loanProduct.getMinCreditLimit()) < 0) {
+                    throw new IllegalArgumentException("伙伴" + partnerPhone + "的可用额度" + partnerCreditLimit.getAvailableLimit() + 
+                            "元低于产品最低额度要求" + loanProduct.getMinCreditLimit() + "元，无法参与联合贷款");
+                }
+
+                // 检查伙伴的额度是否足够承担其份额
+                if (shareAmount.compareTo(partnerCreditLimit.getAvailableLimit()) > 0) {
+                    throw new IllegalArgumentException("伙伴" + partnerPhone + "的可用额度" + partnerCreditLimit.getAvailableLimit() +
+                            "元，不足以承担联合贷款" + shareAmount + "元的份额");
                 }
 
                 // 检查伙伴是否有待审批的联合贷款申请
@@ -1016,11 +1040,17 @@ public class FinancingService {
                 throw new IllegalArgumentException("您当前无可用贷款额度");
             }
 
+            // 检查用户的信用额度是否满足产品的最低信用额度要求
+            if (farmerCreditLimit.getAvailableLimit().compareTo(loanProduct.getMinCreditLimit()) < 0) {
+                throw new IllegalArgumentException("您的可用额度" + farmerCreditLimit.getAvailableLimit() + 
+                        "元低于产品最低额度要求" + loanProduct.getMinCreditLimit() + "元，无法申请该产品");
+            }
+
             SmartLoanRecommendationResponseDTO response = new SmartLoanRecommendationResponseDTO();
             response.setUser_available_limit(farmerCreditLimit.getAvailableLimit());
             response.setApply_amount(request.getApply_amount());
 
-            // 检查个人额度是否足够
+            // 检查申请金额是否超过用户可用额度
             if (request.getApply_amount().compareTo(farmerCreditLimit.getAvailableLimit()) <= 0) {
                 // 个人额度足够，推荐单人贷款
                 response.setRecommendation_type("single");
