@@ -2678,6 +2678,56 @@ public class DatabaseManager {
     }
 
     /**
+     * 根据手机号获取买家信息
+     */
+    public Map<String, Object> getBuyerInfoByPhone(String phone) throws SQLException {
+        Connection conn = getConnection();
+        Map<String, Object> buyerInfo = null;
+        try {
+            String sql = "SELECT ub.* FROM user_buyers ub " +
+                    "JOIN users u ON ub.uid = u.uid " +
+                    "WHERE u.phone = ? AND ub.enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, phone);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                buyerInfo = new HashMap<>();
+                buyerInfo.put("buyer_id", rs.getLong("buyer_id"));
+                buyerInfo.put("uid", rs.getString("uid"));
+                buyerInfo.put("shipping_address", rs.getString("shipping_address"));
+                buyerInfo.put("member_level", rs.getString("member_level"));
+                buyerInfo.put("enable", rs.getBoolean("enable"));
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return buyerInfo;
+    }
+
+    /**
+     * 更新买家收货地址
+     */
+    public void updateBuyerShippingAddress(String phone, String shippingAddress) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE user_buyers ub " +
+                    "JOIN users u ON ub.uid = u.uid " +
+                    "SET ub.shipping_address = ? " +
+                    "WHERE u.phone = ? AND ub.enable = TRUE";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, shippingAddress);
+            stmt.setString(2, phone);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
      * 根据产品ID获取贷款产品
      */
     public entity.financing.LoanProduct getLoanProductById(Long productId) throws SQLException {

@@ -47,6 +47,23 @@
               />
               <div v-else class="info-value">{{ userInfo.nickname || '未设置' }}</div>
             </div>
+
+            <!-- 买家收货地址 -->
+            <div v-if="isBuyer && !isEditing" class="info-group">
+              <label class="info-label">默认收货地址</label>
+              <div class="info-value">{{ shippingAddress || '未设置' }}</div>
+            </div>
+
+            <div v-if="isBuyer && isEditing" class="info-group">
+              <label class="info-label">默认收货地址</label>
+              <textarea
+                v-model="editedShippingAddress"
+                class="info-textarea"
+                placeholder="请输入默认收货地址"
+                maxlength="500"
+                rows="3"
+              ></textarea>
+            </div>
           </div>
         </div>
 
@@ -123,6 +140,8 @@ export default {
     const userInfo = ref({});
     const isEditing = ref(false);
     const editedNickname = ref('');
+    const editedShippingAddress = ref('');
+    const shippingAddress = ref('');
     const balance = ref(null);
     const loadingBalance = ref(false);
     const selectedAmount = ref(null);
@@ -130,12 +149,17 @@ export default {
     const recharging = ref(false);
     const rechargeAmounts = [50, 100, 200, 500, 1000, 2000];
 
+    const isBuyer = computed(() => {
+      return userInfo.value.userType === 'buyer';
+    });
+
     onMounted(async () => {
       logger.lifecycle('Profile', 'mounted');
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
         try {
           userInfo.value = JSON.parse(storedUser);
+          await loadUserProfile();
           await loadBalance();
         } catch (error) {
           logger.error('PROFILE', '解析用户信息失败', {}, error);
@@ -145,6 +169,30 @@ export default {
         router.push('/login');
       }
     });
+
+    const loadUserProfile = async () => {
+      try {
+        const profile = await authService.getUserProfile(userInfo.value.phone, userInfo.value.userType);
+        if (profile) {
+          // 更新用户信息
+          userInfo.value.nickname = profile.nickname || userInfo.value.nickname;
+          userInfo.value.money = profile.money || userInfo.value.money;
+          
+          // 如果是买家，获取收货地址
+          if (profile.userType === 'buyer' && profile.shippingAddress) {
+            shippingAddress.value = profile.shippingAddress;
+            userInfo.value.shippingAddress = profile.shippingAddress;
+            localStorage.setItem('user', JSON.stringify(userInfo.value));
+          }
+        }
+      } catch (error) {
+        logger.error('PROFILE', '获取用户详细信息失败', {}, error);
+        // 如果获取失败，使用localStorage中的信息
+        if (userInfo.value.shippingAddress) {
+          shippingAddress.value = userInfo.value.shippingAddress;
+        }
+      }
+    };
 
     const userRoleText = computed(() => {
       const roleMap = {
@@ -195,11 +243,13 @@ export default {
     const startEdit = () => {
       isEditing.value = true;
       editedNickname.value = userInfo.value.nickname || '';
+      editedShippingAddress.value = shippingAddress.value || '';
     };
 
     const cancelEdit = () => {
       isEditing.value = false;
       editedNickname.value = '';
+      editedShippingAddress.value = '';
     };
 
     const saveProfile = async () => {
@@ -215,9 +265,23 @@ export default {
 
       try {
         logger.userAction('UPDATE_PROFILE', { phone: userInfo.value.phone, nickname: editedNickname.value });
-        await authService.updateProfile(userInfo.value.phone, editedNickname.value.trim());
         
+        // 更新昵称
+        await authService.updateProfile(userInfo.value.phone, editedNickname.value.trim());
         userInfo.value.nickname = editedNickname.value.trim();
+        
+        // 如果是买家，更新收货地址
+        if (isBuyer.value) {
+          try {
+            await authService.updateShippingAddress(userInfo.value.phone, editedShippingAddress.value.trim() || '');
+            shippingAddress.value = editedShippingAddress.value.trim() || '';
+            userInfo.value.shippingAddress = shippingAddress.value;
+          } catch (error) {
+            logger.error('PROFILE', '更新收货地址失败', {}, error);
+            // 收货地址更新失败不影响昵称的更新
+          }
+        }
+        
         localStorage.setItem('user', JSON.stringify(userInfo.value));
         
         isEditing.value = false;
@@ -288,6 +352,9 @@ export default {
       userInfo,
       isEditing,
       editedNickname,
+      editedShippingAddress,
+      shippingAddress,
+      isBuyer,
       balance,
       loadingBalance,
       selectedAmount,
@@ -414,6 +481,24 @@ export default {
 }
 
 .info-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.info-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  color: #1a202c;
+  background: white;
+  border: 2px solid #cbd5e0;
+  border-radius: 6px;
+  transition: border-color 0.2s;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.info-textarea:focus {
   outline: none;
   border-color: #667eea;
 }

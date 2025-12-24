@@ -226,6 +226,69 @@ public class AuthController {
         return response;
     }
 
+    public Map<String, Object> getUserProfile(String phone, String userType) {
+        System.out.println("AuthController.getUserProfile - 开始处理获取用户详细信息请求");
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            if (phone == null || phone.isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "手机号不能为空");
+                return response;
+            }
+
+            if (userType == null || userType.isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "用户类型不能为空");
+                return response;
+            }
+
+            UserProfileResponseDTO profile = authService.getUserProfile(phone, userType);
+            response.put("code", 200);
+            response.put("message", "成功");
+            response.put("data", profile);
+        } catch (IllegalArgumentException e) {
+            System.out.println("AuthController.getUserProfile - 捕获 IllegalArgumentException: " + e.getMessage());
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+        } catch (Exception e) {
+            System.out.println("AuthController.getUserProfile - 捕获异常: " + e.getMessage());
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+        }
+
+        return response;
+    }
+
+    public Map<String, Object> updateShippingAddress(UpdateShippingAddressRequestDTO request) {
+        System.out.println("AuthController.updateShippingAddress - 开始处理更新收货地址请求");
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            if (request.getPhone() == null || request.getPhone().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "手机号不能为空");
+                return response;
+            }
+
+            authService.updateShippingAddress(request);
+            response.put("code", 200);
+            response.put("message", "更新成功");
+        } catch (IllegalArgumentException e) {
+            System.out.println("AuthController.updateShippingAddress - 捕获 IllegalArgumentException: " + e.getMessage());
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+        } catch (Exception e) {
+            System.out.println("AuthController.updateShippingAddress - 捕获异常: " + e.getMessage());
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+        }
+
+        return response;
+    }
+
     private String extractFieldName(String errorMessage) {
         System.out.println("AuthController.extractFieldName - 处理错误消息: [" + errorMessage + "]");
         

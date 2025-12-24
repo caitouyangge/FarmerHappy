@@ -508,6 +508,27 @@ public class RouterConfig {
             return authController.recharge(request);
         }
 
+        // 获取用户详细信息 - /api/v1/auth/profile/detail
+        if ("/api/v1/auth/profile/detail".equals(path) && "GET".equals(method)) {
+            String phone = queryParams != null ? queryParams.get("phone") : null;
+            String userType = queryParams != null ? queryParams.get("user_type") : null;
+            if (phone == null && requestBody != null) {
+                phone = (String) requestBody.get("phone");
+            }
+            if (userType == null && requestBody != null) {
+                userType = (String) requestBody.get("user_type");
+            }
+            return authController.getUserProfile(phone, userType);
+        }
+
+        // 更新买家收货地址 - /api/v1/auth/shipping-address
+        if ("/api/v1/auth/shipping-address".equals(path) && "PUT".equals(method)) {
+            UpdateShippingAddressRequestDTO request = new UpdateShippingAddressRequestDTO();
+            request.setPhone((String) requestBody.get("phone"));
+            request.setShippingAddress((String) requestBody.get("shipping_address"));
+            return authController.updateShippingAddress(request);
+        }
+
         if ("/api/v1/storage/upload".equals(path) && "POST".equals(method)) {
             return handleImageUpload(requestBody);
         }

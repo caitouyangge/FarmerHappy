@@ -223,13 +223,27 @@ export default {
           if (userInfo.phone) {
             formData.value.buyer_phone = userInfo.phone;
           }
-          // 如果是买家，尝试填充收货地址
-          if (userInfo.userType === 'buyer' && userInfo.shippingAddress) {
-            formData.value.buyer_address = userInfo.shippingAddress;
-          }
           
-          // 如果是买家，获取余额
+          // 如果是买家，获取详细信息并填充收货地址
           if (userInfo.userType === 'buyer' && userInfo.phone) {
+            // 尝试从localStorage获取，如果没有则从API获取
+            if (userInfo.shippingAddress) {
+              formData.value.buyer_address = userInfo.shippingAddress;
+            } else {
+              try {
+                const profile = await authService.getUserProfile(userInfo.phone, 'buyer');
+                if (profile && profile.shippingAddress) {
+                  formData.value.buyer_address = profile.shippingAddress;
+                  // 更新localStorage
+                  userInfo.shippingAddress = profile.shippingAddress;
+                  localStorage.setItem('user', JSON.stringify(userInfo));
+                }
+              } catch (err) {
+                logger.error('ORDER_FORM', '获取用户详细信息失败', {}, err);
+              }
+            }
+            
+            // 获取余额
             balanceLoading.value = true;
             try {
               const userBalance = await authService.getBalance(userInfo.phone, 'buyer');

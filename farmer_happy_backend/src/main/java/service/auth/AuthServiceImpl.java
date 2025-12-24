@@ -698,4 +698,75 @@ public class AuthServiceImpl implements AuthService {
             databaseManager.closeConnection();
         }
     }
+
+    @Override
+    public UserProfileResponseDTO getUserProfile(String phone, String userType) throws SQLException, IllegalArgumentException {
+        if (phone == null || phone.trim().isEmpty()) {
+            throw new IllegalArgumentException("手机号不能为空");
+        }
+
+        if (userType == null || userType.trim().isEmpty()) {
+            throw new IllegalArgumentException("用户类型不能为空");
+        }
+
+        // 查找用户
+        User user = findUserByPhone(phone);
+        if (user == null) {
+            throw new IllegalArgumentException("用户不存在");
+        }
+
+        // 构建基础用户信息
+        UserProfileResponseDTO profile = new UserProfileResponseDTO();
+        profile.setUid(user.getUid());
+        profile.setPhone(user.getPhone());
+        profile.setNickname(user.getNickname());
+        profile.setUserType(userType);
+        profile.setMoney(user.getMoney());
+
+        // 根据用户类型获取扩展信息
+        if ("buyer".equals(userType)) {
+            Map<String, Object> buyerInfo = databaseManager.getBuyerInfoByPhone(phone);
+            if (buyerInfo != null) {
+                profile.setShippingAddress((String) buyerInfo.get("shipping_address"));
+                profile.setMemberLevel((String) buyerInfo.get("member_level"));
+            }
+        } else if ("farmer".equals(userType)) {
+            Map<String, Object> farmerInfo = databaseManager.getFarmerInfoByUid(user.getUid());
+            if (farmerInfo != null) {
+                profile.setFarmName((String) farmerInfo.get("farm_name"));
+                profile.setFarmAddress((String) farmerInfo.get("farm_address"));
+                profile.setFarmSize((java.math.BigDecimal) farmerInfo.get("farm_size"));
+            }
+        }
+        // 注意：专家和银行的扩展信息获取可以根据需要添加
+
+        return profile;
+    }
+
+    @Override
+    public void updateShippingAddress(UpdateShippingAddressRequestDTO request) throws SQLException, IllegalArgumentException {
+        if (request.getPhone() == null || request.getPhone().trim().isEmpty()) {
+            throw new IllegalArgumentException("手机号不能为空");
+        }
+
+        // 验证收货地址
+        if (request.getShippingAddress() != null && request.getShippingAddress().length() > 500) {
+            throw new IllegalArgumentException("收货地址长度不能超过500个字符");
+        }
+
+        // 验证用户是否存在
+        User user = findUserByPhone(request.getPhone());
+        if (user == null) {
+            throw new IllegalArgumentException("用户不存在");
+        }
+
+        // 验证用户是否为买家
+        String buyerUid = databaseManager.getBuyerUidByPhone(request.getPhone());
+        if (buyerUid == null) {
+            throw new IllegalArgumentException("该用户不是买家");
+        }
+
+        // 更新收货地址
+        databaseManager.updateBuyerShippingAddress(request.getPhone(), request.getShippingAddress());
+    }
 }
