@@ -145,6 +145,87 @@ public class AuthController {
         return response;
     }
 
+    public Map<String, Object> updateProfile(UpdateProfileRequestDTO request) {
+        System.out.println("AuthController.updateProfile - 开始处理更新用户信息请求");
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            if (request.getPhone() == null || request.getPhone().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "手机号不能为空");
+                return response;
+            }
+
+            if (request.getNickname() == null || request.getNickname().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "昵称不能为空");
+                return response;
+            }
+
+            authService.updateProfile(request);
+            response.put("code", 200);
+            response.put("message", "更新成功");
+        } catch (IllegalArgumentException e) {
+            System.out.println("AuthController.updateProfile - 捕获 IllegalArgumentException: " + e.getMessage());
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+        } catch (Exception e) {
+            System.out.println("AuthController.updateProfile - 捕获异常: " + e.getMessage());
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+        }
+
+        return response;
+    }
+
+    public Map<String, Object> recharge(RechargeRequestDTO request) {
+        System.out.println("AuthController.recharge - 开始处理充值请求");
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            if (request.getPhone() == null || request.getPhone().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "手机号不能为空");
+                return response;
+            }
+
+            if (request.getUserType() == null || request.getUserType().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "用户类型不能为空");
+                return response;
+            }
+
+            if (request.getAmount() == null || request.getAmount().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                response.put("code", 400);
+                response.put("message", "充值金额必须大于0");
+                return response;
+            }
+
+            authService.recharge(request);
+            
+            // 获取更新后的余额
+            java.math.BigDecimal newBalance = authService.getBalance(request.getPhone(), request.getUserType());
+            
+            response.put("code", 200);
+            response.put("message", "充值成功");
+            Map<String, Object> data = new HashMap<>();
+            data.put("balance", newBalance);
+            response.put("data", data);
+        } catch (IllegalArgumentException e) {
+            System.out.println("AuthController.recharge - 捕获 IllegalArgumentException: " + e.getMessage());
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+        } catch (Exception e) {
+            System.out.println("AuthController.recharge - 捕获异常: " + e.getMessage());
+            e.printStackTrace();
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+        }
+
+        return response;
+    }
+
     private String extractFieldName(String errorMessage) {
         System.out.println("AuthController.extractFieldName - 处理错误消息: [" + errorMessage + "]");
         

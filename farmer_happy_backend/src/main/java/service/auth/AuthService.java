@@ -22,4 +22,10 @@ public interface AuthService {
     void saveBuyerExtension(String uid, BuyerRegisterRequestDTO buyerRequest) throws SQLException;
     void saveExpertExtension(String uid, ExpertRegisterRequestDTO expertRequest) throws SQLException;
     void saveBankExtension(String uid, BankRegisterRequestDTO bankRequest) throws SQLException;
+    
+    // 更新用户信息
+    void updateProfile(UpdateProfileRequestDTO request) throws SQLException, IllegalArgumentException;
+    
+    // 充值
+    void recharge(RechargeRequestDTO request) throws SQLException, IllegalArgumentException;
 }

@@ -12,6 +12,7 @@ import Financing from '../financing/Financing.vue';
 import PricePrediction from '../pricePrediction/PricePrediction.vue';
 import PriceData from '../priceData/PriceData.vue';
 import ExpertAppointment from '../expert/ExpertAppointment.vue';
+import Profile from '../profile/Profile.vue';
 
 const routes = [
   {
@@ -92,6 +93,12 @@ const routes = [
     path: '/price-data',
     name: 'PriceData',
     component: PriceData,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: Profile,
     meta: { requiresAuth: true }
   }
 ];

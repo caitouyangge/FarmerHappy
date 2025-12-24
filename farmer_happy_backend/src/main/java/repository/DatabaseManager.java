@@ -908,6 +908,23 @@ public class DatabaseManager {
     }
 
     /**
+     * 更新用户昵称
+     */
+    public void updateUserNickname(String phone, String nickname) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "UPDATE users SET nickname = ?, updated_at = CURRENT_TIMESTAMP WHERE phone = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, nickname);
+            stmt.setString(2, phone);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
      * 更新信用额度
      */
     public void updateCreditLimitUsed(Long farmerId, BigDecimal usedAmount) throws SQLException {

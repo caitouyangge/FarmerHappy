@@ -482,6 +482,32 @@ public class RouterConfig {
             return authController.getBalance(phone, userType);
         }
 
+        // 更新用户信息 - /api/v1/auth/profile
+        if ("/api/v1/auth/profile".equals(path) && "PUT".equals(method)) {
+            UpdateProfileRequestDTO request = new UpdateProfileRequestDTO();
+            request.setPhone((String) requestBody.get("phone"));
+            request.setNickname((String) requestBody.get("nickname"));
+            return authController.updateProfile(request);
+        }
+
+        // 充值 - /api/v1/auth/recharge
+        if ("/api/v1/auth/recharge".equals(path) && "POST".equals(method)) {
+            RechargeRequestDTO request = new RechargeRequestDTO();
+            request.setPhone((String) requestBody.get("phone"));
+            request.setUserType((String) requestBody.get("user_type"));
+            Object amountObj = requestBody.get("amount");
+            if (amountObj != null) {
+                if (amountObj instanceof BigDecimal) {
+                    request.setAmount((BigDecimal) amountObj);
+                } else if (amountObj instanceof Number) {
+                    request.setAmount(BigDecimal.valueOf(((Number) amountObj).doubleValue()));
+                } else if (amountObj instanceof String) {
+                    request.setAmount(new BigDecimal((String) amountObj));
+                }
+            }
+            return authController.recharge(request);
+        }
+
         if ("/api/v1/storage/upload".equals(path) && "POST".equals(method)) {
             return handleImageUpload(requestBody);
         }
