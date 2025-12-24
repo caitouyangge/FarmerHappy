@@ -798,20 +798,8 @@ public class FinancingService {
                 throw new IllegalArgumentException("您当前无可用贷款额度");
             }
 
-            // 检查发起者的信用额度是否满足产品的最低信用额度要求
-            if (initiatorCreditLimit.getAvailableLimit().compareTo(loanProduct.getMinCreditLimit()) < 0) {
-                throw new IllegalArgumentException("您的可用额度" + initiatorCreditLimit.getAvailableLimit() + 
-                        "元低于产品最低额度要求" + loanProduct.getMinCreditLimit() + "元，无法申请该产品");
-            }
-
-            // 计算发起者应承担的份额（平均分配）
-            BigDecimal shareAmount = request.getApply_amount().divide(BigDecimal.valueOf(request.getPartner_phones().size() + 1), 2, BigDecimal.ROUND_HALF_UP);
-
-            // 检查发起者额度是否足够承担其份额
-            if (shareAmount.compareTo(initiatorCreditLimit.getAvailableLimit()) > 0) {
-                throw new IllegalArgumentException("您当前可用额度" + initiatorCreditLimit.getAvailableLimit() +
-                        "元，不足以承担联合贷款" + shareAmount + "元的份额，请先申请提高额度");
-            }
+            // 计算总额度（发起人 + 所有伙伴）
+            BigDecimal totalAvailableLimit = initiatorCreditLimit.getAvailableLimit();
 
             // 检查伙伴是否符合条件
             for (String partnerPhone : request.getPartner_phones()) {
@@ -833,24 +821,26 @@ public class FinancingService {
                     throw new IllegalArgumentException("伙伴" + partnerPhone + "无可用贷款额度，无法参与联合贷款");
                 }
 
-                // 检查伙伴的信用额度是否满足产品的最低信用额度要求
-                if (partnerCreditLimit.getAvailableLimit().compareTo(loanProduct.getMinCreditLimit()) < 0) {
-                    throw new IllegalArgumentException("伙伴" + partnerPhone + "的可用额度" + partnerCreditLimit.getAvailableLimit() + 
-                            "元低于产品最低额度要求" + loanProduct.getMinCreditLimit() + "元，无法参与联合贷款");
-                }
-
-                // 检查伙伴的额度是否足够承担其份额
-                if (shareAmount.compareTo(partnerCreditLimit.getAvailableLimit()) > 0) {
-                    throw new IllegalArgumentException("伙伴" + partnerPhone + "的可用额度" + partnerCreditLimit.getAvailableLimit() +
-                            "元，不足以承担联合贷款" + shareAmount + "元的份额");
-                }
+                // 累计伙伴额度到总额度（联合贷款以总额度为准）
+                totalAvailableLimit = totalAvailableLimit.add(partnerCreditLimit.getAvailableLimit());
 
                 // 检查伙伴是否有待审批的联合贷款申请
                 // 这里需要实现检查逻辑
             }
 
-            // 预扣额度 - 在创建贷款申请记录前扣除
-            preDeductCreditLimit(((Long) farmerInfo.get("farmer_id")).longValue(), shareAmount);
+            // 检查总额度是否满足产品的最低信用额度要求
+            if (totalAvailableLimit.compareTo(loanProduct.getMinCreditLimit()) < 0) {
+                throw new IllegalArgumentException("您和联合伙伴的总可用额度" + totalAvailableLimit + 
+                        "元低于产品最低额度要求" + loanProduct.getMinCreditLimit() + "元，无法申请该产品");
+            }
+
+            // 检查总额度是否足够覆盖申请金额
+            if (totalAvailableLimit.compareTo(request.getApply_amount()) < 0) {
+                throw new IllegalArgumentException("您和联合伙伴的总可用额度" + totalAvailableLimit + 
+                        "元不足以覆盖申请金额" + request.getApply_amount() + "元，请选择其他产品或寻找更多伙伴");
+            }
+
+            // 联合贷款不在此处预扣发起人额度，等所有伙伴确认后再统一预扣
 
             // 生成贷款申请ID (修改为符合数据库字段长度限制的格式)
             String loanApplicationId = "LOAN" + System.currentTimeMillis() +
@@ -1177,7 +1167,13 @@ public class FinancingService {
                 
                 // 检查是否所有伙伴都已确认
                 if (areAllPartnersConfirmed(loanApplication.getId())) {
-                    // 所有伙伴都确认了，将申请状态更新为待银行审批
+                    // 所有伙伴都确认了，预扣发起人的额度
+                    BigDecimal initiatorShareAmount = loanApplication.getApplyAmount().divide(BigDecimal.valueOf(totalParticipants), 2, BigDecimal.ROUND_HALF_UP);
+                    
+                    // 预扣发起人额度
+                    preDeductCreditLimit(loanApplication.getFarmerId(), initiatorShareAmount);
+                    
+                    // 将申请状态更新为待银行审批
                     updateLoanApplicationStatus(loanApplication.getLoanApplicationId(), "pending", null, null, null);
                     response.setNext_step("所有合作伙伴已确认，申请已提交银行审批");
                 } else {
@@ -1189,14 +1185,24 @@ public class FinancingService {
                 
             } else if ("reject".equals(request.getAction())) {
                 // 拒绝参与联合贷款
-                Long partnerFarmerId = ((Long) farmerInfo.get("farmer_id")).longValue();
-                updatePartnerConfirmationStatus(loanApplication.getId(), partnerFarmerId, "rejected");
+                Long rejectingPartnerFarmerId = ((Long) farmerInfo.get("farmer_id")).longValue();
+                updatePartnerConfirmationStatus(loanApplication.getId(), rejectingPartnerFarmerId, "rejected");
                 
                 // 将申请状态更新为已拒绝
                 updateLoanApplicationStatus(loanApplication.getLoanApplicationId(), "rejected", null, null, null, "合作伙伴拒绝参与");
                 
-                // 恢复发起人的预扣额度
-                restoreCreditLimit(loanApplication.getFarmerId(), loanApplication.getApplyAmount().divide(BigDecimal.valueOf(partners.size() + 1), 2, BigDecimal.ROUND_HALF_UP));
+                // 恢复已确认伙伴的预扣额度
+                // 获取所有已确认的伙伴，恢复他们的预扣额度
+                List<Map<String, Object>> allPartners = getJointLoanPartnersByApplicationId(loanApplication.getId());
+                int totalParticipantsCount = partners.size() + 1;
+                BigDecimal partnerShareAmount = loanApplication.getApplyAmount().divide(BigDecimal.valueOf(totalParticipantsCount), 2, BigDecimal.ROUND_HALF_UP);
+                for (Map<String, Object> partner : allPartners) {
+                    String status = (String) partner.get("status");
+                    if ("confirmed".equals(status) || "accepted".equals(status)) {
+                        Long confirmedPartnerFarmerId = (Long) partner.get("partner_farmer_id");
+                        restoreCreditLimit(confirmedPartnerFarmerId, partnerShareAmount);
+                    }
+                }
                 
                 response.setAction_result("rejected");
                 response.setMessage("您已拒绝参与该联合贷款申请，申请已被取消");
@@ -2408,20 +2414,16 @@ public class FinancingService {
 
         if (request.getPartner_phones() == null || request.getPartner_phones().isEmpty()) {
             errors.add(createError("partner_phones", "联合贷款伙伴手机号数组不能为空"));
-        } else if (request.getPartner_phones().size() < 2 || request.getPartner_phones().size() > 5) {
-            errors.add(createError("partner_phones", "联合贷款至少需要2个伙伴，最多5个伙伴"));
+        } else if (request.getPartner_phones().size() != 1) {
+            errors.add(createError("partner_phones", "联合贷款必须有且仅有1个伙伴"));
         }
 
         if (request.getPurpose() == null || request.getPurpose().trim().isEmpty()) {
             errors.add(createError("purpose", "贷款用途不能为空"));
-        } else if (request.getPurpose().length() < 2 || request.getPurpose().length() > 200) {
-            errors.add(createError("purpose", "贷款用途描述至少需要2个字，最多200个字"));
         }
 
         if (request.getRepayment_plan() == null || request.getRepayment_plan().trim().isEmpty()) {
             errors.add(createError("repayment_plan", "还款计划说明不能为空"));
-        } else if (request.getRepayment_plan().length() < 2 || request.getRepayment_plan().length() > 500) {
-            errors.add(createError("repayment_plan", "还款计划说明至少需要2个字，最多500个字"));
         }
 
         if (request.getJoint_agreement() == null || !request.getJoint_agreement()) {

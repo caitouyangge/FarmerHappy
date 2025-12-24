@@ -13,7 +13,7 @@
           <div class="product-details">
             <div class="detail-row">
               <span>贷款额度：</span>
-              <span>¥{{ formatAmount(product.min_amount) }} - ¥{{ formatAmount(product.max_amount) }}</span>
+              <span>¥{{ formatAmount(product.max_amount) }}</span>
             </div>
             <div class="detail-row">
               <span>年利率：</span>
@@ -28,19 +28,10 @@
 
         <form @submit.prevent="handleSubmit" class="form">
           <div class="form-group">
-            <label class="form-label">申请金额 <span class="required">*</span></label>
-            <input
-              v-model.number="formData.apply_amount"
-              type="number"
-              class="form-input"
-              :placeholder="`请输入申请金额（¥${formatAmount(product.min_amount)} - ¥${formatAmount(product.max_amount)}）`"
-              :min="product.min_amount"
-              :max="product.max_amount"
-              step="0.01"
-              required
-            />
-            <div class="form-hint">
-              最低：¥{{ formatAmount(product.min_amount) }}，最高：¥{{ formatAmount(product.max_amount) }}
+            <label class="form-label">申请金额</label>
+            <div class="fixed-amount-display">
+              <span class="amount-value">¥{{ formatAmount(product.max_amount) }}</span>
+              <span class="amount-hint">（固定金额）</span>
             </div>
           </div>
 
@@ -98,7 +89,6 @@ export default {
     const userInfo = ref({});
     const submitting = ref(false);
     const formData = reactive({
-      apply_amount: null,
       purpose: '',
       repayment_source: ''
     });
@@ -125,23 +115,18 @@ export default {
         return;
       }
 
-      if (formData.apply_amount < props.product.min_amount || 
-          formData.apply_amount > props.product.max_amount) {
-        alert(`申请金额必须在 ¥${formatAmount(props.product.min_amount)} - ¥${formatAmount(props.product.max_amount)} 之间`);
-        return;
-      }
-
       submitting.value = true;
       try {
+        const fixedAmount = parseFloat(props.product.max_amount);
         logger.info('FINANCING', '提交单人贷款申请', { 
           productId: props.product.product_id,
-          applyAmount: formData.apply_amount
+          applyAmount: fixedAmount
         });
 
         const loanData = {
           phone: userInfo.value.phone,
           product_id: props.product.product_id,
-          apply_amount: parseFloat(formData.apply_amount),
+          apply_amount: fixedAmount,
           purpose: formData.purpose,
           repayment_source: formData.repayment_source
         };
@@ -315,6 +300,27 @@ export default {
 .form-hint {
   margin-top: 0.5rem;
   font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+.fixed-amount-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+}
+
+.amount-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.amount-hint {
+  font-size: 0.875rem;
   color: var(--gray-500);
 }
 

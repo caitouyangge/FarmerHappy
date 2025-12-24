@@ -7,7 +7,32 @@
       </div>
 
       <div class="modal-body">
-        <div class="filter-section">
+        <div v-if="product" class="product-filter-info">
+          <div class="info-card">
+            <h4>筛选条件（已自动设置）</h4>
+            <div class="info-details">
+              <div class="info-item">
+                <span class="info-label">产品：</span>
+                <span class="info-value">{{ product.product_name }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">申请金额：</span>
+                <span class="info-value">¥{{ formatAmount(product.max_amount) }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">您的可用额度：</span>
+                <span class="info-value">¥{{ formatAmount(userAvailableLimit) }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">所需伙伴最低额度：</span>
+                <span class="info-value highlight">¥{{ formatAmount(filters.min_credit_limit || 0) }}</span>
+              </div>
+            </div>
+            <p class="info-hint">以下为符合条件的伙伴（能承担剩余额度即可联合贷款）</p>
+          </div>
+        </div>
+        
+        <div v-else class="filter-section">
           <div class="filter-row">
             <div class="filter-group">
               <label class="filter-label">最低信用额度：</label>
@@ -62,11 +87,11 @@
               <div class="partner-details">
                 <div class="detail-item">
                   <span class="detail-label">信用额度：</span>
-                  <span class="detail-value highlight">¥{{ formatAmount(partner.credit_limit || 0) }}</span>
+                  <span class="detail-value">¥{{ formatAmount(partner.total_credit_limit || 0) }}</span>
                 </div>
                 <div class="detail-item">
                   <span class="detail-label">可用额度：</span>
-                  <span class="detail-value">¥{{ formatAmount(partner.available_limit || 0) }}</span>
+                  <span class="detail-value highlight">¥{{ formatAmount(partner.available_credit_limit || 0) }}</span>
                 </div>
               </div>
             </div>
@@ -87,23 +112,64 @@ import logger from '../../utils/logger';
 
 export default {
   name: 'JointPartnersModal',
+  props: {
+    product: {
+      type: Object,
+      default: null
+    }
+  },
   emits: ['close', 'select'],
   setup(props, { emit }) {
     const userInfo = ref({});
     const partners = ref([]);
     const loading = ref(false);
     const error = ref('');
+    const userAvailableLimit = ref(0); // 发起人的可用额度
     const filters = reactive({
       min_credit_limit: null,
       max_partners: null,
       exclude_phones: []
     });
 
-    onMounted(() => {
+    // 获取用户可用额度并计算所需伙伴最低额度
+    const calculateRequiredPartnerLimit = async () => {
+      if (!props.product || !userInfo.value.phone) {
+        return;
+      }
+
+      try {
+        // 获取发起人的可用额度
+        const creditLimitData = await financingService.getCreditLimit(userInfo.value.phone);
+        userAvailableLimit.value = parseFloat(creditLimitData.available_limit || 0);
+
+        // 计算所需伙伴最低额度 = 贷款金额 - 发起人当前可用额度
+        const loanAmount = parseFloat(props.product.max_amount || 0);
+        const requiredAmount = loanAmount - userAvailableLimit.value;
+
+        // 所需伙伴最低额度就是贷款金额减去发起人可用额度（必须大于0）
+        filters.min_credit_limit = requiredAmount > 0 ? requiredAmount : 0;
+        filters.max_partners = 5; // 最多显示5个符合条件的伙伴
+      } catch (err) {
+        logger.error('JOINT_PARTNERS', '获取用户额度失败', {
+          errorMessage: err.message || err
+        }, err);
+        // 如果获取额度失败，使用默认计算方式（假设用户额度为0）
+        const loanAmount = parseFloat(props.product.max_amount || 0);
+        filters.min_credit_limit = loanAmount;
+      }
+    };
+
+    onMounted(async () => {
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
         userInfo.value = JSON.parse(storedUser);
         filters.exclude_phones = [userInfo.value.phone];
+        
+        // 如果传入了产品信息，获取用户额度并自动设置筛选条件
+        if (props.product) {
+          await calculateRequiredPartnerLimit();
+        }
+        
         loadPartners();
       }
     });
@@ -155,6 +221,8 @@ export default {
     const handleSelect = (partner) => {
       logger.userAction('SELECT_PARTNER', { partnerPhone: partner.phone });
       emit('select', [partner]);
+      // 选择后自动关闭弹窗（因为只能选择1个）
+      handleClose();
     };
 
     return {
@@ -162,6 +230,7 @@ export default {
       partners,
       loading,
       error,
+      userAvailableLimit,
       filters,
       formatAmount,
       loadPartners,
@@ -242,6 +311,61 @@ export default {
 
 .modal-body {
   padding: 1.5rem;
+}
+
+.product-filter-info {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.info-card {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.info-card h4 {
+  margin: 0 0 1rem 0;
+  color: var(--primary);
+  font-size: 1.125rem;
+}
+
+.info-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.info-label {
+  color: var(--gray-600);
+  font-weight: 500;
+}
+
+.info-value {
+  color: #1a202c;
+  font-weight: 600;
+}
+
+.info-value.highlight {
+  color: var(--primary);
+  font-size: 1rem;
+}
+
+.info-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--gray-600);
+  font-style: italic;
 }
 
 .filter-section {

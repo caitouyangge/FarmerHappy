@@ -128,6 +128,7 @@
       :product="selectedProduct"
       @close="closeUnifiedLoanModal"
       @success="handleLoanSuccess"
+      @switch-to-joint="handleSwitchToJointLoan"
     />
 
     <!-- 申请单人贷款（保留兼容性） -->
@@ -143,6 +144,7 @@
       v-if="showJointLoanModal && selectedProduct"
       ref="jointLoanComponentRef"
       :product="selectedProduct"
+      :selected-partner="selectedPartnerForJointLoan"
       @close="closeLoanModal"
       @success="handleLoanSuccess"
       @open-partners="showPartnersModal = true"
@@ -185,7 +187,8 @@
 
     <!-- 浏览可联合农户 -->
     <JointPartnersModal
-      v-if="showPartnersModal"
+      v-if="showPartnersModal && selectedProduct"
+      :product="selectedProduct"
       @close="showPartnersModal = false"
       @select="handlePartnerSelect"
     />
@@ -200,7 +203,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { financingService } from '../api/financing';
 import logger from '../utils/logger';
@@ -255,6 +258,7 @@ export default {
     const showCreditApprovalModal = ref(false);
     const selectedProduct = ref(null);
     const jointLoanComponentRef = ref(null);
+    const selectedPartnerForJointLoan = ref(null); // 存储选择的联合伙伴
 
     // 用户类型判断
     const isFarmer = computed(() => userInfo.value.userType === 'farmer');
@@ -444,12 +448,21 @@ export default {
       showSingleLoanModal.value = false;
       showJointLoanModal.value = false;
       selectedProduct.value = null;
+      selectedPartnerForJointLoan.value = null; // 清空选择的伙伴
     };
 
     // 关闭统一贷款申请弹窗
     const closeUnifiedLoanModal = () => {
       showUnifiedLoanModal.value = false;
       selectedProduct.value = null;
+    };
+
+    // 从智能申请切换到联合贷款
+    const handleSwitchToJointLoan = () => {
+      // 关闭智能申请弹窗，打开联合贷款弹窗
+      showUnifiedLoanModal.value = false;
+      showJointLoanModal.value = true;
+      // selectedProduct 保持不变，用于联合贷款申请
     };
 
     // 贷款申请成功
@@ -481,11 +494,20 @@ export default {
 
     // 选择联合伙伴
     const handlePartnerSelect = (partners) => {
-      showPartnersModal.value = false;
-      // 将选中的伙伴传递给联合贷款申请组件
-      if (jointLoanComponentRef.value && jointLoanComponentRef.value.handlePartnerSelect) {
-        jointLoanComponentRef.value.handlePartnerSelect(partners);
+      logger.info('FINANCING', '父组件接收到伙伴选择', { 
+        partnersCount: partners?.length || 0,
+        partners: partners
+      });
+      
+      // 直接存储选择的伙伴（选择第一个）
+      if (partners && partners.length > 0) {
+        selectedPartnerForJointLoan.value = partners[0];
+        logger.info('FINANCING', '伙伴选择成功', {
+          partner: selectedPartnerForJointLoan.value
+        });
       }
+      
+      showPartnersModal.value = false;
     };
 
     // 贷款申请记录页面申请新贷款
@@ -509,6 +531,7 @@ export default {
       showUnifiedLoanModal,
       showSingleLoanModal,
       showJointLoanModal,
+      showPartnersModal,
       showRepaymentModal,
       showPublishProductModal,
       showApprovalModal,
@@ -516,6 +539,7 @@ export default {
       showCreditApprovalModal,
       showLoanApplicationHistoryModal,
       selectedProduct,
+      selectedPartnerForJointLoan,
       formatAmount,
       handleBack,
       handleModuleClick,
@@ -526,6 +550,7 @@ export default {
       handleLoanApply,
       closeLoanModal,
       closeUnifiedLoanModal,
+      handleSwitchToJointLoan,
       handleLoanSuccess,
       handlePublishSuccess,
       handleApprovalSuccess,

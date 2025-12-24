@@ -13,7 +13,7 @@
           <div class="product-details">
             <div class="detail-row">
               <span>贷款额度：</span>
-              <span>¥{{ formatAmount(product.min_amount) }} - ¥{{ formatAmount(product.max_amount) }}</span>
+              <span>¥{{ formatAmount(product.max_amount) }}</span>
             </div>
             <div class="detail-row">
               <span>年利率：</span>
@@ -26,22 +26,13 @@
           </div>
         </div>
 
-        <!-- 第一步：输入申请金额并获取推荐 -->
+        <!-- 第一步：显示固定金额并获取推荐 -->
         <div v-if="currentStep === 'input'" class="step-input">
           <div class="form-group">
-            <label class="form-label">申请金额 <span class="required">*</span></label>
-            <input
-              v-model.number="applyAmount"
-              type="number"
-              class="form-input"
-              :placeholder="`请输入申请金额（¥${formatAmount(product.min_amount)} - ¥${formatAmount(product.max_amount)}）`"
-              :min="product.min_amount"
-              :max="product.max_amount"
-              step="0.01"
-              required
-            />
-            <div class="form-hint">
-              最低：¥{{ formatAmount(product.min_amount) }}，最高：¥{{ formatAmount(product.max_amount) }}
+            <label class="form-label">申请金额</label>
+            <div class="fixed-amount-display">
+              <span class="amount-value">¥{{ formatAmount(product.max_amount) }}</span>
+              <span class="amount-hint">（固定金额）</span>
             </div>
           </div>
 
@@ -52,7 +43,7 @@
             <button 
               type="button" 
               class="btn btn-primary" 
-              :disabled="!applyAmount || checkingRecommendation"
+              :disabled="checkingRecommendation"
               @click="getRecommendation"
             >
               {{ checkingRecommendation ? '分析中...' : '智能分析' }}
@@ -159,7 +150,7 @@
             </div>
             <div class="summary-item">
               <span>申请金额：</span>
-              <span>¥{{ formatAmount(applyAmount) }}</span>
+              <span>¥{{ formatAmount(product.max_amount) }}</span>
             </div>
             <div v-if="selectedApplicationType === 'joint' && selectedPartner" class="summary-item">
               <span>合作伙伴：</span>
@@ -225,11 +216,10 @@ export default {
       required: true
     }
   },
-  emits: ['close', 'success'],
+  emits: ['close', 'success', 'switch-to-joint'],
   setup(props, { emit }) {
     const userInfo = ref({});
     const currentStep = ref('input'); // 'input', 'recommendation', 'details'
-    const applyAmount = ref(null);
     const checkingRecommendation = ref(false);
     const recommendation = ref(null);
     const selectedPartner = ref(null);
@@ -289,7 +279,10 @@ export default {
 
      // 获取智能推荐
      const getRecommendation = async () => {
-       if (!applyAmount.value || !userInfo.value.phone) return;
+       if (!userInfo.value.phone) {
+         alert('请先登录');
+         return;
+       }
 
        // 检查产品ID是否存在
        if (!props.product || !props.product.product_id) {
@@ -304,10 +297,11 @@ export default {
          console.log('DEBUG: product_id =', props.product.product_id);
          console.log('DEBUG: product_id type =', typeof props.product.product_id);
          
+         const fixedAmount = parseFloat(props.product.max_amount);
          const requestData = {
            phone: userInfo.value.phone,
            product_id: props.product.product_id,
-           apply_amount: applyAmount.value
+           apply_amount: fixedAmount
          };
 
          // 如果product_id仍然为空，尝试使用product.id作为备用
@@ -332,7 +326,16 @@ export default {
           errorMessage: error.message
         }, error);
         
-        // 显示错误信息给用户
+        // 检查是否是额度不足的错误
+        const errorMessage = error.message || '';
+        if (errorMessage.includes('低于产品最低额度要求') || errorMessage.includes('无法申请该产品')) {
+          // 额度不足，自动跳转到联合贷款
+          logger.info('UNIFIED_LOAN', '额度不足，自动跳转到联合贷款');
+          emit('switch-to-joint');
+          return;
+        }
+        
+        // 其他错误显示错误信息给用户
         alert(error.message || '获取推荐失败，请稍后重试');
       } finally {
         checkingRecommendation.value = false;
@@ -400,12 +403,13 @@ export default {
        try {
          let requestData, apiMethod;
 
+         const fixedAmount = parseFloat(props.product.max_amount);
          if (selectedApplicationType.value === 'single') {
            // 单人贷款申请
            requestData = {
              phone: userInfo.value.phone,
              product_id: props.product.product_id,
-             apply_amount: applyAmount.value,
+             apply_amount: fixedAmount,
              purpose: formData.purpose,
              repayment_source: formData.repayment_source
            };
@@ -415,7 +419,7 @@ export default {
            requestData = {
              phone: userInfo.value.phone,
              product_id: props.product.product_id,
-             apply_amount: applyAmount.value,
+             apply_amount: fixedAmount,
              purpose: formData.purpose,
              repayment_plan: formData.repayment_plan,
              partner_phones: [selectedPartner.value.phone]
@@ -432,7 +436,7 @@ export default {
          console.log('DEBUG: 提交申请的请求数据 =', requestData);
 
         logger.info('UNIFIED_LOAN', `提交${selectedApplicationType.value === 'single' ? '单人' : '联合'}贷款申请`, {
-          apply_amount: applyAmount.value,
+          apply_amount: fixedAmount,
           partners: selectedApplicationType.value === 'joint' ? [selectedPartner.value.phone] : []
         });
 
@@ -465,7 +469,6 @@ export default {
 
     return {
       currentStep,
-      applyAmount,
       checkingRecommendation,
       recommendation,
       selectedPartner,
@@ -837,6 +840,27 @@ export default {
   font-size: 0.75rem;
   color: var(--gray-500);
   margin-top: 0.25rem;
+}
+
+.fixed-amount-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #f8faff 0%, #f1f5ff 100%);
+  border: 2px solid var(--primary-light);
+  border-radius: 8px;
+}
+
+.amount-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.amount-hint {
+  font-size: 0.875rem;
+  color: var(--gray-500);
 }
 
 .form-actions {

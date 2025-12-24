@@ -36,7 +36,7 @@
             <div class="product-details">
               <div class="detail-item">
                 <span class="detail-label">贷款额度：</span>
-                <span class="detail-value">¥{{ formatAmount(product.min_amount) }} - ¥{{ formatAmount(product.max_amount) }}</span>
+                <span class="detail-value">¥{{ formatAmount(product.max_amount) }}</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">年利率：</span>
