@@ -3752,7 +3752,7 @@ public class DatabaseManager {
         Connection conn = getConnection();
         List<Map<String, Object>> applications = new ArrayList<>();
         try {
-            String sql = "SELECT la.loan_application_id, la.apply_amount, la.purpose, la.application_type, " +
+            String sql = "SELECT la.id, la.loan_application_id, la.apply_amount, la.purpose, la.application_type, " +
                         "la.created_at, lp.product_name, u.nickname as farmer_name, u.phone as farmer_phone " +
                         "FROM loan_applications la " +
                         "JOIN user_farmers uf ON la.farmer_id = uf.farmer_id " +
@@ -3765,14 +3765,44 @@ public class DatabaseManager {
 
             while (rs.next()) {
                 Map<String, Object> application = new HashMap<>();
+                long applicationId = rs.getLong("id");
+                String applicationType = rs.getString("application_type");
+                
                 application.put("loan_application_id", rs.getString("loan_application_id"));
                 application.put("apply_amount", rs.getBigDecimal("apply_amount"));
                 application.put("purpose", rs.getString("purpose"));
-                application.put("application_type", rs.getString("application_type"));
+                application.put("application_type", applicationType);
                 application.put("created_at", rs.getTimestamp("created_at"));
                 application.put("product_name", rs.getString("product_name"));
                 application.put("farmer_name", rs.getString("farmer_name"));
                 application.put("farmer_phone", rs.getString("farmer_phone"));
+                
+                // 如果是联合贷款，获取合作伙伴信息
+                if ("joint".equals(applicationType)) {
+                    List<Map<String, Object>> partners = new ArrayList<>();
+                    String partnerSql = "SELECT jla.*, uf.uid, u.phone, u.nickname as partner_name " +
+                            "FROM joint_loan_applications jla " +
+                            "JOIN user_farmers uf ON jla.partner_farmer_id = uf.farmer_id " +
+                            "JOIN users u ON uf.uid = u.uid " +
+                            "WHERE jla.loan_application_id = ?";
+                    PreparedStatement partnerStmt = conn.prepareStatement(partnerSql);
+                    partnerStmt.setLong(1, applicationId);
+                    ResultSet partnerRs = partnerStmt.executeQuery();
+
+                    while (partnerRs.next()) {
+                        Map<String, Object> partner = new HashMap<>();
+                        partner.put("partner_farmer_id", partnerRs.getLong("partner_farmer_id"));
+                        partner.put("partner_share_ratio", partnerRs.getBigDecimal("partner_share_ratio"));
+                        partner.put("partner_share_amount", partnerRs.getBigDecimal("partner_share_amount"));
+                        partner.put("phone", partnerRs.getString("phone"));
+                        partner.put("partner_name", partnerRs.getString("partner_name"));
+                        partners.add(partner);
+                    }
+                    partnerRs.close();
+                    partnerStmt.close();
+                    application.put("partners", partners);
+                }
+                
                 applications.add(application);
             }
             rs.close();

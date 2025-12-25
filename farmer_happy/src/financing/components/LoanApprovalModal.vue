@@ -34,6 +34,16 @@
                   <span class="label">申请人：</span>
                   <span class="value">{{ application.farmer_name }} ({{ application.farmer_phone }})</span>
                 </div>
+                <!-- 联合贷款合作伙伴信息 -->
+                <div v-if="application.application_type === 'joint' && application.partners && application.partners.length > 0" class="detail-item full-width">
+                  <span class="label">联合伙伴：</span>
+                  <div class="partners-list">
+                    <div v-for="(partner, index) in application.partners" :key="index" class="partner-info">
+                      <span class="value">{{ partner.partner_name || '未知' }} ({{ partner.phone }})</span>
+                      <span class="partner-share">份额：{{ formatCurrency(partner.partner_share_amount) }} ({{ partner.partner_share_ratio }}%)</span>
+                    </div>
+                  </div>
+                </div>
                 <div class="detail-item">
                   <span class="label">贷款产品：</span>
                   <span class="value">{{ application.product_name }}</span>
@@ -81,7 +91,17 @@
             <div class="approval-form-body">
               <div class="selected-application-info">
                 <p><strong>申请ID：</strong>{{ selectedApplication?.loan_application_id }}</p>
-                <p><strong>申请人：</strong>{{ selectedApplication?.farmer_name }}</p>
+                <p><strong>申请人：</strong>{{ selectedApplication?.farmer_name }} ({{ selectedApplication?.farmer_phone }})</p>
+                <!-- 联合贷款合作伙伴信息 -->
+                <div v-if="selectedApplication?.application_type === 'joint' && selectedApplication?.partners && selectedApplication.partners.length > 0" class="partners-section">
+                  <p><strong>联合伙伴：</strong></p>
+                  <div v-for="(partner, index) in selectedApplication.partners" :key="index" class="partner-detail">
+                    <p class="partner-item">
+                      <span class="partner-name">{{ partner.partner_name || '未知' }} ({{ partner.phone }})</span>
+                      <span class="partner-share">份额：{{ formatCurrency(partner.partner_share_amount) }} ({{ partner.partner_share_ratio }}%)</span>
+                    </p>
+                  </div>
+                </div>
                 <p><strong>申请金额：</strong>{{ formatCurrency(selectedApplication?.apply_amount) }}</p>
                 <p><strong>贷款产品：</strong>{{ selectedApplication?.product_name }}</p>
                 <p><strong>申请类型：</strong>{{ getApplicationTypeName(selectedApplication?.application_type) }}</p>
@@ -509,6 +529,33 @@ export default {
   color: var(--gray-800);
 }
 
+.detail-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.partners-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.partner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  background: var(--gray-50);
+  border-radius: 6px;
+  border-left: 3px solid var(--primary);
+}
+
+.partner-share {
+  font-size: 0.75rem;
+  color: var(--gray-600);
+  margin-left: 0.5rem;
+}
+
 .application-actions {
   display: flex;
   gap: 0.5rem;
@@ -566,6 +613,39 @@ export default {
 .selected-application-info p {
   margin: 0.25rem 0;
   font-size: 0.875rem;
+}
+
+.partners-section {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  background: var(--white);
+  border-radius: 6px;
+  border: 1px solid var(--gray-200);
+}
+
+.partner-detail {
+  margin: 0.5rem 0;
+}
+
+.partner-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  background: var(--gray-50);
+  border-radius: 6px;
+  border-left: 3px solid var(--primary);
+  margin: 0.25rem 0;
+}
+
+.partner-name {
+  font-weight: 500;
+  color: var(--gray-800);
+}
+
+.partner-share {
+  font-size: 0.75rem;
+  color: var(--gray-600);
 }
 
 .form-group {
