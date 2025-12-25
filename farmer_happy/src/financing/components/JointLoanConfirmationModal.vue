@@ -89,54 +89,6 @@
                 <p class="time-text">{{ formatDateTime(application.created_at) }}</p>
               </div>
 
-              <!-- 消息对话区域 -->
-              <div class="info-section">
-                <h4 class="section-title">
-                  消息对话
-                  <button 
-                    class="btn-toggle-chat" 
-                    @click="toggleChat(application.loan_application_id)"
-                  >
-                    {{ showChat[application.loan_application_id] ? '收起' : '展开' }}
-                  </button>
-                </h4>
-                <div 
-                  v-if="showChat[application.loan_application_id]" 
-                  class="chat-container"
-                >
-                  <div class="chat-messages" :ref="el => setChatRef(application.loan_application_id, el)">
-                    <div
-                      v-for="(message, index) in chatMessages[application.loan_application_id] || []"
-                      :key="index"
-                      :class="['chat-message', message.sender === userInfo.phone ? 'sent' : 'received']"
-                    >
-                      <div class="message-content">
-                        <div class="message-text">{{ message.content }}</div>
-                        <div class="message-time">{{ formatDateTime(message.created_at) }}</div>
-                      </div>
-                    </div>
-                    <div v-if="(chatMessages[application.loan_application_id] || []).length === 0" class="no-messages">
-                      暂无消息
-                    </div>
-                  </div>
-                  <div class="chat-input-area">
-                    <textarea
-                      v-model="newMessages[application.loan_application_id]"
-                      class="chat-input"
-                      rows="2"
-                      placeholder="输入消息..."
-                    ></textarea>
-                    <button
-                      class="btn-send-message"
-                      @click="sendMessage(application)"
-                      :disabled="!newMessages[application.loan_application_id]?.trim()"
-                    >
-                      发送
-                    </button>
-                  </div>
-                </div>
-              </div>
-
               <!-- 操作按钮 -->
               <div class="action-buttons">
                 <button

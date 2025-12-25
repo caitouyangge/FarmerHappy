@@ -2197,16 +2197,7 @@ public class FinancingService {
             request.setRepayment_amount(loan.getNextPaymentAmount());
         }
 
-        // 创建虚拟还款记录（不保存到数据库）
-        entity.financing.Repayment repayment = new entity.financing.Repayment();
-        repayment.setRepaymentAmount(request.getRepayment_amount());
-        repayment.setRepaymentMethod(request.getRepayment_method());
-        repayment.setRepaymentDate(new Timestamp(System.currentTimeMillis()));
-
-        // 更新贷款状态
-        updateLoanAfterRepayment(loan, repayment, isJointPartner, partnerFarmerId);
-
-        // 计算本金和利息分配
+        // 计算本金和利息分配（必须在更新贷款状态之前计算）
         BigDecimal repaymentAmount = request.getRepayment_amount();
         // 注意：数据库中存储的利率已经是百分比形式（如12.00表示12%），所以需要除以100
         BigDecimal monthlyInterest = loan.getRemainingPrincipal().multiply(loan.getInterestRate())
@@ -2225,6 +2216,17 @@ public class FinancingService {
             interestAmount = repaymentAmount;
             principalAmount = BigDecimal.ZERO;
         }
+
+        // 创建虚拟还款记录（不保存到数据库）
+        entity.financing.Repayment repayment = new entity.financing.Repayment();
+        repayment.setRepaymentAmount(request.getRepayment_amount());
+        repayment.setPrincipalAmount(principalAmount);
+        repayment.setInterestAmount(interestAmount);
+        repayment.setRepaymentMethod(request.getRepayment_method());
+        repayment.setRepaymentDate(new Timestamp(System.currentTimeMillis()));
+
+        // 更新贷款状态（包含本金和利息的更新）
+        updateLoanAfterRepayment(loan, repayment, isJointPartner, partnerFarmerId);
 
         // 构造响应
         RepaymentResponseDTO response = new RepaymentResponseDTO();
@@ -2359,12 +2361,35 @@ public class FinancingService {
                                           boolean isJointPartner, Long partnerFarmerId) throws SQLException {
         Timestamp now = new Timestamp(System.currentTimeMillis());
 
-        // 安全处理 null 值，确保 totalPaidAmount 不为 null
+        // 安全处理 null 值
         BigDecimal currentPaidAmount = loan.getTotalPaidAmount() != null ? loan.getTotalPaidAmount() : BigDecimal.ZERO;
+        BigDecimal currentPaidPrincipal = loan.getTotalPaidPrincipal() != null ? loan.getTotalPaidPrincipal() : BigDecimal.ZERO;
+        BigDecimal currentPaidInterest = loan.getTotalPaidInterest() != null ? loan.getTotalPaidInterest() : BigDecimal.ZERO;
+        BigDecimal currentRemainingPrincipal = loan.getRemainingPrincipal() != null ? loan.getRemainingPrincipal() : BigDecimal.ZERO;
+
+        // 获取本次还款的本金和利息
+        BigDecimal principalAmount = repayment.getPrincipalAmount() != null ? repayment.getPrincipalAmount() : BigDecimal.ZERO;
+        BigDecimal interestAmount = repayment.getInterestAmount() != null ? repayment.getInterestAmount() : BigDecimal.ZERO;
 
         // 更新总还款金额
         BigDecimal newTotalPaidAmount = currentPaidAmount.add(repayment.getRepaymentAmount());
         loan.setTotalPaidAmount(newTotalPaidAmount);
+
+        // 更新累计已还本金
+        BigDecimal newTotalPaidPrincipal = currentPaidPrincipal.add(principalAmount);
+        loan.setTotalPaidPrincipal(newTotalPaidPrincipal);
+
+        // 更新累计已还利息
+        BigDecimal newTotalPaidInterest = currentPaidInterest.add(interestAmount);
+        loan.setTotalPaidInterest(newTotalPaidInterest);
+
+        // 更新剩余本金
+        BigDecimal newRemainingPrincipal = currentRemainingPrincipal.subtract(principalAmount);
+        // 确保剩余本金不为负数
+        if (newRemainingPrincipal.compareTo(BigDecimal.ZERO) < 0) {
+            newRemainingPrincipal = BigDecimal.ZERO;
+        }
+        loan.setRemainingPrincipal(newRemainingPrincipal);
 
         // 检查是否逾期
         if (loan.getNextPaymentDate() != null) {

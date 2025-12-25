@@ -153,8 +153,6 @@
               <select v-model="formData.disburse_method" class="form-input" required>
                 <option value="">请选择放款方式</option>
                 <option value="bank_transfer">银行转账</option>
-                <option value="cash">现金</option>
-                <option value="check">支票</option>
               </select>
             </div>
 

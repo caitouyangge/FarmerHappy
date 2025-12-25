@@ -3188,35 +3188,39 @@ public class DatabaseManager {
         Connection conn = getConnection();
         try {
             String sql = "UPDATE loans SET loan_status = ?, total_paid_amount = ?, " +
+                    "total_paid_principal = ?, total_paid_interest = ?, remaining_principal = ?, " +
                     "overdue_days = ?, overdue_amount = ?, total_repayment_amount = ?, " +
                     "next_payment_date = ?, current_period = ?, closed_date = ?, updated_at = ? " +
                     "WHERE id = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, loan.getLoanStatus());
             stmt.setBigDecimal(2, loan.getTotalPaidAmount() != null ? loan.getTotalPaidAmount() : BigDecimal.ZERO);
+            stmt.setBigDecimal(3, loan.getTotalPaidPrincipal() != null ? loan.getTotalPaidPrincipal() : BigDecimal.ZERO);
+            stmt.setBigDecimal(4, loan.getTotalPaidInterest() != null ? loan.getTotalPaidInterest() : BigDecimal.ZERO);
+            stmt.setBigDecimal(5, loan.getRemainingPrincipal() != null ? loan.getRemainingPrincipal() : BigDecimal.ZERO);
             // 修复：正确处理 Integer 对象类型的 null 值检查
             Integer currentOverdueDaysObj = loan.getOverdueDays();
-            stmt.setInt(3, currentOverdueDaysObj != null ? loan.getOverdueDays() : 0);
-            stmt.setBigDecimal(4, loan.getOverdueAmount() != null ? loan.getOverdueAmount() : BigDecimal.ZERO);
-            stmt.setBigDecimal(5, loan.getTotalRepaymentAmount() != null ? loan.getTotalRepaymentAmount() : BigDecimal.ZERO);
+            stmt.setInt(6, currentOverdueDaysObj != null ? loan.getOverdueDays() : 0);
+            stmt.setBigDecimal(7, loan.getOverdueAmount() != null ? loan.getOverdueAmount() : BigDecimal.ZERO);
+            stmt.setBigDecimal(8, loan.getTotalRepaymentAmount() != null ? loan.getTotalRepaymentAmount() : BigDecimal.ZERO);
 
             if (loan.getNextPaymentDate() != null) {
-                stmt.setDate(6, loan.getNextPaymentDate());
+                stmt.setDate(9, loan.getNextPaymentDate());
             } else {
-                stmt.setNull(6, java.sql.Types.DATE);
+                stmt.setNull(9, java.sql.Types.DATE);
             }
             Integer currentOverdueDaysObj1 = loan.getOverdueDays();
             // 修复：正确处理 Integer 对象类型的 null 值检查
-            stmt.setInt(7, currentOverdueDaysObj1 != null ? loan.getCurrentPeriod() : 0);
+            stmt.setInt(10, currentOverdueDaysObj1 != null ? loan.getCurrentPeriod() : 0);
 
             if (loan.getClosedDate() != null) {
-                stmt.setTimestamp(8, loan.getClosedDate());
+                stmt.setTimestamp(11, loan.getClosedDate());
             } else {
-                stmt.setNull(8, java.sql.Types.TIMESTAMP);
+                stmt.setNull(11, java.sql.Types.TIMESTAMP);
             }
 
-            stmt.setTimestamp(9, loan.getUpdatedAt());
-            stmt.setLong(10, loan.getId());
+            stmt.setTimestamp(12, loan.getUpdatedAt());
+            stmt.setLong(13, loan.getId());
             stmt.executeUpdate();
             stmt.close();
         } finally {
@@ -3863,24 +3867,46 @@ public class DatabaseManager {
 
     /**
      * 根据农户ID获取已放款的贷款记录列表
+     * 包括作为主借款人的贷款和作为联合贷款伙伴参与的贷款
      */
     public List<Map<String, Object>> getLoansByFarmerId(Long farmerId) throws SQLException {
         Connection conn = getConnection();
         List<Map<String, Object>> loans = new ArrayList<>();
         try {
+            // 查询作为主借款人的贷款和作为联合贷款伙伴参与的贷款
+            // 使用 UNION 来合并两种查询，避免重复和 NULL 值问题
             String sql = "SELECT l.id, l.loan_id, l.farmer_id, l.loan_amount, l.interest_rate, " +
                         "l.term_months, l.repayment_method, l.disburse_amount, l.disburse_method, " +
                         "l.disburse_date, l.first_repayment_date, l.loan_account, l.disburse_remarks, " +
                         "l.loan_status, l.total_repayment_amount, l.total_paid_amount, l.remaining_principal, " +
                         "l.current_period, l.next_payment_date, l.next_payment_amount, l.purpose, " +
                         "l.repayment_source, l.is_joint_loan, l.created_at, l.updated_at, " +
-                        "lp.product_name, lp.max_amount as product_max_amount " +
+                        "lp.product_name, lp.max_amount as product_max_amount, " +
+                        "jl.partner_farmer_id, jl.partner_principal, jl.partner_interest, " +
+                        "jl.partner_total_repayment, jl.partner_paid_amount, jl.partner_remaining_principal " +
                         "FROM loans l " +
                         "JOIN loan_products lp ON l.product_id = lp.id " +
+                        "LEFT JOIN joint_loans jl ON l.id = jl.loan_id AND jl.partner_farmer_id = ? " +
                         "WHERE l.farmer_id = ? AND l.loan_status IN ('active', 'overdue', 'closed') " +
-                        "ORDER BY l.disburse_date DESC";
+                        "UNION " +
+                        "SELECT l.id, l.loan_id, l.farmer_id, l.loan_amount, l.interest_rate, " +
+                        "l.term_months, l.repayment_method, l.disburse_amount, l.disburse_method, " +
+                        "l.disburse_date, l.first_repayment_date, l.loan_account, l.disburse_remarks, " +
+                        "l.loan_status, l.total_repayment_amount, l.total_paid_amount, l.remaining_principal, " +
+                        "l.current_period, l.next_payment_date, l.next_payment_amount, l.purpose, " +
+                        "l.repayment_source, l.is_joint_loan, l.created_at, l.updated_at, " +
+                        "lp.product_name, lp.max_amount as product_max_amount, " +
+                        "jl.partner_farmer_id, jl.partner_principal, jl.partner_interest, " +
+                        "jl.partner_total_repayment, jl.partner_paid_amount, jl.partner_remaining_principal " +
+                        "FROM loans l " +
+                        "JOIN loan_products lp ON l.product_id = lp.id " +
+                        "JOIN joint_loans jl ON l.id = jl.loan_id " +
+                        "WHERE jl.partner_farmer_id = ? AND l.loan_status IN ('active', 'overdue', 'closed') " +
+                        "ORDER BY disburse_date DESC";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setLong(1, farmerId);
+            stmt.setLong(2, farmerId);
+            stmt.setLong(3, farmerId);
             ResultSet rs = stmt.executeQuery();
 
             while (rs.next()) {
@@ -3912,6 +3938,23 @@ public class DatabaseManager {
                 loan.put("updated_at", rs.getTimestamp("updated_at"));
                 loan.put("product_name", rs.getString("product_name"));
                 loan.put("product_max_amount", rs.getBigDecimal("product_max_amount"));
+                
+                // 如果是联合贷款且当前用户是伙伴，添加伙伴相关信息
+                Long partnerFarmerId = rs.getLong("partner_farmer_id");
+                if (rs.wasNull()) {
+                    partnerFarmerId = null;
+                }
+                if (rs.getBoolean("is_joint_loan") && partnerFarmerId != null && partnerFarmerId.equals(farmerId)) {
+                    loan.put("is_partner", true);
+                    loan.put("partner_principal", rs.getBigDecimal("partner_principal"));
+                    loan.put("partner_interest", rs.getBigDecimal("partner_interest"));
+                    loan.put("partner_total_repayment", rs.getBigDecimal("partner_total_repayment"));
+                    loan.put("partner_paid_amount", rs.getBigDecimal("partner_paid_amount"));
+                    loan.put("partner_remaining_principal", rs.getBigDecimal("partner_remaining_principal"));
+                } else {
+                    loan.put("is_partner", false);
+                }
+                
                 loans.add(loan);
             }
 
