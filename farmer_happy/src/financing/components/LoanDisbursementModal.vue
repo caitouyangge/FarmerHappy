@@ -33,37 +33,6 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">放款方式 <span class="required">*</span></label>
-            <select v-model="formData.disburse_method" class="form-input" required>
-              <option value="">请选择放款方式</option>
-              <option value="bank_transfer">银行转账</option>
-              <option value="cash">现金</option>
-              <option value="check">支票</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">首次还款日期 <span class="required">*</span></label>
-            <input
-              v-model="formData.first_repayment_date"
-              type="date"
-              class="form-input"
-              required
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">贷款账户 <span class="required">*</span></label>
-            <input
-              v-model="formData.loan_account"
-              type="text"
-              class="form-input"
-              placeholder="请输入贷款账户"
-              required
-            />
-          </div>
-
-          <div class="form-group">
             <label class="form-label">放款备注</label>
             <textarea
               v-model="formData.remarks"
@@ -101,9 +70,6 @@ export default {
     const formData = reactive({
       application_id: '',
       disburse_amount: null,
-      disburse_method: '',
-      first_repayment_date: '',
-      loan_account: '',
       remarks: ''
     });
 
@@ -112,10 +78,6 @@ export default {
       if (storedUser) {
         userInfo.value = JSON.parse(storedUser);
       }
-      // 设置默认首次还款日期为一个月后
-      const nextMonth = new Date();
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      formData.first_repayment_date = nextMonth.toISOString().split('T')[0];
     });
 
     const handleClose = () => {
@@ -136,9 +98,6 @@ export default {
           phone: userInfo.value.phone,
           application_id: formData.application_id,
           disburse_amount: parseFloat(formData.disburse_amount),
-          disburse_method: formData.disburse_method,
-          first_repayment_date: formData.first_repayment_date,
-          loan_account: formData.loan_account,
           ...(formData.remarks && { remarks: formData.remarks })
         };
 

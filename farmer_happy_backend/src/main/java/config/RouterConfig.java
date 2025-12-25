@@ -809,25 +809,11 @@ public class RouterConfig {
         LoanDisbursementRequestDTO request = new LoanDisbursementRequestDTO();
         request.setPhone((String) requestBody.get("phone"));
         request.setApplication_id((String) requestBody.get("application_id"));
-        request.setDisburse_method((String) requestBody.get("disburse_method"));
-        request.setLoan_account((String) requestBody.get("loan_account"));
         request.setRemarks((String) requestBody.get("remarks"));
 
         // 处理数值类型字段
         if (requestBody.get("disburse_amount") instanceof Number) {
             request.setDisburse_amount(BigDecimal.valueOf(((Number) requestBody.get("disburse_amount")).doubleValue()));
-        }
-
-        // 处理日期字段
-        if (requestBody.get("first_repayment_date") instanceof String) {
-            try {
-                // 将字符串转换为Date对象
-                String dateStr = (String) requestBody.get("first_repayment_date");
-                // 简化处理，实际项目中应使用适当的日期格式化
-                request.setFirst_repayment_date(java.sql.Date.valueOf(dateStr));
-            } catch (Exception e) {
-                // 日期格式不正确时保持为null
-            }
         }
 
         return request;

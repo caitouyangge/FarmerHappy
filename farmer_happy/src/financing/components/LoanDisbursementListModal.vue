@@ -132,50 +132,13 @@
 
           <form @submit.prevent="handleSubmit" class="form">
             <div class="form-group">
-              <label class="form-label">放款金额 <span class="required">*</span></label>
-              <input
-                v-model.number="formData.disburse_amount"
-                type="number"
-                class="form-input"
-                placeholder="请输入放款金额（元）"
-                :max="selectedApplication.approved_amount"
-                min="0"
-                step="0.01"
-                required
-              />
-              <div class="form-hint">
-                最大可放款金额：¥{{ formatAmount(selectedApplication.approved_amount) }}
+              <label class="form-label">放款金额</label>
+              <div class="form-display-value">
+                ¥{{ formatAmount(selectedApplication.approved_amount) }}
               </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">放款方式 <span class="required">*</span></label>
-              <select v-model="formData.disburse_method" class="form-input" required>
-                <option value="">请选择放款方式</option>
-                <option value="bank_transfer">银行转账</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">首次还款日期 <span class="required">*</span></label>
-              <input
-                v-model="formData.first_repayment_date"
-                type="date"
-                class="form-input"
-                :min="minRepaymentDate"
-                required
-              />
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">贷款账户 <span class="required">*</span></label>
-              <input
-                v-model="formData.loan_account"
-                type="text"
-                class="form-input"
-                placeholder="请输入贷款账户"
-                required
-              />
+              <div class="form-hint">
+                固定为审批通过的金额，不可修改
+              </div>
             </div>
 
             <div class="form-group">
@@ -221,17 +184,7 @@ export default {
     const submitting = ref(false);
     
     const formData = reactive({
-      disburse_amount: null,
-      disburse_method: '',
-      first_repayment_date: '',
-      loan_account: '',
       remarks: ''
-    });
-
-    const minRepaymentDate = computed(() => {
-      const nextMonth = new Date();
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      return nextMonth.toISOString().split('T')[0];
     });
 
     onMounted(async () => {
@@ -240,11 +193,6 @@ export default {
         userInfo.value = JSON.parse(storedUser);
         await loadApplications();
       }
-      
-      // 设置默认首次还款日期
-      const nextMonth = new Date();
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      formData.first_repayment_date = nextMonth.toISOString().split('T')[0];
     });
 
     const loadApplications = async () => {
@@ -294,9 +242,6 @@ export default {
 
     const handleDisburse = (application) => {
       selectedApplication.value = application;
-      formData.disburse_amount = parseFloat(application.approved_amount);
-      formData.disburse_method = '';
-      formData.loan_account = '';
       formData.remarks = '';
       showDisbursementForm.value = true;
     };
@@ -323,18 +268,18 @@ export default {
 
       submitting.value = true;
       try {
+        // 使用审批通过的金额，确保不可修改
+        const approvedAmount = parseFloat(selectedApplication.value.approved_amount);
+        
         logger.info('FINANCING', '提交放款操作', { 
           applicationId: selectedApplication.value.loan_application_id,
-          amount: formData.disburse_amount
+          amount: approvedAmount
         });
 
         const disbursementData = {
           phone: userInfo.value.phone,
           application_id: selectedApplication.value.loan_application_id,
-          disburse_amount: parseFloat(formData.disburse_amount),
-          disburse_method: formData.disburse_method,
-          first_repayment_date: formData.first_repayment_date,
-          loan_account: formData.loan_account,
+          disburse_amount: approvedAmount,
           ...(formData.remarks && { remarks: formData.remarks })
         };
 
@@ -366,7 +311,6 @@ export default {
       selectedApplication,
       submitting,
       formData,
-      minRepaymentDate,
       loadApplications,
       formatAmount,
       formatDate,
@@ -706,6 +650,16 @@ export default {
 .form-hint {
   font-size: 0.75rem;
   color: var(--gray-500);
+}
+
+.form-display-value {
+  padding: 0.75rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--primary);
 }
 
 .form-actions {

@@ -62,10 +62,6 @@
                   <span class="detail-label">已还金额：</span>
                   <span class="detail-value">¥{{ formatAmount(loan.total_paid_amount || 0) }}</span>
                 </div>
-                <div class="loan-detail">
-                  <span class="detail-label">剩余金额：</span>
-                  <span class="detail-value highlight">¥{{ formatAmount(loan.remaining_principal || loan.loan_amount) }}</span>
-                </div>
               </div>
               <div class="loan-footer">
                 <button class="btn btn-primary" @click.stop="viewSchedule(loan.loan_id)">
@@ -132,10 +128,6 @@
                   <div class="summary-item">
                     <span class="summary-label">已还金额：</span>
                     <span class="summary-value">¥{{ formatAmount(schedule.summary?.total_paid || 0) }}</span>
-                  </div>
-                  <div class="summary-item highlight">
-                    <span class="summary-label">剩余欠款：</span>
-                    <span class="summary-value">¥{{ formatAmount(getRemainingDebt()) }}</span>
                   </div>
                 </div>
                 

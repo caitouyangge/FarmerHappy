@@ -425,9 +425,6 @@ export const financingService = {
      * @param {string} disbursementData.phone - 银行操作员手机号
      * @param {string} disbursementData.application_id - 贷款申请ID
      * @param {number} disbursementData.disburse_amount - 放款金额
-     * @param {string} disbursementData.disburse_method - 放款方式（bank_transfer/cash/check）
-     * @param {string} disbursementData.first_repayment_date - 首次还款日期（YYYY-MM-DD格式）
-     * @param {string} disbursementData.loan_account - 贷款账户
      * @param {string} [disbursementData.remarks] - 放款备注（可选）
      * @returns {Promise<Object>} 响应数据
      */

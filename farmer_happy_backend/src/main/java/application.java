@@ -1067,14 +1067,8 @@ public class application {
                     if (dto.getDisburse_amount() != null) {
                         json.append("\"disburse_amount\":").append(dto.getDisburse_amount()).append(",");
                     }
-                    if (dto.getDisburse_method() != null) {
-                        json.append("\"disburse_method\":\"").append(escapeJsonString(dto.getDisburse_method())).append("\",");
-                    }
                     if (dto.getDisburse_date() != null) {
                         json.append("\"disburse_date\":\"").append(escapeJsonString(dto.getDisburse_date().toString())).append("\",");
-                    }
-                    if (dto.getFirst_repayment_date() != null) {
-                        json.append("\"first_repayment_date\":\"").append(escapeJsonString(dto.getFirst_repayment_date().toString())).append("\",");
                     }
                     if (dto.getLoan_status() != null) {
                         json.append("\"loan_status\":\"").append(escapeJsonString(dto.getLoan_status())).append("\",");

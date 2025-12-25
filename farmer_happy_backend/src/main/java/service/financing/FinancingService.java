@@ -1623,6 +1623,16 @@ public class FinancingService {
                     BigDecimal.ROUND_HALF_UP
             );
 
+            // 计算下次还款日期（放款日期后一个月）
+            Timestamp disburseDate = new Timestamp(System.currentTimeMillis());
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(disburseDate);
+            calendar.add(Calendar.MONTH, 1);
+            Date nextPaymentDate = new Date(calendar.getTimeInMillis());
+            
+            // 首次还款日期（与下次还款日期相同，因为这是首次）
+            Date firstRepaymentDate = new Date(nextPaymentDate.getTime());
+
             // 创建贷款记录
             entity.financing.Loan loan = new entity.financing.Loan();
             loan.setLoanId(loanId);
@@ -1633,17 +1643,16 @@ public class FinancingService {
             loan.setTermMonths(loanProduct.getTermMonths());
             loan.setRepaymentMethod(loanProduct.getRepaymentMethod());
             loan.setDisburseAmount(request.getDisburse_amount());
-            loan.setDisburseMethod(request.getDisburse_method());
-            loan.setDisburseDate(new Timestamp(System.currentTimeMillis()));
-            loan.setFirstRepaymentDate(request.getFirst_repayment_date());
-            loan.setLoanAccount(request.getLoan_account());
+            loan.setDisburseMethod("bank_transfer"); // 默认银行转账
+            loan.setDisburseDate(disburseDate);
+            loan.setFirstRepaymentDate(firstRepaymentDate); // 设置为下次还款日期
             loan.setDisburseRemarks(request.getRemarks());
             loan.setLoanStatus("active");
             loan.setApprovedBy(((Long) bankInfo.get("bank_id")).longValue());
             loan.setApprovedAt(new Timestamp(System.currentTimeMillis()));
             loan.setTotalRepaymentAmount(totalRepaymentAmount);
             loan.setRemainingPrincipal(request.getDisburse_amount());
-            loan.setNextPaymentDate(request.getFirst_repayment_date());
+            loan.setNextPaymentDate(nextPaymentDate);
             loan.setNextPaymentAmount(monthlyPayment);
             loan.setPurpose(loanApplication.getPurpose());
             loan.setRepaymentSource(loanApplication.getRepaymentSource());
@@ -1678,13 +1687,11 @@ public class FinancingService {
             response.setDisbursement_id("DIS" + System.currentTimeMillis());
             response.setApplication_id(request.getApplication_id());
             response.setDisburse_amount(request.getDisburse_amount());
-            response.setDisburse_method(request.getDisburse_method());
             response.setDisburse_date(new Timestamp(System.currentTimeMillis()));
-            response.setFirst_repayment_date(request.getFirst_repayment_date());
             response.setLoan_status("active");
             response.setTotal_repayment_amount(totalRepaymentAmount);
             response.setMonthly_payment(monthlyPayment);
-            response.setNext_payment_date(request.getFirst_repayment_date());
+            response.setNext_payment_date(nextPaymentDate);
 
             return response;
         } catch (Exception e) {
@@ -2075,26 +2082,6 @@ public class FinancingService {
 
         if (request.getDisburse_amount() == null || request.getDisburse_amount().compareTo(BigDecimal.ZERO) <= 0) {
             errors.add(createError("disburse_amount", "放款金额必须大于0"));
-        }
-
-        if (request.getDisburse_method() == null || request.getDisburse_method().trim().isEmpty()) {
-            errors.add(createError("disburse_method", "放款方式不能为空"));
-        } else if (!Arrays.asList("bank_transfer", "cash", "check").contains(request.getDisburse_method())) {
-            errors.add(createError("disburse_method", "放款方式必须是bank_transfer、cash或check"));
-        }
-
-        if (request.getFirst_repayment_date() == null) {
-            errors.add(createError("first_repayment_date", "首次还款日期不能为空"));
-        } else {
-            // 检查首次还款日期是否在放款日期之后至少15天
-            java.util.Date disburseDate = new java.util.Date();
-            java.util.Date firstRepaymentDate = new java.util.Date(request.getFirst_repayment_date().getTime());
-            long diffInMillies = Math.abs(firstRepaymentDate.getTime() - disburseDate.getTime());
-            long diffInDays = TimeUnit.DAYS.convert(diffInMillies, TimeUnit.MILLISECONDS);
-
-            if (diffInDays < 15) {
-                errors.add(createError("first_repayment_date", "首次还款日期不能早于或等于放款日期，必须至少间隔15天"));
-            }
         }
 
         if (request.getRemarks() != null && request.getRemarks().length() > 200) {
