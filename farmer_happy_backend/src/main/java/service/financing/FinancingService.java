@@ -910,6 +910,27 @@ public class FinancingService {
 
             // 保存联合贷款伙伴记录到数据库
             saveJointLoanApplicationPartners(applicationRecordId, partnerRecords);
+            
+            // 调试：验证数据是否正确保存
+            System.out.println("=== DEBUG: 验证保存的联合贷款伙伴记录 ===");
+            for (Map<String, Object> partnerRecord : partnerRecords) {
+                Long partnerFarmerId = ((Long) partnerRecord.get("partner_farmer_id"));
+                System.out.println("已保存伙伴记录: partner_farmer_id=" + partnerFarmerId + 
+                                 ", loan_application_id(数据库ID)=" + applicationRecordId);
+            }
+            System.out.println("loan_application_id(字符串ID)=" + loanApplicationId);
+            
+            // 验证：立即查询保存的数据，确保可以查询到
+            List<Map<String, Object>> savedPartners = getJointLoanPartnersByApplicationId(applicationRecordId);
+            System.out.println("验证查询：保存后立即查询，找到 " + savedPartners.size() + " 条伙伴记录");
+            for (Map<String, Object> savedPartner : savedPartners) {
+                System.out.println("  伙伴ID: " + savedPartner.get("partner_farmer_id") + 
+                                 ", 状态: " + savedPartner.get("status"));
+            }
+            System.out.println("=== DEBUG END ===");
+
+            // 更新贷款申请状态为pending_partners（等待合作伙伴确认）
+            updateLoanApplicationStatus(loanApplicationId, "pending_partners", null, null, null);
 
             // 构造成功响应
             JointLoanApplicationResponseDTO response = new JointLoanApplicationResponseDTO();
@@ -1442,9 +1463,11 @@ public class FinancingService {
             }
 
             // 检查申请状态
-            if (!"pending".equals(loanApplication.getStatus()) &&
-                    !"pending_partners".equals(loanApplication.getStatus())) {
-                throw new IllegalArgumentException("该申请状态为" + loanApplication.getStatus() + "，不能重复审批");
+            if (!"pending".equals(loanApplication.getStatus())) {
+                if ("pending_partners".equals(loanApplication.getStatus())) {
+                    throw new IllegalArgumentException("该联合贷款申请还在等待合作伙伴确认，不能审批。请等待所有合作伙伴确认后再审批。");
+                }
+                throw new IllegalArgumentException("该申请状态为" + loanApplication.getStatus() + "，不能审批");
             }
 
             // 构造响应

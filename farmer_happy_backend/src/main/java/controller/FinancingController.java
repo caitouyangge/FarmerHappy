@@ -849,11 +849,26 @@ public class FinancingController {
      */
     public Map<String, Object> getPendingJointLoanApplications(PendingJointLoanApplicationsRequestDTO request) {
         try {
+            System.out.println("=== DEBUG: 获取待确认联合贷款申请 ===");
+            System.out.println("请求手机号: " + (request != null ? request.getPhone() : "null"));
+            
             PendingJointLoanApplicationsResponseDTO response = financingService.getPendingJointLoanApplications(request);
+            
+            System.out.println("查询结果: total=" + (response != null ? response.getTotal() : 0) + 
+                             ", applications数量=" + (response != null && response.getApplications() != null ? response.getApplications().size() : 0));
+            
+            // 直接构建Map结构避免DTO序列化问题
+            Map<String, Object> dataMap = new HashMap<>();
+            dataMap.put("total", response != null ? response.getTotal() : 0);
+            dataMap.put("applications", response != null && response.getApplications() != null ? response.getApplications() : new ArrayList<>());
+            
             Map<String, Object> result = new HashMap<>();
             result.put("code", 200);
             result.put("message", "获取成功");
-            result.put("data", response);
+            result.put("data", dataMap);
+            
+            System.out.println("返回结果: dataMap=" + dataMap);
+            System.out.println("=== DEBUG END ===");
             return result;
         } catch (IllegalArgumentException e) {
             Map<String, Object> result = new HashMap<>();

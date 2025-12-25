@@ -309,7 +309,7 @@ export default {
       let greeting = '你好';
       if (hour>5 && hour < 12) greeting = '早上好';
       else if (hour>12 && hour < 18) greeting = '下午好';
-      else if (hour>18 && hour < 21) greeting = '晚上好';
+      else if (hour>18 && hour < 24) greeting = '晚上好';
       else greeting = '凌晨好';
       
       return `${greeting}，${userInfo.value.nickname || '用户'}`;

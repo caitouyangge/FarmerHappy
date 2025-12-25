@@ -3,7 +3,7 @@
     <div class="navbar-container">
       <div class="navbar-brand" @click="goHome">
         <span class="brand-icon">🌾</span>
-        <span class="brand-text">农户快乐</span>
+        <span class="brand-text">农乐</span>
       </div>
       
       <ul class="navbar-menu">

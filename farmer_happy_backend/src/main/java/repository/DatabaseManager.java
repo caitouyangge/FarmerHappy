@@ -5,6 +5,7 @@ import entity.Comment;
 import entity.Content;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -735,6 +736,10 @@ public class DatabaseManager {
             Timestamp approvedAt, BigDecimal approvedAmount) throws SQLException {
         Connection conn = getConnection();
         try {
+            System.out.println("=== DEBUG: 更新贷款申请状态 ===");
+            System.out.println("loan_application_id: " + applicationId);
+            System.out.println("新状态: " + status);
+            
             String sql = "UPDATE loan_applications SET status = ?, approved_by = ?, approved_at = ?, approved_amount = ? WHERE loan_application_id = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, status);
@@ -754,7 +759,26 @@ public class DatabaseManager {
                 stmt.setNull(4, java.sql.Types.DECIMAL);
             }
             stmt.setString(5, applicationId);
-            stmt.executeUpdate();
+            int rowsAffected = stmt.executeUpdate();
+            System.out.println("更新影响行数: " + rowsAffected);
+            
+            // 验证更新是否成功
+            if (rowsAffected == 0) {
+                System.out.println("警告: 没有找到匹配的申请记录，loan_application_id=" + applicationId);
+            } else {
+                // 查询更新后的状态确认
+                String verifySql = "SELECT status FROM loan_applications WHERE loan_application_id = ?";
+                PreparedStatement verifyStmt = conn.prepareStatement(verifySql);
+                verifyStmt.setString(1, applicationId);
+                java.sql.ResultSet verifyRs = verifyStmt.executeQuery();
+                if (verifyRs.next()) {
+                    System.out.println("验证: 更新后的状态为 " + verifyRs.getString("status"));
+                }
+                verifyRs.close();
+                verifyStmt.close();
+            }
+            
+            System.out.println("=== DEBUG END ===");
             stmt.close();
         } finally {
             closeConnection();
@@ -981,18 +1005,33 @@ public class DatabaseManager {
             throws SQLException {
         Connection conn = getConnection();
         try {
+            System.out.println("=== DEBUG: 保存联合贷款伙伴记录 ===");
+            System.out.println("loanApplicationId (数据库ID): " + loanApplicationId);
+            System.out.println("伙伴数量: " + partners.size());
+            
             String sql = "INSERT INTO joint_loan_applications (loan_application_id, partner_farmer_id, partner_share_ratio, partner_share_amount, status) VALUES (?, ?, ?, ?, ?)";
             PreparedStatement stmt = conn.prepareStatement(sql);
 
             for (Map<String, Object> partner : partners) {
+                Long partnerFarmerId = (Long) partner.get("partner_farmer_id");
+                BigDecimal shareRatio = (BigDecimal) partner.get("partner_share_ratio");
+                BigDecimal shareAmount = (BigDecimal) partner.get("partner_share_amount");
+                
+                System.out.println("保存伙伴: partner_farmer_id=" + partnerFarmerId + 
+                                 ", share_ratio=" + shareRatio + 
+                                 ", share_amount=" + shareAmount + 
+                                 ", status=pending_invitation");
+                
                 stmt.setLong(1, loanApplicationId);
-                stmt.setLong(2, (Long) partner.get("partner_farmer_id"));
-                stmt.setBigDecimal(3, (BigDecimal) partner.get("partner_share_ratio"));
-                stmt.setBigDecimal(4, (BigDecimal) partner.get("partner_share_amount"));
+                stmt.setLong(2, partnerFarmerId);
+                stmt.setBigDecimal(3, shareRatio);
+                stmt.setBigDecimal(4, shareAmount);
                 stmt.setString(5, "pending_invitation");
-                stmt.executeUpdate();
+                int rowsAffected = stmt.executeUpdate();
+                System.out.println("插入影响行数: " + rowsAffected);
             }
 
+            System.out.println("=== DEBUG END ===");
             stmt.close();
         } finally {
             closeConnection();
@@ -2373,6 +2412,33 @@ public class DatabaseManager {
         Connection conn = getConnection();
         List<Map<String, Object>> applications = new ArrayList<>();
         try {
+            // 添加调试日志
+            System.out.println("=== DEBUG: 查询待确认联合贷款申请 ===");
+            System.out.println("查询的farmerId: " + farmerId);
+            
+            // 先查询所有该伙伴参与的联合贷款申请（用于调试）
+            String debugSql = "SELECT jla.loan_application_id, jla.partner_farmer_id, jla.status as partner_status, " +
+                    "la.loan_application_id as la_loan_id, la.status as la_status " +
+                    "FROM joint_loan_applications jla " +
+                    "JOIN loan_applications la ON jla.loan_application_id = la.id " +
+                    "WHERE jla.partner_farmer_id = ?";
+            PreparedStatement debugStmt = conn.prepareStatement(debugSql);
+            debugStmt.setLong(1, farmerId);
+            ResultSet debugRs = debugStmt.executeQuery();
+            System.out.println("=== 调试：该伙伴参与的所有联合贷款申请 ===");
+            while (debugRs.next()) {
+                System.out.println("loan_application_id(DB): " + debugRs.getLong("loan_application_id") + 
+                                 ", loan_application_id(业务ID): " + debugRs.getString("la_loan_id") +
+                                 ", 申请状态: " + debugRs.getString("la_status") +
+                                 ", 伙伴状态: " + debugRs.getString("partner_status"));
+            }
+            debugRs.close();
+            debugStmt.close();
+            System.out.println("=== 调试结束 ===");
+            
+            // 查询待确认的联合贷款申请
+            // 条件：申请状态为 pending_partners 且伙伴状态为 pending_invitation（还未接受）
+            // 注意：如果伙伴已经接受但申请状态还没更新，不应该显示在待确认列表中
             String sql = "SELECT la.*, lp.product_name, lp.interest_rate, lp.term_months, " +
                     "jla.partner_share_amount, jla.status as partner_status, " +
                     "initiator.phone as initiator_phone, initiator.nickname as initiator_nickname " +
@@ -2385,12 +2451,18 @@ public class DatabaseManager {
                     "AND la.status = 'pending_partners' " +
                     "AND jla.status = 'pending_invitation' " +
                     "ORDER BY la.created_at DESC";
+            
+            System.out.println("执行的SQL: " + sql);
+            System.out.println("查询参数: farmerId = " + farmerId);
                     
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setLong(1, farmerId);
             ResultSet rs = stmt.executeQuery();
             
+            int count = 0;
+            
             while (rs.next()) {
+                count++;
                 Map<String, Object> application = new HashMap<>();
                 application.put("loan_application_id", rs.getString("loan_application_id"));
                 application.put("product_name", rs.getString("product_name"));
@@ -2405,7 +2477,14 @@ public class DatabaseManager {
                 application.put("partner_status", rs.getString("partner_status"));
                 application.put("created_at", rs.getTimestamp("created_at"));
                 applications.add(application);
+                
+                System.out.println("找到申请 #" + count + ": loan_application_id=" + rs.getString("loan_application_id") + 
+                                 ", status=" + rs.getString("status") + ", partner_status=" + rs.getString("partner_status"));
             }
+            
+            System.out.println("查询结果: 共找到 " + count + " 条待确认申请");
+            System.out.println("=== DEBUG END ===");
+            
             rs.close();
             stmt.close();
         } finally {
@@ -3679,7 +3758,7 @@ public class DatabaseManager {
                         "JOIN user_farmers uf ON la.farmer_id = uf.farmer_id " +
                         "JOIN users u ON uf.uid = u.uid " +
                         "JOIN loan_products lp ON la.product_id = lp.id " +
-                        "WHERE la.status IN ('pending', 'pending_partners') " +
+                        "WHERE la.status = 'pending' " +
                         "ORDER BY la.created_at DESC";
             PreparedStatement stmt = conn.prepareStatement(sql);
             ResultSet rs = stmt.executeQuery();
@@ -3819,12 +3898,14 @@ public class DatabaseManager {
 
     /**
      * 根据农户ID获取贷款申请记录列表
+     * 包括作为发起人的申请和作为伙伴参与的联合贷款申请
      */
     public List<Map<String, Object>> getLoanApplicationsByFarmerId(Long farmerId) throws SQLException {
         Connection conn = getConnection();
         List<Map<String, Object>> applications = new ArrayList<>();
         try {
-            String sql = "SELECT la.loan_application_id, la.apply_amount, la.approved_amount, la.purpose, " +
+            // 查询作为发起人的申请
+            String sqlInitiator = "SELECT la.id, la.loan_application_id, la.apply_amount, la.approved_amount, la.purpose, " +
                         "la.repayment_source, la.application_type, la.status, la.reject_reason, " +
                         "la.created_at, la.approved_at, la.updated_at, lp.product_name, lp.interest_rate, " +
                         "lp.term_months, lp.repayment_method, approver.nickname as approver_name, " +
@@ -3833,39 +3914,139 @@ public class DatabaseManager {
                         "JOIN loan_products lp ON la.product_id = lp.id " +
                         "LEFT JOIN user_banks ub ON la.approved_by = ub.bank_id " +
                         "LEFT JOIN users approver ON ub.uid = approver.uid " +
-                        "WHERE la.farmer_id = ? " +
-                        "ORDER BY la.created_at DESC";
-            PreparedStatement stmt = conn.prepareStatement(sql);
-            stmt.setLong(1, farmerId);
-            ResultSet rs = stmt.executeQuery();
+                        "WHERE la.farmer_id = ?";
+            
+            PreparedStatement stmtInitiator = conn.prepareStatement(sqlInitiator);
+            stmtInitiator.setLong(1, farmerId);
+            ResultSet rsInitiator = stmtInitiator.executeQuery();
 
-            while (rs.next()) {
+            while (rsInitiator.next()) {
                 Map<String, Object> application = new HashMap<>();
-                application.put("loan_application_id", rs.getString("loan_application_id"));
-                application.put("apply_amount", rs.getBigDecimal("apply_amount"));
-                application.put("approved_amount", rs.getBigDecimal("approved_amount"));
-                application.put("purpose", rs.getString("purpose"));
-                application.put("repayment_source", rs.getString("repayment_source"));
-                application.put("application_type", rs.getString("application_type"));
-                application.put("status", rs.getString("status"));
-                application.put("reject_reason", rs.getString("reject_reason"));
-                application.put("created_at", rs.getTimestamp("created_at"));
-                application.put("approved_at", rs.getTimestamp("approved_at"));
-                application.put("updated_at", rs.getTimestamp("updated_at"));
-                application.put("product_name", rs.getString("product_name"));
-                application.put("interest_rate", rs.getBigDecimal("interest_rate"));
-                application.put("term_months", rs.getInt("term_months"));
-                application.put("repayment_method", rs.getString("repayment_method"));
-                application.put("approver_name", rs.getString("approver_name"));
-                application.put("approver_bank", rs.getString("approver_bank"));
+                application.put("loan_application_id", rsInitiator.getString("loan_application_id"));
+                application.put("apply_amount", rsInitiator.getBigDecimal("apply_amount"));
+                application.put("approved_amount", rsInitiator.getBigDecimal("approved_amount"));
+                application.put("purpose", rsInitiator.getString("purpose"));
+                application.put("repayment_source", rsInitiator.getString("repayment_source"));
+                application.put("application_type", rsInitiator.getString("application_type"));
+                application.put("status", rsInitiator.getString("status"));
+                application.put("reject_reason", rsInitiator.getString("reject_reason"));
+                application.put("created_at", rsInitiator.getTimestamp("created_at"));
+                application.put("approved_at", rsInitiator.getTimestamp("approved_at"));
+                application.put("updated_at", rsInitiator.getTimestamp("updated_at"));
+                application.put("product_name", rsInitiator.getString("product_name"));
+                application.put("interest_rate", rsInitiator.getBigDecimal("interest_rate"));
+                application.put("term_months", rsInitiator.getInt("term_months"));
+                application.put("repayment_method", rsInitiator.getString("repayment_method"));
+                application.put("approver_name", rsInitiator.getString("approver_name"));
+                application.put("approver_bank", rsInitiator.getString("approver_bank"));
+                application.put("role", "initiator");
+                
+                // 计算份额信息
+                BigDecimal applyAmount = rsInitiator.getBigDecimal("apply_amount");
+                if ("joint".equals(rsInitiator.getString("application_type"))) {
+                    // 如果是联合贷款，计算发起人的份额（总金额 - 所有伙伴份额）
+                    BigDecimal totalPartnerShare = getTotalPartnerShareAmount(conn, rsInitiator.getLong("id"));
+                    BigDecimal initiatorShare = applyAmount.subtract(totalPartnerShare);
+                    BigDecimal initiatorShareRatio = applyAmount.compareTo(BigDecimal.ZERO) > 0 
+                        ? initiatorShare.divide(applyAmount, 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO;
+                    application.put("my_share_amount", initiatorShare);
+                    application.put("my_share_ratio", initiatorShareRatio);
+                } else {
+                    // 单人贷款，份额为100%
+                    application.put("my_share_amount", applyAmount);
+                    application.put("my_share_ratio", BigDecimal.valueOf(100));
+                }
+                
                 applications.add(application);
             }
-            rs.close();
-            stmt.close();
+            rsInitiator.close();
+            stmtInitiator.close();
+
+            // 查询作为伙伴参与的联合贷款申请
+            String sqlPartner = "SELECT la.loan_application_id, la.apply_amount, la.approved_amount, la.purpose, " +
+                        "la.repayment_source, la.application_type, la.status, la.reject_reason, " +
+                        "la.created_at, la.approved_at, la.updated_at, lp.product_name, lp.interest_rate, " +
+                        "lp.term_months, lp.repayment_method, approver.nickname as approver_name, " +
+                        "ub.bank_name as approver_bank, " +
+                        "jla.partner_share_amount as my_share_amount, " +
+                        "jla.partner_share_ratio as my_share_ratio " +
+                        "FROM joint_loan_applications jla " +
+                        "JOIN loan_applications la ON jla.loan_application_id = la.id " +
+                        "JOIN loan_products lp ON la.product_id = lp.id " +
+                        "LEFT JOIN user_banks ub ON la.approved_by = ub.bank_id " +
+                        "LEFT JOIN users approver ON ub.uid = approver.uid " +
+                        "WHERE jla.partner_farmer_id = ? " +
+                        "AND jla.status != 'rejected'";
+            
+            PreparedStatement stmtPartner = conn.prepareStatement(sqlPartner);
+            stmtPartner.setLong(1, farmerId);
+            ResultSet rsPartner = stmtPartner.executeQuery();
+
+            while (rsPartner.next()) {
+                Map<String, Object> application = new HashMap<>();
+                application.put("loan_application_id", rsPartner.getString("loan_application_id"));
+                application.put("apply_amount", rsPartner.getBigDecimal("apply_amount"));
+                application.put("approved_amount", rsPartner.getBigDecimal("approved_amount"));
+                application.put("purpose", rsPartner.getString("purpose"));
+                application.put("repayment_source", rsPartner.getString("repayment_source"));
+                application.put("application_type", rsPartner.getString("application_type"));
+                application.put("status", rsPartner.getString("status"));
+                application.put("reject_reason", rsPartner.getString("reject_reason"));
+                application.put("created_at", rsPartner.getTimestamp("created_at"));
+                application.put("approved_at", rsPartner.getTimestamp("approved_at"));
+                application.put("updated_at", rsPartner.getTimestamp("updated_at"));
+                application.put("product_name", rsPartner.getString("product_name"));
+                application.put("interest_rate", rsPartner.getBigDecimal("interest_rate"));
+                application.put("term_months", rsPartner.getInt("term_months"));
+                application.put("repayment_method", rsPartner.getString("repayment_method"));
+                application.put("approver_name", rsPartner.getString("approver_name"));
+                application.put("approver_bank", rsPartner.getString("approver_bank"));
+                application.put("role", "partner");
+                application.put("my_share_amount", rsPartner.getBigDecimal("my_share_amount"));
+                application.put("my_share_ratio", rsPartner.getBigDecimal("my_share_ratio"));
+                applications.add(application);
+            }
+            rsPartner.close();
+            stmtPartner.close();
+
+            // 按创建时间倒序排序
+            applications.sort((a, b) -> {
+                Timestamp timeA = (Timestamp) a.get("created_at");
+                Timestamp timeB = (Timestamp) b.get("created_at");
+                if (timeA == null && timeB == null) return 0;
+                if (timeA == null) return 1;
+                if (timeB == null) return -1;
+                return timeB.compareTo(timeA);
+            });
         } finally {
             closeConnection();
         }
         return applications;
+    }
+
+    /**
+     * 获取联合贷款申请中所有伙伴的总份额金额
+     */
+    private BigDecimal getTotalPartnerShareAmount(Connection conn, Long loanApplicationId) throws SQLException {
+        String sql = "SELECT COALESCE(SUM(partner_share_amount), 0) as total_share " +
+                    "FROM joint_loan_applications " +
+                    "WHERE loan_application_id = ? " +
+                    "AND status != 'rejected'";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setLong(1, loanApplicationId);
+        ResultSet rs = stmt.executeQuery();
+        BigDecimal totalShare = BigDecimal.ZERO;
+        if (rs.next()) {
+            totalShare = rs.getBigDecimal("total_share");
+            if (totalShare == null) {
+                totalShare = BigDecimal.ZERO;
+            }
+        }
+        rs.close();
+        stmt.close();
+        return totalShare;
     }
 
     /**

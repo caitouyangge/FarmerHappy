@@ -38,6 +38,9 @@
                 <div class="application-id">
                   <span class="label">申请编号：</span>
                   <span class="value">{{ application.loan_application_id }}</span>
+                  <span v-if="application.application_type === 'joint'" class="role-badge" :class="application.role === 'initiator' ? 'role-initiator' : 'role-partner'">
+                    {{ application.role === 'initiator' ? '发起人' : '联合伙伴' }}
+                  </span>
                 </div>
                 <div class="application-status">
                   <span class="status-badge" :class="getStatusClass(application.status)">
@@ -54,11 +57,17 @@
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">申请类型：</span>
-                    <span class="detail-value">{{ getApplicationTypeText(application.application_type) }}</span>
+                    <span class="detail-value">{{ getApplicationTypeText(application.application_type, application.role) }}</span>
                   </div>
                   <div class="detail-item">
-                    <span class="detail-label">申请金额：</span>
+                    <span class="detail-label">{{ application.role === 'partner' ? '总申请金额' : '申请金额' }}：</span>
                     <span class="detail-value amount">¥{{ formatAmount(application.apply_amount) }}</span>
+                  </div>
+                  <div class="detail-item" v-if="application.application_type === 'joint' && application.my_share_amount !== undefined">
+                    <span class="detail-label">{{ application.role === 'initiator' ? '我的份额（发起人）' : '我的份额（联合伙伴）' }}：</span>
+                    <span class="detail-value amount share">¥{{ formatAmount(application.my_share_amount) }} 
+                      <span class="share-ratio">({{ formatAmount(application.my_share_ratio) }}%)</span>
+                    </span>
                   </div>
                   <div class="detail-item" v-if="application.approved_amount">
                     <span class="detail-label">批准金额：</span>
@@ -105,7 +114,7 @@
                 <!-- 时间信息 -->
                 <div class="time-info">
                   <div class="time-item">
-                    <span class="detail-label">申请时间：</span>
+                    <span class="detail-label">{{ application.role === 'partner' ? '参与时间' : '申请时间' }}：</span>
                     <span class="detail-value">{{ formatDateTime(application.created_at) }}</span>
                   </div>
                   <div v-if="application.updated_at && application.updated_at !== application.created_at" class="time-item">
@@ -118,13 +127,13 @@
               <!-- 状态说明 -->
               <div class="status-description">
                 <div class="status-text">
-                  {{ getStatusDescription(application.status) }}
+                  {{ getStatusDescription(application.status, application.role, application.application_type, application.my_share_amount) }}
                 </div>
                 <div v-if="application.status === 'approved'" class="status-action">
-                  <span class="action-hint">✅ 等待银行放款</span>
+                  <span class="action-hint">✅ {{ application.role === 'partner' ? '等待银行放款至您的账户' : '等待银行放款' }}</span>
                 </div>
                 <div v-else-if="application.status === 'disbursed'" class="status-action">
-                  <span class="action-hint">✅ 贷款已成功发放</span>
+                  <span class="action-hint">✅ {{ application.role === 'partner' ? '贷款已成功发放至您的账户' : '贷款已成功发放' }}</span>
                 </div>
               </div>
             </div>
@@ -227,21 +236,54 @@ export default {
       }
     };
 
-    const getApplicationTypeText = (type) => {
+    const getApplicationTypeText = (type, role) => {
       switch (type) {
         case 'single': return '单人贷款';
-        case 'joint': return '联合贷款';
+        case 'joint': 
+          if (role === 'initiator') {
+            return '联合贷款（发起人）';
+          } else if (role === 'partner') {
+            return '联合贷款（参与）';
+          }
+          return '联合贷款';
         default: return type;
       }
     };
 
-    const getStatusDescription = (status) => {
+    const getStatusDescription = (status, role, applicationType, myShareAmount) => {
+      const isPartner = role === 'partner';
+      const isJoint = applicationType === 'joint';
+      
       switch (status) {
-        case 'pending': return '您的贷款申请正在银行审批中，请耐心等待审批结果。';
-        case 'pending_partners': return '您的联合贷款申请正在等待合作伙伴确认，请联系相关伙伴完成确认。';
-        case 'approved': return '恭喜您！贷款申请已获得批准，银行将尽快安排放款。';
-        case 'rejected': return '很遗憾，您的贷款申请被拒绝。您可以根据拒绝原因调整后重新申请。';
-        case 'disbursed': return '贷款已成功发放到您的账户，请按时还款。';
+        case 'pending': 
+          if (isPartner) {
+            return '您参与的联合贷款申请正在银行审批中，请耐心等待审批结果。';
+          }
+          return '您的贷款申请正在银行审批中，请耐心等待审批结果。';
+        case 'pending_partners': 
+          if (isPartner) {
+            // 联合伙伴接受邀请后，状态应该已经更新为 pending
+            // 如果还是 pending_partners，说明还未接受邀请或状态未更新
+            return '您已收到联合贷款邀请，请前往确认页面接受或拒绝邀请。';
+          }
+          return '您的联合贷款申请正在等待联合伙伴确认，请等待对方同意或拒绝。';
+        case 'approved': 
+          if (isPartner) {
+            return '恭喜您！您参与的联合贷款申请已获得批准，银行将尽快安排放款至您的账户。';
+          }
+          return '恭喜您！贷款申请已获得批准，银行将尽快安排放款。';
+        case 'rejected': 
+          if (isPartner) {
+            return '很遗憾，您参与的联合贷款申请被拒绝。';
+          }
+          return '很遗憾，您的贷款申请被拒绝。您可以根据拒绝原因调整后重新申请。';
+        case 'disbursed': 
+          if (isPartner && myShareAmount) {
+            return `贷款已成功发放到您的账户，请按时还款。您的份额为 ¥${formatAmount(myShareAmount)}。`;
+          } else if (isPartner) {
+            return '贷款已成功发放到您的账户，请按时还款。';
+          }
+          return '贷款已成功发放到您的账户，请按时还款。';
         default: return '';
       }
     };
@@ -539,6 +581,36 @@ export default {
 }
 
 .detail-value.approved {
+  color: var(--success);
+}
+
+.detail-value.share {
+  color: var(--primary);
+}
+
+.share-ratio {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  font-weight: 400;
+  margin-left: 0.25rem;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+.role-badge.role-initiator {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.role-badge.role-partner {
+  background: var(--success-light);
   color: var(--success);
 }
 
