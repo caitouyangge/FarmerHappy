@@ -876,6 +876,237 @@ export const financingService = {
     },
 
     /**
+     * 获取待确认的联合贷款申请
+     * @param {Object} requestData - 请求数据
+     * @param {string} requestData.phone - 用户手机号
+     * @returns {Promise<Object>} 待确认的联合贷款申请列表
+     */
+    async getPendingJointLoanApplications(requestData) {
+        try {
+            logger.apiRequest('POST', `${FINANCING_API_URL}/pending-joint-loans`, {
+                phone: requestData.phone
+            });
+            logger.info('FINANCING', '获取待确认的联合贷款申请', {
+                phone: requestData.phone
+            });
+
+            const response = await axios.post(`${FINANCING_API_URL}/pending-joint-loans`, requestData);
+
+            logger.apiResponse('POST', `${FINANCING_API_URL}/pending-joint-loans`, response.status, {
+                code: response.data.code
+            });
+
+            if (response.data.code !== 200) {
+                logger.error('FINANCING', '获取待确认的联合贷款申请失败', {
+                    code: response.data.code,
+                    message: response.data.message
+                });
+
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+
+                throw errorObj;
+            }
+
+            logger.info('FINANCING', '获取待确认的联合贷款申请成功', {
+                total: response.data.data?.total || 0
+            });
+
+            return response.data;
+        } catch (error) {
+            logger.apiError('POST', `${FINANCING_API_URL}/pending-joint-loans`, error);
+            logger.error('FINANCING', '获取待确认的联合贷款申请失败', {
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+
+            if (error.code && error.message) {
+                throw error;
+            }
+
+            throw {
+                code: 500,
+                message: error.message || '获取待确认的联合贷款申请失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
+     * 确认或拒绝联合贷款申请
+     * @param {Object} requestData - 请求数据
+     * @param {string} requestData.phone - 用户手机号
+     * @param {string} requestData.application_id - 贷款申请ID
+     * @param {string} requestData.action - 操作类型：'confirm' 或 'reject'
+     * @returns {Promise<Object>} 响应数据
+     */
+    async confirmJointLoanApplication(requestData) {
+        try {
+            logger.apiRequest('POST', `${FINANCING_API_URL}/joint-loan-confirmation`, {
+                phone: requestData.phone,
+                application_id: requestData.application_id,
+                action: requestData.action
+            });
+            logger.info('FINANCING', '确认联合贷款申请', {
+                application_id: requestData.application_id,
+                action: requestData.action
+            });
+
+            const response = await axios.post(`${FINANCING_API_URL}/joint-loan-confirmation`, requestData);
+
+            logger.apiResponse('POST', `${FINANCING_API_URL}/joint-loan-confirmation`, response.status, {
+                code: response.data.code
+            });
+
+            if (response.data.code !== 200) {
+                logger.error('FINANCING', '确认联合贷款申请失败', {
+                    code: response.data.code,
+                    message: response.data.message
+                });
+
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+
+                throw errorObj;
+            }
+
+            logger.info('FINANCING', '确认联合贷款申请成功', {
+                application_id: requestData.application_id,
+                action: requestData.action
+            });
+
+            return response.data;
+        } catch (error) {
+            logger.apiError('POST', `${FINANCING_API_URL}/joint-loan-confirmation`, error);
+            logger.error('FINANCING', '确认联合贷款申请失败', {
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+
+            if (error.code && error.message) {
+                throw error;
+            }
+
+            throw {
+                code: 500,
+                message: error.message || '确认联合贷款申请失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
+     * 发送联合贷款消息
+     * @param {Object} requestData - 请求数据
+     * @param {string} requestData.phone - 发送者手机号
+     * @param {string} requestData.application_id - 贷款申请ID
+     * @param {string} requestData.receiver_phone - 接收者手机号
+     * @param {string} requestData.content - 消息内容
+     * @returns {Promise<Object>} 响应数据
+     */
+    async sendJointLoanMessage(requestData) {
+        try {
+            logger.apiRequest('POST', `${FINANCING_API_URL}/joint-loan-messages/send`, {
+                application_id: requestData.application_id,
+                receiver_phone: requestData.receiver_phone
+            });
+
+            const response = await axios.post(`${FINANCING_API_URL}/joint-loan-messages/send`, requestData);
+
+            if (response.data.code !== 200) {
+                throw {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+            }
+
+            return response.data;
+        } catch (error) {
+            logger.apiError('POST', `${FINANCING_API_URL}/joint-loan-messages/send`, error);
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+            if (error.code && error.message) {
+                throw error;
+            }
+            throw {
+                code: 500,
+                message: error.message || '发送消息失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
+     * 获取联合贷款消息列表
+     * @param {Object} requestData - 请求数据
+     * @param {string} requestData.phone - 用户手机号
+     * @param {string} requestData.application_id - 贷款申请ID
+     * @returns {Promise<Object>} 消息列表
+     */
+    async getJointLoanMessages(requestData) {
+        try {
+            logger.apiRequest('POST', `${FINANCING_API_URL}/joint-loan-messages`, {
+                application_id: requestData.application_id
+            });
+
+            const response = await axios.post(`${FINANCING_API_URL}/joint-loan-messages`, requestData);
+
+            if (response.data.code !== 200) {
+                throw {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+            }
+
+            return response.data;
+        } catch (error) {
+            logger.apiError('POST', `${FINANCING_API_URL}/joint-loan-messages`, error);
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+            if (error.code && error.message) {
+                throw error;
+            }
+            throw {
+                code: 500,
+                message: error.message || '获取消息失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
      * 获取智能贷款推荐
      * @param {Object} requestData - 请求数据
      * @param {string} requestData.phone - 用户手机号

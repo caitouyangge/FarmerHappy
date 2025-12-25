@@ -134,13 +134,36 @@ export default {
     // 获取用户可用额度并计算所需伙伴最低额度
     const calculateRequiredPartnerLimit = async () => {
       if (!props.product || !userInfo.value.phone) {
+        logger.warn('JOINT_PARTNERS', '缺少必要参数', {
+          hasProduct: !!props.product,
+          hasPhone: !!userInfo.value.phone
+        });
         return;
       }
 
       try {
         // 获取发起人的可用额度
+        logger.info('JOINT_PARTNERS', '开始获取用户可用额度', {
+          phone: userInfo.value.phone
+        });
         const creditLimitData = await financingService.getCreditLimit(userInfo.value.phone);
-        userAvailableLimit.value = parseFloat(creditLimitData.available_limit || 0);
+        
+        // 调试：输出接收到的数据
+        console.log('DEBUG: JointPartnersModal 获取到的额度数据:', creditLimitData);
+        console.log('DEBUG: available_limit =', creditLimitData?.available_limit);
+        
+        // 确保正确解析数值
+        const availableLimit = creditLimitData?.available_limit;
+        if (availableLimit !== undefined && availableLimit !== null) {
+          userAvailableLimit.value = parseFloat(availableLimit);
+        } else {
+          userAvailableLimit.value = 0;
+          logger.warn('JOINT_PARTNERS', '可用额度数据为空，使用默认值0');
+        }
+
+        logger.info('JOINT_PARTNERS', '用户可用额度获取成功', {
+          available_limit: userAvailableLimit.value
+        });
 
         // 计算所需伙伴最低额度 = 贷款金额 - 发起人当前可用额度
         const loanAmount = parseFloat(props.product.max_amount || 0);
@@ -149,13 +172,25 @@ export default {
         // 所需伙伴最低额度就是贷款金额减去发起人可用额度（必须大于0）
         filters.min_credit_limit = requiredAmount > 0 ? requiredAmount : 0;
         filters.max_partners = 5; // 最多显示5个符合条件的伙伴
+        
+        logger.info('JOINT_PARTNERS', '计算所需伙伴最低额度', {
+          loanAmount,
+          userAvailableLimit: userAvailableLimit.value,
+          requiredAmount,
+          min_credit_limit: filters.min_credit_limit
+        });
       } catch (err) {
         logger.error('JOINT_PARTNERS', '获取用户额度失败', {
-          errorMessage: err.message || err
+          errorMessage: err.message || err,
+          phone: userInfo.value.phone
         }, err);
         // 如果获取额度失败，使用默认计算方式（假设用户额度为0）
+        userAvailableLimit.value = 0;
         const loanAmount = parseFloat(props.product.max_amount || 0);
         filters.min_credit_limit = loanAmount;
+        logger.warn('JOINT_PARTNERS', '使用默认值计算所需伙伴最低额度', {
+          min_credit_limit: filters.min_credit_limit
+        });
       }
     };
 

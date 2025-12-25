@@ -330,7 +330,13 @@ export default {
           loan_application_id: response.data?.loan_application_id 
         });
         
-        alert('申请提交成功！请等待审核');
+        // 检查响应状态
+        const status = response.data?.status || 'pending_partners';
+        if (status === 'pending_partners') {
+          alert('申请已提交！已发送邀请给联合伙伴，请等待对方确认。确认后申请将进入银行审批流程。');
+        } else {
+          alert('申请提交成功！请等待审核');
+        }
         emit('success');
         handleClose();
       } catch (error) {

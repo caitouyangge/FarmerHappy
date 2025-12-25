@@ -728,6 +728,8 @@ public class application {
                         return serializePartnersResponseDTO((PartnersResponseDTO) value);
                     }else if (value instanceof PartnerItemDTO) {
                         return serializePartnerItemDTO((PartnerItemDTO) value);
+                    }else if (value instanceof SmartLoanRecommendationResponseDTO) {
+                        return serializeSmartLoanRecommendationResponseDTO((SmartLoanRecommendationResponseDTO) value);
                     }else if (value instanceof LoanApprovalResponseDTO) {
                         return serializeLoanApprovalResponseDTO((LoanApprovalResponseDTO) value);
                     }else if (value instanceof LoanDisbursementResponseDTO) {
@@ -1817,6 +1819,33 @@ public class application {
                     }
                     if (dto.getTotal_credit_limit() != null) {
                         json.append("\"total_credit_limit\":").append(dto.getTotal_credit_limit()).append(",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1);
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 序列化 SmartLoanRecommendationResponseDTO
+                private String serializeSmartLoanRecommendationResponseDTO(SmartLoanRecommendationResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getRecommendation_type() != null) {
+                        json.append("\"recommendation_type\":\"").append(escapeJsonString(dto.getRecommendation_type())).append("\",");
+                    }
+                    if (dto.getRecommendation_reason() != null) {
+                        json.append("\"recommendation_reason\":\"").append(escapeJsonString(dto.getRecommendation_reason())).append("\",");
+                    }
+                    if (dto.getUser_available_limit() != null) {
+                        json.append("\"user_available_limit\":").append(dto.getUser_available_limit()).append(",");
+                    }
+                    if (dto.getApply_amount() != null) {
+                        json.append("\"apply_amount\":").append(dto.getApply_amount()).append(",");
+                    }
+                    json.append("\"can_apply_single\":").append(dto.isCan_apply_single()).append(",");
+                    json.append("\"can_apply_joint\":").append(dto.isCan_apply_joint()).append(",");
+                    if (dto.getRecommended_partners() != null) {
+                        json.append("\"recommended_partners\":").append(serializeList(dto.getRecommended_partners())).append(",");
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1);

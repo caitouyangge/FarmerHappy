@@ -129,6 +129,7 @@
       @close="closeUnifiedLoanModal"
       @success="handleLoanSuccess"
       @switch-to-joint="handleSwitchToJointLoan"
+      @switch-to-joint-partners="handleSwitchToJointPartners"
     />
 
     <!-- 申请单人贷款（保留兼容性） -->
@@ -199,6 +200,13 @@
       @close="showLoanApplicationHistoryModal = false"
       @apply="handleLoanApplicationHistoryApply"
     />
+
+    <!-- 待确认的联合贷款申请 -->
+    <JointLoanConfirmationModal
+      v-if="showJointLoanConfirmationModal"
+      @close="showJointLoanConfirmationModal = false"
+      @success="handleJointLoanConfirmationSuccess"
+    />
   </div>
 </template>
 
@@ -214,6 +222,7 @@ import UnifiedLoanApplicationModal from './components/UnifiedLoanApplicationModa
 import SingleLoanApplicationModal from './components/SingleLoanApplicationModal.vue';
 import JointLoanApplicationModal from './components/JointLoanApplicationModal.vue';
 import JointPartnersModal from './components/JointPartnersModal.vue';
+import JointLoanConfirmationModal from './components/JointLoanConfirmationModal.vue';
 import LoanApplicationHistoryModal from './components/LoanApplicationHistoryModal.vue';
 import RepaymentScheduleModal from './components/RepaymentScheduleModal.vue';
 import LoanProductPublishModal from './components/LoanProductPublishModal.vue';
@@ -231,6 +240,7 @@ export default {
     SingleLoanApplicationModal,
     JointLoanApplicationModal,
     JointPartnersModal,
+    JointLoanConfirmationModal,
     LoanApplicationHistoryModal,
     RepaymentScheduleModal,
     LoanProductPublishModal,
@@ -252,6 +262,7 @@ export default {
     const showPartnersModal = ref(false);
     const showLoanApplicationHistoryModal = ref(false);
     const showRepaymentModal = ref(false);
+    const showJointLoanConfirmationModal = ref(false);
     const showPublishProductModal = ref(false);
     const showApprovalModal = ref(false);
     const showDisbursementModal = ref(false);
@@ -297,6 +308,13 @@ export default {
         description: '查看贷款申请状态，追踪审批进度',
         icon: '📜',
         action: () => { showLoanApplicationHistoryModal.value = true; }
+      },
+      {
+        id: 'joint_loan_confirmation',
+        name: '待确认联合贷款',
+        description: '查看并处理待确认的联合贷款申请',
+        icon: '🤝',
+        action: () => { showJointLoanConfirmationModal.value = true; }
       },
       {
         id: 'loan_products',
@@ -406,8 +424,13 @@ export default {
         moduleName: module.name,
         userType: userInfo.value.userType 
       });
+      console.log('点击模块:', module.id, module.name);
       if (module.action) {
+        console.log('执行模块action');
         module.action();
+        console.log('showJointLoanConfirmationModal:', showJointLoanConfirmationModal.value);
+      } else {
+        console.warn('模块没有action函数:', module);
       }
     };
 
@@ -465,6 +488,21 @@ export default {
       // selectedProduct 保持不变，用于联合贷款申请
     };
 
+    // 从智能申请切换到选择联合伙伴页面
+    const handleSwitchToJointPartners = (product) => {
+      logger.info('FINANCING', '从智能推荐切换到选择联合伙伴', { 
+        product_id: product?.product_id || product?.id 
+      });
+      // 关闭智能申请弹窗
+      showUnifiedLoanModal.value = false;
+      // 确保selectedProduct已设置（如果传入了product则使用，否则保持原有值）
+      if (product) {
+        selectedProduct.value = product;
+      }
+      // 打开选择联合伙伴弹窗
+      showPartnersModal.value = true;
+    };
+
     // 贷款申请成功
     const handleLoanSuccess = () => {
       closeLoanModal();
@@ -490,6 +528,12 @@ export default {
     // 信贷额度审批成功
     const handleCreditApprovalSuccess = () => {
       showCreditApprovalModal.value = false;
+    };
+
+    // 联合贷款确认成功
+    const handleJointLoanConfirmationSuccess = () => {
+      showJointLoanConfirmationModal.value = false;
+      loadCreditLimit();
     };
 
     // 选择联合伙伴
@@ -538,6 +582,7 @@ export default {
       showDisbursementModal,
       showCreditApprovalModal,
       showLoanApplicationHistoryModal,
+      showJointLoanConfirmationModal,
       selectedProduct,
       selectedPartnerForJointLoan,
       formatAmount,
@@ -551,11 +596,13 @@ export default {
       closeLoanModal,
       closeUnifiedLoanModal,
       handleSwitchToJointLoan,
+      handleSwitchToJointPartners,
       handleLoanSuccess,
       handlePublishSuccess,
       handleApprovalSuccess,
       handleDisbursementSuccess,
       handleCreditApprovalSuccess,
+      handleJointLoanConfirmationSuccess,
       handlePartnerSelect,
       handleLoanApplicationHistoryApply
     };

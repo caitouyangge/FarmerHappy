@@ -577,6 +577,21 @@ public class DatabaseManager {
                     ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款表';";
             dbStatement.executeUpdate(createJointLoansTable);
 
+            // 创建联合贷款消息表
+            String createJointLoanMessagesTable = "CREATE TABLE IF NOT EXISTS joint_loan_messages (" +
+                    "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    loan_application_id VARCHAR(20) NOT NULL COMMENT '贷款申请ID'," +
+                    "    sender_phone VARCHAR(11) NOT NULL COMMENT '发送者手机号'," +
+                    "    receiver_phone VARCHAR(11) NOT NULL COMMENT '接收者手机号'," +
+                    "    content TEXT NOT NULL COMMENT '消息内容'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                    "    INDEX idx_loan_application_id (loan_application_id)," +
+                    "    INDEX idx_sender_phone (sender_phone)," +
+                    "    INDEX idx_receiver_phone (receiver_phone)," +
+                    "    INDEX idx_created_at (created_at)" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联合贷款消息表';";
+            dbStatement.executeUpdate(createJointLoanMessagesTable);
+
             dbStatement.close();
             dbConnection.close();
 
@@ -3851,6 +3866,60 @@ public class DatabaseManager {
             closeConnection();
         }
         return applications;
+    }
+
+    /**
+     * 保存联合贷款消息
+     */
+    public void saveJointLoanMessage(String loanApplicationId, String senderPhone, String receiverPhone, String content) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            String sql = "INSERT INTO joint_loan_messages (loan_application_id, sender_phone, receiver_phone, content) VALUES (?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, loanApplicationId);
+            stmt.setString(2, senderPhone);
+            stmt.setString(3, receiverPhone);
+            stmt.setString(4, content);
+            stmt.executeUpdate();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 获取联合贷款消息列表
+     */
+    public List<Map<String, Object>> getJointLoanMessages(String loanApplicationId, String userPhone) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> messages = new ArrayList<>();
+        try {
+            String sql = "SELECT * FROM joint_loan_messages " +
+                    "WHERE loan_application_id = ? " +
+                    "AND (sender_phone = ? OR receiver_phone = ?) " +
+                    "ORDER BY created_at ASC";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, loanApplicationId);
+            stmt.setString(2, userPhone);
+            stmt.setString(3, userPhone);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                Map<String, Object> message = new HashMap<>();
+                message.put("id", rs.getLong("id"));
+                message.put("loan_application_id", rs.getString("loan_application_id"));
+                message.put("sender", rs.getString("sender_phone"));
+                message.put("receiver", rs.getString("receiver_phone"));
+                message.put("content", rs.getString("content"));
+                message.put("created_at", rs.getTimestamp("created_at"));
+                messages.add(message);
+            }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return messages;
     }
 
 }

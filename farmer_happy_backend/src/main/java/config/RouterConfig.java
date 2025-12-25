@@ -257,6 +257,18 @@ public class RouterConfig {
             return financingController.getPendingJointLoanApplications(request);
         }
 
+        // 发送联合贷款消息
+        if ("/api/v1/financing/joint-loan-messages/send".equals(path) && "POST".equals(method)) {
+            JointLoanMessageRequestDTO request = parseJointLoanMessageRequest(requestBody);
+            return financingController.sendJointLoanMessage(request);
+        }
+
+        // 获取联合贷款消息列表
+        if ("/api/v1/financing/joint-loan-messages".equals(path) && "POST".equals(method)) {
+            GetJointLoanMessagesRequestDTO request = parseGetJointLoanMessagesRequest(requestBody);
+            return financingController.getJointLoanMessages(request);
+        }
+
         // ============= 买家订单相关路由 =============
 
         // 创建订单 - /api/v1/buyer/orders
@@ -1253,6 +1265,34 @@ public class RouterConfig {
     /**
      * 解析获取待确认联合贷款申请请求
      */
+    private JointLoanMessageRequestDTO parseJointLoanMessageRequest(Map<String, Object> requestBody) {
+        JointLoanMessageRequestDTO request = new JointLoanMessageRequestDTO();
+        if (requestBody.containsKey("phone")) {
+            request.setPhone((String) requestBody.get("phone"));
+        }
+        if (requestBody.containsKey("application_id")) {
+            request.setApplication_id((String) requestBody.get("application_id"));
+        }
+        if (requestBody.containsKey("receiver_phone")) {
+            request.setReceiver_phone((String) requestBody.get("receiver_phone"));
+        }
+        if (requestBody.containsKey("content")) {
+            request.setContent((String) requestBody.get("content"));
+        }
+        return request;
+    }
+
+    private GetJointLoanMessagesRequestDTO parseGetJointLoanMessagesRequest(Map<String, Object> requestBody) {
+        GetJointLoanMessagesRequestDTO request = new GetJointLoanMessagesRequestDTO();
+        if (requestBody.containsKey("phone")) {
+            request.setPhone((String) requestBody.get("phone"));
+        }
+        if (requestBody.containsKey("application_id")) {
+            request.setApplication_id((String) requestBody.get("application_id"));
+        }
+        return request;
+    }
+
     private PendingJointLoanApplicationsRequestDTO parsePendingJointLoanApplicationsRequest(Map<String, Object> requestBody) {
         PendingJointLoanApplicationsRequestDTO request = new PendingJointLoanApplicationsRequestDTO();
         request.setPhone((String) requestBody.get("phone"));

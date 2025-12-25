@@ -873,4 +873,52 @@ public class FinancingController {
         }
     }
 
+    /**
+     * 发送联合贷款消息API
+     */
+    public Map<String, Object> sendJointLoanMessage(JointLoanMessageRequestDTO request) {
+        try {
+            JointLoanMessageResponseDTO response = financingService.sendJointLoanMessage(request);
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 200);
+            result.put("message", "消息发送成功");
+            result.put("data", response);
+            return result;
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 400);
+            result.put("message", e.getMessage());
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 500);
+            result.put("message", e.getMessage());
+            return result;
+        }
+    }
+
+    /**
+     * 获取联合贷款消息列表API
+     */
+    public Map<String, Object> getJointLoanMessages(GetJointLoanMessagesRequestDTO request) {
+        try {
+            JointLoanMessageResponseDTO response = financingService.getJointLoanMessages(request);
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 200);
+            result.put("message", "获取成功");
+            result.put("data", response);
+            return result;
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 400);
+            result.put("message", e.getMessage());
+            return result;
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 500);
+            result.put("message", e.getMessage());
+            return result;
+        }
+    }
+
 }

@@ -112,6 +112,14 @@
             </div>
           </div>
 
+          <!-- 当推荐联合贷款但没有推荐合作伙伴时的提示 -->
+          <div v-if="recommendation.recommendation_type === 'joint' && 
+                     (!recommendation.recommended_partners || recommendation.recommended_partners.length === 0)" 
+               class="no-partners-hint">
+            <p class="hint-text">系统推荐您使用联合贷款，但暂无可推荐的合作伙伴。</p>
+            <p class="hint-text">您可以前往联合贷款页面自行选择合作伙伴。</p>
+          </div>
+
           <!-- 选择申请方式 -->
           <div class="application-options">
             <button 
@@ -122,14 +130,26 @@
             >
               申请单人贷款
             </button>
+            <!-- 如果有推荐合作伙伴，显示选择推荐伙伴的按钮 -->
             <button 
-              v-if="recommendation.can_apply_joint"
+              v-if="recommendation.recommended_partners && recommendation.recommended_partners.length > 0"
               type="button" 
               class="btn btn-primary"
               :disabled="!canProceedWithJoint"
               @click="proceedWithJoint"
             >
               {{ selectedPartner ? '申请联合贷款' : '请先选择合作伙伴' }}
+            </button>
+            <!-- 推荐联合贷款时，始终提供跳转到联合贷款页面的按钮 -->
+            <!-- 使用与显示"推荐联合贷款"相同的条件：只要不是单人贷款，就显示按钮 -->
+            <button 
+              v-if="recommendation && recommendation.recommendation_type !== 'single'"
+              type="button" 
+              class="btn"
+              :class="recommendation.recommended_partners && recommendation.recommended_partners.length > 0 ? 'btn-outline' : 'btn-primary'"
+              @click="switchToJointLoanPage"
+            >
+              {{ recommendation.recommended_partners && recommendation.recommended_partners.length > 0 ? '自己选择合作伙伴' : '前往联合贷款页面' }}
             </button>
           </div>
 
@@ -216,7 +236,7 @@ export default {
       required: true
     }
   },
-  emits: ['close', 'success', 'switch-to-joint'],
+  emits: ['close', 'success', 'switch-to-joint', 'switch-to-joint-partners'],
   setup(props, { emit }) {
     const userInfo = ref({});
     const currentStep = ref('input'); // 'input', 'recommendation', 'details'
@@ -237,6 +257,12 @@ export default {
       return recommendation.value?.can_apply_joint && 
              recommendation.value?.recommended_partners?.length > 0 && 
              selectedPartner.value;
+    });
+
+    // 判断是否推荐联合贷款
+    const isJointRecommendation = computed(() => {
+      if (!recommendation.value) return false;
+      return recommendation.value.recommendation_type !== 'single';
     });
 
     // 处理还款信息的双向绑定
@@ -314,11 +340,41 @@ export default {
          logger.info('UNIFIED_LOAN', '获取智能推荐', requestData);
         const data = await financingService.getSmartLoanRecommendation(requestData);
         
+        // 调试：输出接收到的完整数据
+        console.log('DEBUG: 智能推荐返回的完整数据:', data);
+        console.log('DEBUG: user_available_limit 原始值 =', data.user_available_limit, '类型 =', typeof data.user_available_limit);
+        console.log('DEBUG: apply_amount 原始值 =', data.apply_amount, '类型 =', typeof data.apply_amount);
+        
+        // 确保数值正确解析（处理字符串、数字、BigDecimal等各种格式）
+        if (data.user_available_limit !== undefined && data.user_available_limit !== null) {
+          const limitValue = typeof data.user_available_limit === 'string' 
+            ? parseFloat(data.user_available_limit) 
+            : Number(data.user_available_limit);
+          data.user_available_limit = isNaN(limitValue) ? 0 : limitValue;
+          console.log('DEBUG: user_available_limit 解析后 =', data.user_available_limit);
+        } else {
+          data.user_available_limit = 0;
+          console.warn('DEBUG: user_available_limit 为空，设置为0');
+        }
+        
+        if (data.apply_amount !== undefined && data.apply_amount !== null) {
+          const amountValue = typeof data.apply_amount === 'string' 
+            ? parseFloat(data.apply_amount) 
+            : Number(data.apply_amount);
+          data.apply_amount = isNaN(amountValue) ? 0 : amountValue;
+          console.log('DEBUG: apply_amount 解析后 =', data.apply_amount);
+        } else {
+          data.apply_amount = 0;
+          console.warn('DEBUG: apply_amount 为空，设置为0');
+        }
+        
         recommendation.value = data;
         currentStep.value = 'recommendation';
         
         logger.info('UNIFIED_LOAN', '智能推荐获取成功', { 
           recommendation_type: data.recommendation_type,
+          user_available_limit: data.user_available_limit,
+          apply_amount: data.apply_amount,
           partners_count: data.recommended_partners?.length || 0
         });
       } catch (error) {
@@ -462,6 +518,19 @@ export default {
       }
     };
 
+    // 跳转到联合贷款页面（打开选择伙伴弹窗）
+    const switchToJointLoanPage = () => {
+      logger.info('UNIFIED_LOAN', '用户选择跳转到联合贷款页面', {
+        recommendation_type: recommendation.value?.recommendation_type,
+        has_partners: recommendation.value?.recommended_partners?.length > 0,
+        product: props.product
+      });
+      console.log('DEBUG: 跳转到联合贷款页面，当前推荐信息:', recommendation.value);
+      console.log('DEBUG: 当前产品信息:', props.product);
+      // 发送事件，传递产品信息，让父组件打开JointPartnersModal
+      emit('switch-to-joint-partners', props.product);
+    };
+
     // 关闭弹窗
     const handleClose = () => {
       emit('close');
@@ -476,6 +545,7 @@ export default {
       submitting,
       formData,
       canProceedWithJoint,
+      isJointRecommendation,
       repaymentInfo,
       formatAmount,
       getRecommendation,
@@ -485,6 +555,7 @@ export default {
       goBack,
       goBackToRecommendation,
       handleSubmit,
+      switchToJointLoanPage,
       handleClose
     };
   }
@@ -675,6 +746,23 @@ export default {
 /* 合作伙伴区域 */
 .partners-section {
   margin-bottom: 2rem;
+}
+
+/* 无推荐合作伙伴提示 */
+.no-partners-hint {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #f59e0b;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.hint-text {
+  margin: 0.5rem 0;
+  color: #92400e;
+  line-height: 1.6;
+  font-size: 0.9375rem;
 }
 
 .section-title {
