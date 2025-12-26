@@ -172,159 +172,577 @@ public class PricePredictionService {
     }
 
     /**
-     * 预测单条规格序列
+     * 统计特征类
+     */
+    private static class StatisticalFeatures {
+        double mean;                    // 均值
+        double variance;               // 方差
+        double stdDev;                   // 标准差
+        double coefficientOfVariation;    // 变异系数
+        double trendSlope;               // 趋势斜率
+        String trendDirection;           // 趋势方向：上升/下降/平稳
+        double autocorrelationLag1;       // 一阶自相关系数
+        double autocorrelationLag2;       // 二阶自相关系数
+        double skewness;                 // 偏度
+        double kurtosis;                 // 峰度
+        double minPrice;                 // 最小价格
+        double maxPrice;                 // 最大价格
+        double median;                   // 中位数
+        double q25;                      // 第一四分位数
+        double q75;                      // 第三四分位数
+        double recentMean;                // 近期均值（最近30%数据）
+        double recentStdDev;              // 近期标准差
+    }
+
+    /**
+     * 自动检测时间间隔（天）
+     */
+    private int detectTimeInterval(List<Long> timestamps) {
+        if (timestamps.size() < 2) return 1;
+        
+        // 计算相邻时间点的间隔
+        List<Long> intervals = new ArrayList<>();
+        for (int i = 1; i < timestamps.size(); i++) {
+            long diff = timestamps.get(i) - timestamps.get(i - 1);
+            long days = diff / (24L * 60 * 60 * 1000);
+            if (days > 0) {
+                intervals.add(days);
+            }
+        }
+        
+        if (intervals.isEmpty()) return 1;
+        
+        // 找到最常见的间隔（众数）
+        Map<Long, Integer> freq = new HashMap<>();
+        for (Long interval : intervals) {
+            freq.put(interval, freq.getOrDefault(interval, 0) + 1);
+        }
+        
+        long mode = intervals.get(0);
+        int maxFreq = 0;
+        for (Map.Entry<Long, Integer> entry : freq.entrySet()) {
+            if (entry.getValue() > maxFreq) {
+                maxFreq = entry.getValue();
+                mode = entry.getKey();
+            }
+        }
+        
+        // 如果最常见的间隔占比超过50%，使用它；否则使用中位数
+        if (maxFreq * 2 > intervals.size()) {
+            return (int) mode;
+        } else {
+            Collections.sort(intervals);
+            return (int) intervals.get(intervals.size() / 2).longValue();
+        }
+    }
+
+    /**
+     * 计算统计特征
+     */
+    private StatisticalFeatures calculateStatisticalFeatures(List<Double> prices, List<Long> timestamps, int timeIntervalDays) {
+        StatisticalFeatures features = new StatisticalFeatures();
+        int n = prices.size();
+        
+        // 基础统计量
+        features.mean = prices.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        features.minPrice = prices.stream().mapToDouble(Double::doubleValue).min().orElse(0);
+        features.maxPrice = prices.stream().mapToDouble(Double::doubleValue).max().orElse(0);
+        
+        // 方差和标准差
+        double sumSquaredDiff = 0.0;
+        for (double price : prices) {
+            sumSquaredDiff += Math.pow(price - features.mean, 2);
+        }
+        features.variance = sumSquaredDiff / n;
+        features.stdDev = Math.sqrt(features.variance);
+        features.coefficientOfVariation = features.mean > 0 ? features.stdDev / features.mean : 0.0;
+        
+        // 中位数和四分位数
+        List<Double> sortedPrices = new ArrayList<>(prices);
+        Collections.sort(sortedPrices);
+        features.median = sortedPrices.get(n / 2);
+        features.q25 = sortedPrices.get(n / 4);
+        features.q75 = sortedPrices.get(n * 3 / 4);
+        
+        // 趋势分析（线性回归）
+        double sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        for (int i = 0; i < n; i++) {
+            double x = i;
+            double y = prices.get(i);
+            sumX += x;
+            sumY += y;
+            sumXY += x * y;
+            sumXX += x * x;
+        }
+        double denominator = n * sumXX - sumX * sumX;
+        if (Math.abs(denominator) > 1e-12) {
+            features.trendSlope = (n * sumXY - sumX * sumY) / denominator;
+        }
+        
+        // 趋势方向
+        if (features.trendSlope > features.mean * 0.001) {
+            features.trendDirection = "上升";
+        } else if (features.trendSlope < -features.mean * 0.001) {
+            features.trendDirection = "下降";
+        } else {
+            features.trendDirection = "平稳";
+        }
+        
+        // 自相关系数（lag 1 和 lag 2）
+        features.autocorrelationLag1 = calculateAutocorrelation(prices, 1);
+        features.autocorrelationLag2 = calculateAutocorrelation(prices, 2);
+        
+        // 偏度和峰度
+        features.skewness = calculateSkewness(prices, features.mean, features.stdDev);
+        features.kurtosis = calculateKurtosis(prices, features.mean, features.stdDev);
+        
+        // 近期统计（最近30%数据）
+        int recentStart = (int) (n * 0.7);
+        List<Double> recentPrices = prices.subList(recentStart, n);
+        features.recentMean = recentPrices.stream().mapToDouble(Double::doubleValue).average().orElse(features.mean);
+        double recentSumSquaredDiff = 0.0;
+        for (double price : recentPrices) {
+            recentSumSquaredDiff += Math.pow(price - features.recentMean, 2);
+        }
+        features.recentStdDev = Math.sqrt(recentSumSquaredDiff / recentPrices.size());
+        
+        return features;
+    }
+
+    /**
+     * 计算自相关系数
+     */
+    private double calculateAutocorrelation(List<Double> prices, int lag) {
+        if (prices.size() <= lag) return 0.0;
+        
+        double mean = prices.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double variance = 0.0;
+        for (double price : prices) {
+            variance += Math.pow(price - mean, 2);
+        }
+        variance /= prices.size();
+        
+        if (variance < 1e-12) return 0.0;
+        
+        double covariance = 0.0;
+        for (int i = lag; i < prices.size(); i++) {
+            covariance += (prices.get(i) - mean) * (prices.get(i - lag) - mean);
+        }
+        covariance /= (prices.size() - lag);
+        
+        return covariance / variance;
+    }
+
+    /**
+     * 计算偏度
+     */
+    private double calculateSkewness(List<Double> prices, double mean, double stdDev) {
+        if (stdDev < 1e-12) return 0.0;
+        
+        double sum = 0.0;
+        for (double price : prices) {
+            double normalized = (price - mean) / stdDev;
+            sum += normalized * normalized * normalized;
+        }
+        return sum / prices.size();
+    }
+
+    /**
+     * 计算峰度
+     */
+    private double calculateKurtosis(List<Double> prices, double mean, double stdDev) {
+        if (stdDev < 1e-12) return 0.0;
+        
+        double sum = 0.0;
+        for (double price : prices) {
+            double normalized = (price - mean) / stdDev;
+            sum += normalized * normalized * normalized * normalized;
+        }
+        return (sum / prices.size()) - 3.0; // 超额峰度
+    }
+
+    /**
+     * 基于统计特征的预测 - 保持方差不变，不过度平滑
+     */
+    private List<Double> predictWithStatistics(List<Double> prices, StatisticalFeatures features, int predictionDays, int timeIntervalDays) {
+        List<Double> forecast = new ArrayList<>();
+        int n = prices.size();
+        if (n < 2) {
+            // 数据不足，返回最后一个值
+            double lastPrice = prices.isEmpty() ? 0.0 : prices.get(n - 1);
+            for (int i = 0; i < predictionDays; i++) {
+                forecast.add(lastPrice);
+            }
+            return forecast;
+        }
+        
+        // 计算价格差分序列（一阶差分），用于保持方差特征
+        List<Double> differences = new ArrayList<>();
+        for (int i = 1; i < n; i++) {
+            differences.add(prices.get(i) - prices.get(i - 1));
+        }
+        
+        // 计算差分序列的统计特征
+        double diffMean = differences.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double diffVariance = 0.0;
+        for (double diff : differences) {
+            diffVariance += Math.pow(diff - diffMean, 2);
+        }
+        diffVariance /= differences.size();
+        double diffStdDev = Math.sqrt(diffVariance);
+        
+        // 如果方差为0，使用原始数据的标准差
+        if (diffStdDev < 1e-12) {
+            diffStdDev = features.stdDev * 0.1; // 使用原始标准差的10%作为最小波动
+        }
+        
+        // 计算差分序列的自相关（用于预测差分）
+        double diffAutocorr1 = calculateAutocorrelation(differences, 1);
+        double diffAutocorr2 = calculateAutocorrelation(differences, 2);
+        
+        // 使用自回归模型预测差分序列，然后累加得到价格预测
+        // 这样可以保持方差特征
+        double lastPrice = prices.get(n - 1);
+        double prevDiff1 = differences.isEmpty() ? 0.0 : differences.get(differences.size() - 1);
+        double prevDiff2 = differences.size() > 1 ? differences.get(differences.size() - 2) : 0.0;
+        
+        // 预测每个未来点
+        for (int h = 1; h <= predictionDays; h++) {
+            // 1. 预测差分值（使用自回归模型）
+            double predictedDiff;
+            
+            if (h == 1) {
+                // 第一步：使用最近的两个差分值和自相关系数
+                if (Math.abs(diffAutocorr1) > 0.1) {
+                    predictedDiff = diffMean + diffAutocorr1 * (prevDiff1 - diffMean);
+                } else {
+                    // 自相关很弱，使用趋势斜率
+                    predictedDiff = features.trendSlope * timeIntervalDays;
+                }
+            } else if (h == 2 && Math.abs(diffAutocorr2) > 0.1) {
+                // 第二步：可以使用二阶自相关
+                predictedDiff = diffMean + diffAutocorr2 * (prevDiff2 - diffMean);
+            } else {
+                // 后续步骤：使用一阶自相关，但逐渐向均值回归
+                double arWeight = Math.max(0.0, diffAutocorr1 - (h - 1) * 0.1);
+                if (arWeight > 0.1 && !forecast.isEmpty()) {
+                    // 使用前一步的差分（从预测序列计算）
+                    double lastForecastDiff = forecast.get(forecast.size() - 1) - (forecast.size() > 1 ? forecast.get(forecast.size() - 2) : lastPrice);
+                    predictedDiff = diffMean + arWeight * (lastForecastDiff - diffMean);
+                } else {
+                    // 自相关很弱，使用趋势斜率
+                    predictedDiff = features.trendSlope * timeIntervalDays;
+                }
+            }
+            
+            // 2. 添加随机扰动，保持方差不变（不衰减）
+            // 使用历史差分的标准差，保持波动性
+            // 扰动的大小应该与历史差分的标准差一致，以保持方差
+            double randomShock = generateRandomShock(diffStdDev);
+            predictedDiff += randomShock;
+            
+            // 3. 计算预测价格（累加差分）
+            // 直接累加，不进行额外的平滑或调整，以保持方差特征
+            double prediction;
+            if (forecast.isEmpty()) {
+                prediction = lastPrice + predictedDiff;
+            } else {
+                prediction = forecast.get(forecast.size() - 1) + predictedDiff;
+            }
+            
+            // 4. 约束预测值在历史范围内（最高和最低），保持方差特征
+            // 如果超出范围，调整差分值使其在范围内，但保持波动性
+            if (prediction > features.maxPrice) {
+                // 超出最大值，调整差分值使其在最大值范围内
+                // 计算当前值到最大值的距离，调整差分值
+                double currentBase = forecast.isEmpty() ? lastPrice : forecast.get(forecast.size() - 1);
+                double maxAllowedDiff = features.maxPrice - currentBase;
+                // 如果预测的差分值会导致超出最大值，则限制差分值
+                if (predictedDiff > maxAllowedDiff) {
+                    // 将差分值调整到允许范围内，但保持一定的波动性
+                    // 使用历史差分标准差的30%作为最小波动
+                    double minVolatility = diffStdDev * 0.3;
+                    predictedDiff = Math.max(maxAllowedDiff - minVolatility, maxAllowedDiff * 0.7);
+                    prediction = currentBase + predictedDiff;
+                }
+                // 最终确保不超过最大值
+                prediction = Math.min(prediction, features.maxPrice);
+            } else if (prediction < features.minPrice) {
+                // 低于最小值，调整差分值使其在最小值范围内
+                double currentBase = forecast.isEmpty() ? lastPrice : forecast.get(forecast.size() - 1);
+                double minAllowedDiff = features.minPrice - currentBase;
+                // 如果预测的差分值会导致低于最小值，则限制差分值
+                if (predictedDiff < minAllowedDiff) {
+                    // 将差分值调整到允许范围内，但保持一定的波动性
+                    double minVolatility = diffStdDev * 0.3;
+                    predictedDiff = Math.min(minAllowedDiff + minVolatility, minAllowedDiff * 0.7);
+                    prediction = currentBase + predictedDiff;
+                }
+                // 最终确保不低于最小值
+                prediction = Math.max(prediction, features.minPrice);
+            }
+            
+            // 5. 如果价格为负，使用最小值
+            if (prediction < 0) {
+                prediction = Math.max(0.0, features.minPrice);
+            }
+            
+            forecast.add(prediction);
+            
+            // 更新用于自回归的差分值
+            if (h == 1) {
+                prevDiff2 = prevDiff1;
+                prevDiff1 = predictedDiff;
+            } else if (h == 2) {
+                prevDiff2 = prevDiff1;
+                prevDiff1 = forecast.get(forecast.size() - 1) - forecast.get(forecast.size() - 2);
+            }
+        }
+        
+        return forecast;
+    }
+    
+    /**
+     * 生成随机扰动（使用Box-Muller变换生成正态分布随机数）
+     * 保持方差不变
+     */
+    private double generateRandomShock(double stdDev) {
+        if (stdDev < 1e-12) return 0.0;
+        
+        // 使用Box-Muller变换生成标准正态分布
+        double u1 = Math.random();
+        double u2 = Math.random();
+        double z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+        
+        return z0 * stdDev;
+    }
+
+    /**
+     * 计算模型指标（使用留一法交叉验证）
+     */
+    private Map<String, Double> calculateModelMetrics(List<Double> prices, StatisticalFeatures features, int timeIntervalDays) {
+        Map<String, Double> metrics = new HashMap<>();
+        
+        if (prices.size() < 5) {
+            metrics.put("r_squared", 0.0);
+            metrics.put("mae", 0.0);
+            metrics.put("rmse", 0.0);
+            metrics.put("mape", 0.0);
+            metrics.put("aic", 0.0);
+            return metrics;
+        }
+        
+        // 留一法交叉验证
+        List<Double> actuals = new ArrayList<>();
+        List<Double> predictions = new ArrayList<>();
+        
+        int testSize = Math.min(10, prices.size() / 5); // 测试集大小
+        for (int i = prices.size() - testSize; i < prices.size(); i++) {
+            // 使用前面的数据训练
+            List<Double> trainData = prices.subList(0, i);
+            if (trainData.size() < 2) continue;
+            
+            // 计算训练数据的特征
+            List<Long> dummyTimestamps = new ArrayList<>();
+            for (int j = 0; j < trainData.size(); j++) {
+                dummyTimestamps.add((long) j);
+            }
+            StatisticalFeatures trainFeatures = calculateStatisticalFeatures(trainData, dummyTimestamps, timeIntervalDays);
+            
+            // 预测下一个值
+            List<Double> forecast = predictWithStatistics(trainData, trainFeatures, 1, timeIntervalDays);
+            if (!forecast.isEmpty()) {
+                actuals.add(prices.get(i));
+                predictions.add(forecast.get(0));
+            }
+        }
+        
+        if (actuals.isEmpty()) {
+            metrics.put("r_squared", 0.0);
+            metrics.put("mae", 0.0);
+            metrics.put("rmse", 0.0);
+            metrics.put("mape", 0.0);
+            metrics.put("aic", 0.0);
+            return metrics;
+        }
+        
+        // 计算指标
+        double meanActual = actuals.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double ssTot = 0.0, ssRes = 0.0, sumAbs = 0.0, sumSq = 0.0, sumMape = 0.0;
+        int mapeCount = 0;
+        
+        for (int i = 0; i < actuals.size(); i++) {
+            double a = actuals.get(i);
+            double p = predictions.get(i);
+            double e = a - p;
+            
+            ssTot += Math.pow(a - meanActual, 2);
+            ssRes += e * e;
+            sumAbs += Math.abs(e);
+            sumSq += e * e;
+            
+            if (Math.abs(a) > 1e-9) {
+                sumMape += Math.abs(e / a);
+                mapeCount++;
+            }
+        }
+        
+        int n = actuals.size();
+        double r2 = (ssTot > 1e-12) ? (1.0 - ssRes / ssTot) : 0.0;
+        if (Double.isNaN(r2) || Double.isInfinite(r2)) r2 = 0.0;
+        
+        metrics.put("r_squared", round4(r2));
+        metrics.put("mae", round2(sumAbs / n));
+        metrics.put("rmse", round2(Math.sqrt(sumSq / n)));
+        metrics.put("mape", round4(mapeCount > 0 ? sumMape / mapeCount : 0.0));
+        
+        // AIC近似：AIC = n * ln(SSE/n) + 2k，k为参数数量（这里用特征数量近似）
+        double sse = ssRes;
+        int k = 10; // 统计特征数量
+        double aic = n * Math.log(Math.max(1e-12, sse / n)) + 2 * k;
+        metrics.put("aic", round2(aic));
+        
+        return metrics;
+    }
+
+    /**
+     * 预测单条规格序列 - 完全基于统计学的价格预测模型
+     * 输入：两年时长的价格（元）-时间（天）序列，x轴可能以一天为单位，也可能为十天等
+     * 使用统计学方法捕捉数据特征进行预测：方差、平均数、趋势、自相关等
      */
     private SeriesPrediction predictOneSeries(List<ExcelParser.DataPoint> rawPoints, int predictionDays) {
-        // 统一按天聚合（同一天多条记录取平均）
-        List<ExcelParser.DataPoint> dataPoints = normalizeDaily(rawPoints);
-        if (dataPoints.size() < 2) {
-            // 数据太少：返回“持平外推”
-            return naivePredict(dataPoints, predictionDays);
-        }
-
-        // 数据预处理：去除异常值
-        List<ExcelParser.DataPoint> cleanedData = removeOutliers(dataPoints);
-
-        // 补齐缺失日期（保证等间隔“按天”序列，ETS/HW 更稳定）
-        List<ExcelParser.DataPoint> filledData = fillMissingDays(cleanedData);
-        if (filledData.size() < 2) {
-            return naivePredict(filledData, predictionDays);
+        // 数据排序
+        List<ExcelParser.DataPoint> sortedPoints = new ArrayList<>(rawPoints);
+        sortedPoints.sort(Comparator.comparing(ExcelParser.DataPoint::getDate));
+        
+        if (sortedPoints.size() < 2) {
+            return naivePredict(sortedPoints, predictionDays);
         }
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
         // 构建历史数据
         List<Map<String, Object>> historicalData = new ArrayList<>();
-        for (ExcelParser.DataPoint point : filledData) {
+        for (ExcelParser.DataPoint point : sortedPoints) {
             Map<String, Object> item = new HashMap<>();
             item.put("date", sdf.format(point.getDate()));
             item.put("price", point.getPrice());
             historicalData.add(item);
         }
 
-        // ========= ARIMA模型 + 留出集回测自动选参 =========
-        List<Double> y = new ArrayList<>();
-        for (ExcelParser.DataPoint p : filledData) y.add(p.getPrice());
-
-        // 缺失日期补齐比例：补齐（carry-forward）容易制造"伪周周期"，季节性判定需惩罚
-        double imputedFraction = 0.0;
-        if (filledData.size() > 0) {
-            imputedFraction = Math.max(0.0, (filledData.size() - cleanedData.size()) / (double) filledData.size());
+        // 提取价格序列和时间序列
+        List<Double> prices = new ArrayList<>();
+        List<Long> timestamps = new ArrayList<>();
+        for (ExcelParser.DataPoint point : sortedPoints) {
+            prices.add(point.getPrice());
+            timestamps.add(point.getDate().getTime());
         }
 
-        ModelSelection selection = selectBestARIMAModel(y, filledData, imputedFraction, predictionDays);
+        // ========= 自动检测时间间隔 =========
+        int timeIntervalDays = detectTimeInterval(timestamps);
+        
+        // ========= 计算统计特征 =========
+        StatisticalFeatures features = calculateStatisticalFeatures(prices, timestamps, timeIntervalDays);
+        
+        // ========= 基于统计特征的预测 =========
+        List<Double> forecast = predictWithStatistics(prices, features, predictionDays, timeIntervalDays);
 
-        // 使用ARIMA模型进行预测
-        List<Double> forecast;
-        List<ARIMAModel.Point> arimaPoints = new ArrayList<>();
-        for (int i = 0; i < filledData.size(); i++) {
-            arimaPoints.add(new ARIMAModel.Point(i + 1, y.get(i)));
-        }
-        ARIMAModel model = new ARIMAModel();
-        model.train(arimaPoints, selection.arimaParams);
-        forecast = new ArrayList<>();
-        for (int i = 1; i <= predictionDays; i++) {
-            double pred = model.predict(i);
-            if (Double.isNaN(pred) || Double.isInfinite(pred) || pred < 0) {
-                // 如果预测值不合理，使用最近几个值的平均值作为兜底
-                int lookback = Math.min(5, y.size());
-                double avg = y.subList(y.size() - lookback, y.size()).stream()
-                    .mapToDouble(Double::doubleValue).average().orElse(y.get(y.size() - 1));
-                pred = avg;
-            }
-            forecast.add(pred);
-        }
-
-        // 预测未来数据（按天递增日期）
+        // 预测未来数据（按检测到的时间间隔递增）
+        // 确保第一天从历史数据最后一天的下一个时间间隔开始，不重叠
         List<Map<String, Object>> predictedData = new ArrayList<>();
-        Date lastDate = filledData.get(filledData.size() - 1).getDate();
+        Date lastDate = sortedPoints.get(sortedPoints.size() - 1).getDate();
         Calendar cal = Calendar.getInstance();
         cal.setTime(lastDate);
+        // 先加上第一个时间间隔，确保第一天不重叠
+        cal.add(Calendar.DAY_OF_MONTH, timeIntervalDays);
         for (int i = 0; i < predictionDays; i++) {
-            cal.add(Calendar.DAY_OF_MONTH, 1);
             Date futureDate = cal.getTime();
-            double predictedPrice = (i < forecast.size()) ? forecast.get(i) : 0.0;
-            if (Double.isNaN(predictedPrice) || Double.isInfinite(predictedPrice)) predictedPrice = 0.0;
+            double predictedPrice = (i < forecast.size()) ? forecast.get(i) : features.mean;
+            if (Double.isNaN(predictedPrice) || Double.isInfinite(predictedPrice)) predictedPrice = features.mean;
+            
+            // 确保预测值在历史最高和最低范围内，保持方差特征
+            predictedPrice = Math.max(features.minPrice, Math.min(features.maxPrice, predictedPrice));
             if (predictedPrice < 0) predictedPrice = 0.0;
 
             Map<String, Object> item = new HashMap<>();
             item.put("date", sdf.format(futureDate));
             item.put("price", Math.round(predictedPrice * 100.0) / 100.0);
             predictedData.add(item);
-        }
-
-        // 构建详细计算过程（仅用于主规格）
-        Map<String, Object> calculationDetails = new HashMap<>();
-
-        // 数据预处理详情
-        Map<String, Object> preprocessingDetails = new HashMap<>();
-        preprocessingDetails.put("original_count", dataPoints.size());
-        preprocessingDetails.put("cleaned_count", cleanedData.size());
-        preprocessingDetails.put("removed_count", dataPoints.size() - cleanedData.size());
-        preprocessingDetails.put("filled_count", filledData.size());
-        preprocessingDetails.put("imputed_fraction", round4(imputedFraction));
-        if (dataPoints.size() != cleanedData.size()) {
-            double mean = dataPoints.stream().mapToDouble(ExcelParser.DataPoint::getPrice).average().orElse(0);
-            double variance = dataPoints.stream()
-                .mapToDouble(p -> Math.pow(p.getPrice() - mean, 2))
-                .average().orElse(0);
-            double stdDev = Math.sqrt(variance);
-            preprocessingDetails.put("mean", Math.round(mean * 100.0) / 100.0);
-            preprocessingDetails.put("std_dev", Math.round(stdDev * 100.0) / 100.0);
-            preprocessingDetails.put("lower_bound", Math.round((mean - 3 * stdDev) * 100.0) / 100.0);
-            preprocessingDetails.put("upper_bound", Math.round((mean + 3 * stdDev) * 100.0) / 100.0);
-            preprocessingDetails.put("method", "3倍标准差规则");
-        } else {
-            preprocessingDetails.put("method", "数据点少于10个，未进行异常值过滤");
-        }
-        calculationDetails.put("preprocessing", preprocessingDetails);
-
-        // 模型选择与参数详情（ARIMA + 回测）
-        Map<String, Object> modelDetails = new HashMap<>();
-        modelDetails.put("model_name", selection.modelDisplayName);
-        modelDetails.put("selection_method", "多折中期回测（CV）最小RMSE优先，其次MAE；自动选择最优ARIMA参数，只选择R² > 0的模型");
-        if (selection.arimaParams != null) {
-            modelDetails.put("arima_params", selection.arimaParams.toString());
-            modelDetails.put("ar_p", selection.arimaParams.p);
-            modelDetails.put("ar_d", selection.arimaParams.d);
-            modelDetails.put("ar_q", selection.arimaParams.q);
-            if (selection.arimaParams.isSeasonal()) {
-                modelDetails.put("sarima_P", selection.arimaParams.P);
-                modelDetails.put("sarima_D", selection.arimaParams.D);
-                modelDetails.put("sarima_Q", selection.arimaParams.Q);
-                modelDetails.put("sarima_s", selection.arimaParams.s);
+            
+            // 为下一次循环加上时间间隔
+            if (i < predictionDays - 1) {
+                cal.add(Calendar.DAY_OF_MONTH, timeIntervalDays);
             }
         }
-        modelDetails.put("cv_folds", selection.cvFolds);
-        modelDetails.put("holdout_size", selection.holdoutSize);
-        modelDetails.put("holdout_metrics", selection.holdoutMetricsAsObject());
-        calculationDetails.put("model_selection", modelDetails);
+
+        // 构建详细计算过程
+        Map<String, Object> calculationDetails = new HashMap<>();
+        
+        // 时间间隔检测
+        Map<String, Object> intervalInfo = new HashMap<>();
+        intervalInfo.put("detected_interval_days", timeIntervalDays);
+        intervalInfo.put("data_points", sortedPoints.size());
+        intervalInfo.put("time_span_days", (timestamps.get(timestamps.size() - 1) - timestamps.get(0)) / (24L * 60 * 60 * 1000));
+        calculationDetails.put("time_interval", intervalInfo);
+
+        // 统计特征详情
+        Map<String, Object> featuresInfo = new HashMap<>();
+        featuresInfo.put("mean", round2(features.mean));
+        featuresInfo.put("variance", round2(features.variance));
+        featuresInfo.put("std_dev", round2(features.stdDev));
+        featuresInfo.put("coefficient_of_variation", round4(features.coefficientOfVariation));
+        featuresInfo.put("trend_slope", round4(features.trendSlope));
+        featuresInfo.put("trend_direction", features.trendDirection);
+        featuresInfo.put("autocorrelation_lag1", round4(features.autocorrelationLag1));
+        featuresInfo.put("autocorrelation_lag2", round4(features.autocorrelationLag2));
+        featuresInfo.put("skewness", round4(features.skewness));
+        featuresInfo.put("kurtosis", round4(features.kurtosis));
+        featuresInfo.put("min_price", round2(features.minPrice));
+        featuresInfo.put("max_price", round2(features.maxPrice));
+        featuresInfo.put("median", round2(features.median));
+        featuresInfo.put("q25", round2(features.q25));
+        featuresInfo.put("q75", round2(features.q75));
+        featuresInfo.put("recent_mean", round2(features.recentMean));
+        featuresInfo.put("recent_std_dev", round2(features.recentStdDev));
+        calculationDetails.put("statistical_features", featuresInfo);
+
+        // 预测方法详情
+        Map<String, Object> predictionMethod = new HashMap<>();
+        predictionMethod.put("method_name", "统计学特征预测模型（保持方差不变）");
+        predictionMethod.put("description", "基于差分序列的自回归模型进行预测，严格保持历史数据的方差特征，不过度平滑");
+        predictionMethod.put("components", Arrays.asList(
+            "差分序列分析（一阶差分保持方差特征）",
+            "自回归模型（基于差分序列的自相关系数）",
+            "方差保持（使用历史差分的标准差，不衰减）",
+            "趋势外推（基于线性回归斜率）"
+        ));
+        predictionMethod.put("variance_preservation", "预测序列的方差与历史序列的方差保持一致，不进行平滑处理");
+        calculationDetails.put("prediction_method", predictionMethod);
 
         // 预测过程详情
         List<Map<String, Object>> predictionDetails = new ArrayList<>();
         cal.setTime(lastDate);
+        // 先加上第一个时间间隔，确保第一天不重叠
+        cal.add(Calendar.DAY_OF_MONTH, timeIntervalDays);
         for (int i = 0; i < predictionDays; i++) {
-            cal.add(Calendar.DAY_OF_MONTH, 1);
-            double predictedPrice = (i < forecast.size()) ? forecast.get(i) : 0.0;
+            double predictedPrice = (i < forecast.size()) ? forecast.get(i) : features.mean;
             Map<String, Object> detail = new HashMap<>();
             detail.put("step", i + 1);
             detail.put("date", sdf.format(cal.getTime()));
             detail.put("predicted_price", Math.round(predictedPrice * 100.0) / 100.0);
-            detail.put("formula", selection.formulaHint);
+            detail.put("formula", "差分序列自回归预测：保持方差不变，价格范围限制在历史最高和最低之间");
             predictionDetails.add(detail);
+            // 为下一次循环加上时间间隔
+            if (i < predictionDays - 1) {
+                cal.add(Calendar.DAY_OF_MONTH, timeIntervalDays);
+            }
         }
         calculationDetails.put("prediction_steps", predictionDetails);
 
-        // 指标与趋势
-        Map<String, Double> metricsMap = new HashMap<>();
-        // 以“回测holdout”指标作为更可靠的参考；若无holdout，则退化使用全序列的简单误差
-        metricsMap.put("r_squared", round4(selection.r2));
-        metricsMap.put("mae", round2(selection.mae));
-        metricsMap.put("rmse", round2(selection.rmse));
-        metricsMap.put("mape", round4(selection.mape));
-        metricsMap.put("aic", round2(selection.aic)); // ARIMA提供AIC
+        // 计算模型指标（使用留一法交叉验证）
+        Map<String, Double> metricsMap = calculateModelMetrics(prices, features, timeIntervalDays);
 
-        String trend = determineTrendFromForecast(forecast);
+        String trend = features.trendDirection;
 
         SeriesPrediction sp = new SeriesPrediction();
         sp.historicalData = historicalData;
