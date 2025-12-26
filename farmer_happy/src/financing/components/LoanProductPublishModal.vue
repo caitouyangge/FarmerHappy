@@ -30,28 +30,16 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">最低贷款额度要求 <span class="required">*</span></label>
+            <label class="form-label">贷款额度 <span class="required">*</span></label>
             <input
-              v-model.number="formData.min_credit_limit"
+              v-model.number="formData.loan_amount"
               type="number"
               class="form-input"
-              placeholder="请输入最低信用额度要求（元）"
-              min="0"
-              step="0.01"
-              required
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">最高贷款额度 <span class="required">*</span></label>
-            <input
-              v-model.number="formData.max_amount"
-              type="number"
-              class="form-input"
-              placeholder="请输入最高贷款额度（元）"
+              placeholder="请输入贷款额度（元）"
               min="1"
               step="0.01"
               required
+              @input="updateLoanLimits"
             />
           </div>
 
@@ -83,16 +71,6 @@
               step="1"
               required
             />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">还款方式 <span class="required">*</span></label>
-            <select v-model="formData.repayment_method" class="form-input" required>
-              <option value="">请选择还款方式</option>
-              <option value="equal_installment">等额本息</option>
-              <option value="interest_first">先息后本</option>
-              <option value="bullet_repayment">一次性还本付息</option>
-            </select>
           </div>
 
           <div class="form-group">
@@ -133,13 +111,25 @@ export default {
     const formData = reactive({
       product_name: '',
       product_code: '',
+      loan_amount: null,
       min_credit_limit: null,
       max_amount: null,
       interest_rate: null,
       term_months: null,
-      repayment_method: '',
+      repayment_method: 'equal_installment', // 固定为等额本息，后端只支持等额本息计算
       description: ''
     });
+
+    // 更新贷款额度限制（自动填充最低和最高额度）
+    const updateLoanLimits = () => {
+      if (formData.loan_amount !== null && formData.loan_amount !== '' && !isNaN(formData.loan_amount)) {
+        const amount = parseFloat(formData.loan_amount);
+        if (!isNaN(amount) && amount > 0) {
+          formData.min_credit_limit = amount;
+          formData.max_amount = amount;
+        }
+      }
+    };
 
     onMounted(() => {
       const storedUser = localStorage.getItem('user');
@@ -158,10 +148,8 @@ export default {
         return;
       }
 
-      if (formData.max_amount < formData.min_credit_limit) {
-        alert('最高贷款额度不能小于最低信用额度要求');
-        return;
-      }
+      // 确保贷款额度已同步
+      updateLoanLimits();
 
       submitting.value = true;
       try {
@@ -203,7 +191,8 @@ export default {
       submitting,
       formData,
       handleClose,
-      handleSubmit
+      handleSubmit,
+      updateLoanLimits
     };
   }
 };
