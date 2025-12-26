@@ -16,6 +16,10 @@
       <div v-else class="image-placeholder">
         <span class="image-icon">🌾</span>
       </div>
+      <!-- 状态标签 -->
+      <div class="status-badge" :class="statusClass">
+        {{ statusText }}
+      </div>
     </div>
 
     <!-- 产品信息 -->
@@ -132,6 +136,33 @@ export default {
       return categoryMap[props.product.category] || props.product.category || '其他';
     });
 
+    // 状态文本
+    const statusText = computed(() => {
+      const statusMap = {
+        draft: '草稿',
+        on_shelf: '在售',
+        off_shelf: '已下架',
+        sold_out: '售罄',
+        pending_review: '待审核'
+      };
+      return statusMap[props.product.status] || '未知';
+    });
+
+    // 状态样式类
+    const statusClass = computed(() => {
+      const status = props.product.status;
+      if (status === 'on_shelf') {
+        return 'status-on-shelf';
+      } else if (status === 'off_shelf') {
+        return 'status-off-shelf';
+      } else if (status === 'sold_out') {
+        return 'status-sold-out';
+      } else if (status === 'draft') {
+        return 'status-draft';
+      }
+      return 'status-draft';
+    });
+
     // 获取购买按钮文本
     const getPurchaseButtonText = computed(() => {
       if (props.product.status === 'sold_out' || props.product.stock === 0) {
@@ -222,6 +253,8 @@ export default {
 
     return {
       categoryText,
+      statusText,
+      statusClass,
       formatDate,
       getPurchaseButtonText,
       getPurchaseDisabledReason,
