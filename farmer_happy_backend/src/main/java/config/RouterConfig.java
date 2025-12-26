@@ -131,6 +131,23 @@ public class RouterConfig {
             return expertAppointmentController.decide(appointmentId, req);
         }
 
+        // 发送聊天消息 - /api/v1/expert/appointments/{appointment_id}/messages/send
+        Pattern sendMessagePattern = Pattern.compile("/api/v1/expert/appointments/([^/]+)/messages/send");
+        Matcher sendMessageMatcher = sendMessagePattern.matcher(path);
+        if (sendMessageMatcher.matches() && "POST".equals(method)) {
+            String appointmentId = sendMessageMatcher.group(1);
+            return expertAppointmentController.sendMessage(appointmentId, requestBody);
+        }
+
+        // 获取聊天消息列表 - /api/v1/expert/appointments/{appointment_id}/messages
+        Pattern getMessagesPattern = Pattern.compile("/api/v1/expert/appointments/([^/]+)/messages");
+        Matcher getMessagesMatcher = getMessagesPattern.matcher(path);
+        if (getMessagesMatcher.matches() && "POST".equals(method)) {
+            String appointmentId = getMessagesMatcher.group(1);
+            String userPhone = (String) requestBody.get("user_phone");
+            return expertAppointmentController.getMessages(appointmentId, userPhone);
+        }
+
         // ============= 融资相关路由 =============
 
         // 在处理请求的方法中添加
@@ -897,6 +914,27 @@ public class RouterConfig {
         dto.expert.AppointmentCreateRequestDTO req = new dto.expert.AppointmentCreateRequestDTO();
         req.setFarmer_phone((String) requestBody.get("farmer_phone"));
         req.setMode((String) requestBody.get("mode"));
+        req.setMessage((String) requestBody.get("message"));
+        req.setLocation((String) requestBody.get("location"));
+        
+        // 解析scheduled_time
+        Object scheduledTimeObj = requestBody.get("scheduled_time");
+        if (scheduledTimeObj != null) {
+            try {
+                if (scheduledTimeObj instanceof String) {
+                    String timeStr = (String) scheduledTimeObj;
+                    // 格式: "2024-01-01 12:00:00"
+                    java.sql.Timestamp timestamp = java.sql.Timestamp.valueOf(timeStr);
+                    req.setScheduled_time(timestamp);
+                } else if (scheduledTimeObj instanceof Number) {
+                    req.setScheduled_time(new java.sql.Timestamp(((Number) scheduledTimeObj).longValue()));
+                }
+            } catch (Exception e) {
+                // 如果解析失败，设置为null
+                req.setScheduled_time(null);
+            }
+        }
+        
         if (requestBody.get("expert_ids") instanceof List) {
             List<?> ids = (List<?>) requestBody.get("expert_ids");
             List<Long> longIds = new ArrayList<>();
@@ -909,7 +947,6 @@ public class RouterConfig {
             }
             req.setExpert_ids(longIds);
         }
-        req.setMessage((String) requestBody.get("message"));
         return req;
     }
 

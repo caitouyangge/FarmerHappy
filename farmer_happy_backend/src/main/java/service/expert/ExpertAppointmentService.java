@@ -54,7 +54,15 @@ public class ExpertAppointmentService {
         }
 
         String groupId = UUID.randomUUID().toString();
-        List<String> appointmentIds = dbManager.createExpertAppointments(groupId, farmerId, request.getExpert_ids(), request.getMode(), request.getMessage());
+        List<String> appointmentIds = dbManager.createExpertAppointments(
+            groupId, 
+            farmerId, 
+            request.getExpert_ids(), 
+            request.getMode(), 
+            request.getMessage(),
+            request.getScheduled_time(),
+            request.getLocation()
+        );
 
         AppointmentCreateResponseDTO resp = new AppointmentCreateResponseDTO();
         resp.setGroup_id(groupId);
@@ -138,6 +146,77 @@ public class ExpertAppointmentService {
         }
         Map<String, Object> data = new HashMap<>();
         data.put("detail", appt);
+        return data;
+    }
+
+    public Map<String, Object> sendMessage(String appointmentId, String senderPhone, String content) throws SQLException {
+        if (appointmentId == null || appointmentId.isEmpty()) {
+            throw new IllegalArgumentException("预约ID不能为空");
+        }
+        if (senderPhone == null || senderPhone.isEmpty()) {
+            throw new IllegalArgumentException("发送者手机号不能为空");
+        }
+        if (content == null || content.trim().isEmpty()) {
+            throw new IllegalArgumentException("消息内容不能为空");
+        }
+
+        // 验证预约是否存在
+        Map<String, Object> appt = dbManager.getAppointmentByAppointmentId(appointmentId);
+        if (appt == null) {
+            throw new IllegalArgumentException("预约不存在");
+        }
+
+        // 获取预约的农户和专家信息
+        String farmerPhone = (String) appt.get("farmer_phone");
+        String expertPhone = (String) appt.get("expert_phone");
+
+        // 验证发送者是否有权限
+        if (!senderPhone.equals(farmerPhone) && !senderPhone.equals(expertPhone)) {
+            throw new IllegalArgumentException("无权限发送消息");
+        }
+
+        // 确定接收者
+        String receiverPhone = senderPhone.equals(farmerPhone) ? expertPhone : farmerPhone;
+
+        // 保存消息
+        dbManager.saveExpertAppointmentMessage(appointmentId, senderPhone, receiverPhone, content);
+        
+        System.out.println("sendMessage - 消息已保存: appointmentId=" + appointmentId + 
+                ", sender=" + senderPhone + ", receiver=" + receiverPhone + ", content=" + content);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("appointment_id", appointmentId);
+        data.put("sender", senderPhone);
+        data.put("receiver", receiverPhone);
+        data.put("content", content);
+        return data;
+    }
+
+    public Map<String, Object> getMessages(String appointmentId, String userPhone) throws SQLException {
+        if (appointmentId == null || appointmentId.isEmpty()) {
+            throw new IllegalArgumentException("预约ID不能为空");
+        }
+        if (userPhone == null || userPhone.isEmpty()) {
+            throw new IllegalArgumentException("用户手机号不能为空");
+        }
+
+        // 验证预约是否存在
+        Map<String, Object> appt = dbManager.getAppointmentByAppointmentId(appointmentId);
+        if (appt == null) {
+            throw new IllegalArgumentException("预约不存在");
+        }
+
+        // 验证用户是否有权限查看消息
+        String farmerPhone = (String) appt.get("farmer_phone");
+        String expertPhone = (String) appt.get("expert_phone");
+        if (!userPhone.equals(farmerPhone) && !userPhone.equals(expertPhone)) {
+            throw new IllegalArgumentException("无权限查看消息");
+        }
+
+        // 获取消息列表
+        List<Map<String, Object>> messages = dbManager.getExpertAppointmentMessages(appointmentId, userPhone);
+        Map<String, Object> data = new HashMap<>();
+        data.put("messages", messages);
         return data;
     }
 }

@@ -265,6 +265,22 @@ public class DatabaseManager {
                     ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='专家预约申请记录表';";
             dbStatement.executeUpdate(createExpertAppointmentsTable);
 
+            // 创建专家预约聊天消息表
+            String createExpertAppointmentMessagesTable = "CREATE TABLE IF NOT EXISTS expert_appointment_messages (" +
+                    "    id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "    appointment_id VARCHAR(64) NOT NULL COMMENT '预约ID'," +
+                    "    sender_phone VARCHAR(11) NOT NULL COMMENT '发送者手机号'," +
+                    "    receiver_phone VARCHAR(11) NOT NULL COMMENT '接收者手机号'," +
+                    "    content TEXT NOT NULL COMMENT '消息内容'," +
+                    "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'," +
+                    "    INDEX idx_appointment_id (appointment_id)," +
+                    "    INDEX idx_sender_phone (sender_phone)," +
+                    "    INDEX idx_receiver_phone (receiver_phone)," +
+                    "    INDEX idx_created_at (created_at)," +
+                    "    FOREIGN KEY (appointment_id) REFERENCES expert_appointments(appointment_id) ON DELETE CASCADE" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='专家预约聊天消息表';";
+            dbStatement.executeUpdate(createExpertAppointmentMessagesTable);
+
             // 更新表结构：将specification列改为detailed_description
             try {
                 // 首先检查列是否存在
@@ -2119,11 +2135,11 @@ public class DatabaseManager {
     /**
      * 批量创建专家预约记录
      */
-    public List<String> createExpertAppointments(String groupId, Long farmerId, List<Long> expertIds, String mode, String message) throws SQLException {
+    public List<String> createExpertAppointments(String groupId, Long farmerId, List<Long> expertIds, String mode, String message, java.sql.Timestamp scheduledTime, String location) throws SQLException {
         Connection conn = getConnection();
         List<String> appointmentIds = new ArrayList<>();
         try {
-            String sql = "INSERT INTO expert_appointments (appointment_id, group_id, farmer_id, expert_id, mode, message, status, created_at) VALUES (?,?,?,?,?,?, 'pending', CURRENT_TIMESTAMP)";
+            String sql = "INSERT INTO expert_appointments (appointment_id, group_id, farmer_id, expert_id, mode, message, status, scheduled_time, location, created_at) VALUES (?,?,?,?,?,?, 'pending', ?, ?, CURRENT_TIMESTAMP)";
             PreparedStatement stmt = conn.prepareStatement(sql);
             for (Long expertId : expertIds) {
                 String appointmentId = java.util.UUID.randomUUID().toString();
@@ -2133,6 +2149,8 @@ public class DatabaseManager {
                 stmt.setLong(4, expertId);
                 stmt.setString(5, mode);
                 stmt.setString(6, message);
+                stmt.setTimestamp(7, scheduledTime);
+                stmt.setString(8, location);
                 stmt.addBatch();
                 appointmentIds.add(appointmentId);
             }
@@ -4270,6 +4288,67 @@ public class DatabaseManager {
                 message.put("created_at", rs.getTimestamp("created_at"));
                 messages.add(message);
             }
+            rs.close();
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+        return messages;
+    }
+
+    /**
+     * 保存专家预约聊天消息
+     */
+    public void saveExpertAppointmentMessage(String appointmentId, String senderPhone, String receiverPhone, String content) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            // 确保自动提交开启
+            conn.setAutoCommit(true);
+            String sql = "INSERT INTO expert_appointment_messages (appointment_id, sender_phone, receiver_phone, content) VALUES (?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, appointmentId);
+            stmt.setString(2, senderPhone);
+            stmt.setString(3, receiverPhone);
+            stmt.setString(4, content);
+            int rowsAffected = stmt.executeUpdate();
+            System.out.println("saveExpertAppointmentMessage - 插入行数: " + rowsAffected + ", appointmentId: " + appointmentId + ", sender: " + senderPhone);
+            stmt.close();
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 获取专家预约聊天消息列表
+     */
+    public List<Map<String, Object>> getExpertAppointmentMessages(String appointmentId, String userPhone) throws SQLException {
+        Connection conn = getConnection();
+        List<Map<String, Object>> messages = new ArrayList<>();
+        try {
+            String sql = "SELECT * FROM expert_appointment_messages " +
+                    "WHERE appointment_id = ? " +
+                    "AND (sender_phone = ? OR receiver_phone = ?) " +
+                    "ORDER BY created_at ASC";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, appointmentId);
+            stmt.setString(2, userPhone);
+            stmt.setString(3, userPhone);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                Map<String, Object> message = new HashMap<>();
+                message.put("id", rs.getLong("id"));
+                message.put("appointment_id", rs.getString("appointment_id"));
+                message.put("sender", rs.getString("sender_phone"));
+                message.put("receiver", rs.getString("receiver_phone"));
+                message.put("content", rs.getString("content"));
+                message.put("created_at", rs.getTimestamp("created_at"));
+                messages.add(message);
+            }
+            
+            System.out.println("getExpertAppointmentMessages - 查询结果: appointmentId=" + appointmentId + 
+                    ", userPhone=" + userPhone + ", 消息数量=" + messages.size());
+            
             rs.close();
             stmt.close();
         } finally {

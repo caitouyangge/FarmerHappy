@@ -110,4 +110,40 @@ public class ExpertAppointmentController {
         }
         return response;
     }
+
+    public Map<String, Object> sendMessage(String appointmentId, Map<String, Object> request) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            String senderPhone = (String) request.get("sender_phone");
+            String content = (String) request.get("content");
+            Map<String, Object> data = service.sendMessage(appointmentId, senderPhone, content);
+            response.put("code", 200);
+            response.put("message", "消息发送成功");
+            response.put("data", data);
+        } catch (IllegalArgumentException e) {
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+        } catch (Exception e) {
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+        }
+        return response;
+    }
+
+    public Map<String, Object> getMessages(String appointmentId, String userPhone) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            Map<String, Object> data = service.getMessages(appointmentId, userPhone);
+            response.put("code", 200);
+            response.put("message", "成功");
+            response.put("data", data);
+        } catch (IllegalArgumentException e) {
+            response.put("code", 400);
+            response.put("message", e.getMessage());
+        } catch (Exception e) {
+            response.put("code", 500);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+        }
+        return response;
+    }
 }

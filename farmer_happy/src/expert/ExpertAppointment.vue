@@ -15,6 +15,14 @@
             <label><input type="radio" value="offline" v-model="form.mode" /> 线下预约</label>
           </div>
         </div>
+        <div class="form-row" v-if="form.mode === 'offline'">
+          <label class="label">预约时间</label>
+          <input type="datetime-local" v-model="form.scheduled_time" class="input" />
+        </div>
+        <div class="form-row" v-if="form.mode === 'offline'">
+          <label class="label">预约地点</label>
+          <input type="text" v-model="form.location" class="input" placeholder="请输入线下见面地点" />
+        </div>
         <div class="form-row">
           <label class="label">预约说明</label>
           <textarea v-model="form.message" class="input" rows="3" placeholder="请输入预约说明"></textarea>
@@ -50,6 +58,9 @@
               <div class="row" v-if="item.scheduled_time"><span class="label">预约时间</span><span class="value">{{ formatTime(item.scheduled_time) }}</span></div>
               <div class="row" v-if="item.location"><span class="label">地点</span><span class="value">{{ item.location }}</span></div>
             </div>
+            <div class="card-actions" v-if="item.mode === 'online' && item.status === 'accepted'">
+              <button class="btn-chat" @click="openChat(item)">进入聊天</button>
+            </div>
           </div>
         </div>
       </section>
@@ -73,6 +84,9 @@
             <div class="card-actions" v-if="item.status === 'pending'">
               <button class="btn-success" @click="openDecision(item, 'accepted')">同意</button>
               <button class="btn-danger" @click="openDecision(item, 'rejected')">拒绝</button>
+            </div>
+            <div class="card-actions" v-if="item.mode === 'online' && item.status === 'accepted'">
+              <button class="btn-chat" @click="openChat(item)">进入聊天</button>
             </div>
           </div>
         </div>
@@ -99,18 +113,33 @@
           </div>
         </div>
       </section>
+
+      <!-- 聊天窗口 -->
+      <ExpertChatWindow
+        v-if="showChat && currentChatAppointment && currentChatAppointment.appointment_id"
+        :visible="showChat"
+        :appointment-id="currentChatAppointment.appointment_id"
+        :current-user-phone="getCurrentUserPhone()"
+        :chat-title="chatTitle"
+        :chat-subtitle="chatSubtitle"
+        @close="closeChat"
+      />
     </main>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { expertAppointmentService } from '../api/expertAppointment';
+import ExpertChatWindow from './components/ExpertChatWindow.vue';
 import logger from '../utils/logger';
 
 export default {
   name: 'ExpertAppointment',
+  components: {
+    ExpertChatWindow
+  },
   setup() {
     const router = useRouter();
     const user = ref(null);
@@ -123,13 +152,20 @@ export default {
 
     const form = ref({
       mode: 'online',
-      message: ''
+      message: '',
+      scheduled_time: '',
+      location: ''
     });
 
     const showDecision = ref(false);
     const decisionAction = ref('accepted');
     const currentAppointment = ref(null);
     const decision = ref({ expert_note: '', scheduled_time: '', location: '' });
+
+    const showChat = ref(false);
+    const currentChatAppointment = ref(null);
+    const chatTitle = ref('');
+    const chatSubtitle = ref('');
 
     const isFarmer = computed(() => user.value?.userType === 'farmer');
 
@@ -160,16 +196,34 @@ export default {
         alert('请选择至少一位专家');
         return;
       }
+      if (form.value.mode === 'offline') {
+        if (!form.value.scheduled_time) {
+          alert('请选择预约时间');
+          return;
+        }
+        if (!form.value.location || !form.value.location.trim()) {
+          alert('请输入预约地点');
+          return;
+        }
+      }
       submitting.value = true;
       try {
+        let scheduledTime = null;
+        if (form.value.mode === 'offline' && form.value.scheduled_time) {
+          scheduledTime = form.value.scheduled_time.replace('T', ' ') + ':00';
+        }
         await expertAppointmentService.applyAppointment({
           farmer_phone: user.value.phone,
           mode: form.value.mode,
           expert_ids: selectedExperts.value,
-          message: form.value.message
+          message: form.value.message,
+          scheduled_time: scheduledTime,
+          location: form.value.mode === 'offline' ? form.value.location : null
         });
         selectedExperts.value = [];
         form.value.message = '';
+        form.value.scheduled_time = '';
+        form.value.location = '';
         await loadLists();
         alert('预约提交成功');
       } catch (e) {
@@ -216,6 +270,40 @@ export default {
       }
     };
 
+    const openChat = async (item) => {
+      if (!item || !item.appointment_id) {
+        alert('预约信息不完整，无法打开聊天窗口');
+        return;
+      }
+      
+      // 重新从 localStorage 获取最新的用户信息
+      const latestUser = loadUserInfo();
+      if (!latestUser || !latestUser.phone) {
+        alert('用户信息不完整，请重新登录');
+        router.push('/login');
+        return;
+      }
+      
+      // 设置聊天窗口数据
+      currentChatAppointment.value = item;
+      if (isFarmer.value) {
+        chatTitle.value = item.expert_name || '专家';
+        chatSubtitle.value = item.expertise_field || '';
+      } else {
+        chatTitle.value = item.farmer_name || '农户';
+        chatSubtitle.value = item.farmer_phone || '';
+      }
+      
+      // 使用 nextTick 确保 DOM 更新后再显示
+      await nextTick();
+      showChat.value = true;
+    };
+
+    const closeChat = () => {
+      showChat.value = false;
+      currentChatAppointment.value = null;
+    };
+
     const statusLabel = (s) => ({ pending: '待处理', accepted: '已同意', rejected: '已拒绝' }[s] || s);
     const modeLabel = (m) => ({ online: '线上', offline: '线下' }[m] || m);
     const formatTime = (t) => {
@@ -230,11 +318,47 @@ export default {
       } catch { return t; }
     };
 
-    onMounted(async () => {
+    // 从 localStorage 获取用户信息
+    const loadUserInfo = () => {
       try {
         const stored = localStorage.getItem('user');
-        user.value = stored ? JSON.parse(stored) : null;
-        if (!user.value) {
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          user.value = parsed;
+          return parsed;
+        }
+        return null;
+      } catch (e) {
+        console.error('解析用户信息失败:', e);
+        return null;
+      }
+    };
+
+    // 获取当前用户手机号（始终从 localStorage 读取最新值）
+    const getCurrentUserPhone = () => {
+      try {
+        const stored = localStorage.getItem('user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return parsed.phone || '';
+        }
+      } catch (e) {
+        console.error('获取用户手机号失败:', e);
+      }
+      return '';
+    };
+
+    onMounted(async () => {
+      try {
+        const userData = loadUserInfo();
+        console.log('ExpertAppointment mounted, user:', userData);
+        if (!userData) {
+          router.push('/login');
+          return;
+        }
+        if (!userData.phone) {
+          console.error('用户手机号不存在，跳转到登录页');
+          alert('用户信息不完整，请重新登录');
           router.push('/login');
           return;
         }
@@ -242,6 +366,7 @@ export default {
         await loadLists();
       } catch (e) {
         logger.error('APPOINTMENT', '初始化失败', {}, e);
+        console.error('ExpertAppointment初始化错误:', e);
       }
     });
 
@@ -264,7 +389,14 @@ export default {
       openDecision,
       closeDecision,
       submitDecision,
-      deciding
+      deciding,
+      showChat,
+      currentChatAppointment,
+      chatTitle,
+      chatSubtitle,
+      openChat,
+      closeChat,
+      getCurrentUserPhone
     };
   }
 };
@@ -292,6 +424,9 @@ export default {
 .btn-success { background: #22c55e; color: var(--white); border: none; border-radius: 8px; padding: 0.4rem 0.8rem; cursor: pointer; }
 .btn-danger { background: #ef4444; color: var(--white); border: none; border-radius: 8px; padding: 0.4rem 0.8rem; cursor: pointer; }
 .btn-secondary { background: var(--gray-300); color: var(--gray-900); border: none; border-radius: 8px; padding: 0.4rem 0.8rem; cursor: pointer; }
+.btn-chat { background: var(--primary); color: var(--white); border: none; border-radius: 8px; padding: 0.4rem 0.8rem; cursor: pointer; font-size: 0.9rem; }
+.btn-chat:hover { background: var(--primary-dark); }
+.card-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--gray-200); }
 .list { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
 .card { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; padding: 0.75rem; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }

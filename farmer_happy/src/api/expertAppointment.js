@@ -18,11 +18,18 @@ export const expertAppointmentService = {
     }
   },
 
-  async applyAppointment({ farmer_phone, mode, expert_ids, message }) {
+  async applyAppointment({ farmer_phone, mode, expert_ids, message, scheduled_time, location }) {
     try {
       const url = `${BASE}/appointments/apply`;
       logger.apiRequest('POST', url, { farmer_phone, mode, expert_ids_count: expert_ids?.length || 0 });
-      const res = await axios.post(url, { farmer_phone, mode, expert_ids, message });
+      const res = await axios.post(url, { 
+        farmer_phone, 
+        mode, 
+        expert_ids, 
+        message,
+        scheduled_time,
+        location
+      });
       logger.apiResponse('POST', url, res.status, { code: res.data.code });
       if (res.data.code !== 201) throw new Error(res.data.message || '提交预约失败');
       return res.data.data;
@@ -85,6 +92,34 @@ export const expertAppointmentService = {
       return res.data.data?.detail || null;
     } catch (error) {
       logger.apiError('POST', `${BASE}/appointments/query/{id}`, error);
+      throw error.response?.data?.message || error.message || error;
+    }
+  },
+
+  async sendMessage(appointment_id, { sender_phone, content }) {
+    try {
+      const url = `${BASE}/appointments/${appointment_id}/messages/send`;
+      logger.apiRequest('POST', url, { appointment_id, sender_phone });
+      const res = await axios.post(url, { sender_phone, content });
+      logger.apiResponse('POST', url, res.status, { code: res.data.code });
+      if (res.data.code !== 200) throw new Error(res.data.message || '发送消息失败');
+      return res.data.data;
+    } catch (error) {
+      logger.apiError('POST', `${BASE}/appointments/{id}/messages/send`, error);
+      throw error.response?.data?.message || error.message || error;
+    }
+  },
+
+  async getMessages(appointment_id, user_phone) {
+    try {
+      const url = `${BASE}/appointments/${appointment_id}/messages`;
+      logger.apiRequest('POST', url, { appointment_id, user_phone });
+      const res = await axios.post(url, { user_phone });
+      logger.apiResponse('POST', url, res.status, { code: res.data.code });
+      if (res.data.code !== 200) throw new Error(res.data.message || '获取消息失败');
+      return res.data.data?.messages || [];
+    } catch (error) {
+      logger.apiError('POST', `${BASE}/appointments/{id}/messages`, error);
       throw error.response?.data?.message || error.message || error;
     }
   }
