@@ -125,6 +125,7 @@ export const communityService = {
      * @param {string} params.content_type - 内容类型（可选）
      * @param {string} params.keyword - 搜索关键词（可选）
      * @param {string} params.sort - 排序方式：newest, hottest, commented（可选）
+     * @param {string} params.author_user_id - 作者用户ID（可选，用于筛选我的帖子）
      */
     async getContentList(params = {}) {
         try {
@@ -137,6 +138,9 @@ export const communityService = {
             }
             if (params.sort) {
                 queryParams.append('sort', params.sort);
+            }
+            if (params.author_user_id) {
+                queryParams.append('author_user_id', params.author_user_id);
             }
             
             const url = `${API_URL}/list${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
@@ -420,6 +424,140 @@ export const communityService = {
             throw {
                 code: 500,
                 message: error.message || '回复评论失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
+     * 删除内容（帖子）
+     * DELETE /api/v1/content/{content_id}
+     * @param {string} contentId - 内容ID
+     * @param {Object} deleteData - 删除数据
+     * @param {string} deleteData.phone - 用户手机号
+     */
+    async deleteContent(contentId, deleteData) {
+        try {
+            const url = `${API_URL}/${contentId}`;
+            logger.apiRequest('DELETE', url, {
+                phone: deleteData.phone
+            });
+            logger.info('COMMUNITY', '删除内容', { contentId, phone: deleteData.phone });
+            
+            const response = await axios.delete(url, { data: deleteData });
+            
+            logger.apiResponse('DELETE', url, response.status, {
+                code: response.data.code,
+                success: response.data.code === 200
+            });
+            
+            if (response.data.code !== 200) {
+                logger.error('COMMUNITY', '删除内容失败', {
+                    code: response.data.code,
+                    message: response.data.message
+                });
+                
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+                
+                throw errorObj;
+            }
+            
+            logger.info('COMMUNITY', '内容删除成功', { contentId });
+            
+            return response.data;
+        } catch (error) {
+            logger.apiError('DELETE', `${API_URL}/${contentId}`, error);
+            logger.error('COMMUNITY', '删除内容失败', {
+                contentId,
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+            
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+            
+            if (error.code && error.message) {
+                throw error;
+            }
+            
+            throw {
+                code: 500,
+                message: error.message || '删除内容失败，请稍后重试',
+                errors: []
+            };
+        }
+    },
+
+    /**
+     * 删除评论（包括一级评论和回复）
+     * DELETE /api/v1/comment/{comment_id}
+     * @param {string} commentId - 评论ID
+     * @param {Object} deleteData - 删除数据
+     * @param {string} deleteData.phone - 用户手机号
+     */
+    async deleteComment(commentId, deleteData) {
+        try {
+            const url = `${COMMENT_API_URL}/${commentId}`;
+            logger.apiRequest('DELETE', url, {
+                phone: deleteData.phone
+            });
+            logger.info('COMMUNITY', '删除评论', { commentId, phone: deleteData.phone });
+            
+            const response = await axios.delete(url, { data: deleteData });
+            
+            logger.apiResponse('DELETE', url, response.status, {
+                code: response.data.code,
+                success: response.data.code === 200
+            });
+            
+            if (response.data.code !== 200) {
+                logger.error('COMMUNITY', '删除评论失败', {
+                    code: response.data.code,
+                    message: response.data.message
+                });
+                
+                const errorObj = {
+                    code: response.data.code,
+                    message: response.data.message,
+                    errors: response.data.errors || []
+                };
+                
+                throw errorObj;
+            }
+            
+            logger.info('COMMUNITY', '评论删除成功', { commentId });
+            
+            return response.data;
+        } catch (error) {
+            logger.apiError('DELETE', `${COMMENT_API_URL}/${commentId}`, error);
+            logger.error('COMMUNITY', '删除评论失败', {
+                commentId,
+                errorMessage: error.response?.data?.message || error.message
+            }, error);
+            
+            if (error.response?.data) {
+                throw {
+                    code: error.response.data.code,
+                    message: error.response.data.message,
+                    errors: error.response.data.errors || []
+                };
+            }
+            
+            if (error.code && error.message) {
+                throw error;
+            }
+            
+            throw {
+                code: 500,
+                message: error.message || '删除评论失败，请稍后重试',
                 errors: []
             };
         }

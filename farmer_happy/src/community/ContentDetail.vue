@@ -34,6 +34,16 @@
                 {{ getRoleLabel(contentDetail.author_role) }}
               </span>
               <span class="time">{{ formatTime(contentDetail.created_at) }}</span>
+              <!-- 删除按钮（只有作者可见） -->
+              <button 
+                v-if="canDeleteContent" 
+                class="btn-delete" 
+                @click.stop="handleDeleteContent"
+                :disabled="deletingContent"
+              >
+                <span class="delete-icon">🗑️</span>
+                {{ deletingContent ? '删除中...' : '删除' }}
+              </button>
             </div>
           </div>
 
@@ -111,11 +121,23 @@
 
               <div class="comment-content">{{ comment?.content || '' }}</div>
 
-              <!-- 回复按钮 -->
-              <button class="btn-reply" @click="toggleReplyForm(comment?.comment_id)" v-if="comment?.comment_id">
-                <span class="reply-icon">↩</span>
-                回复
-              </button>
+              <div class="comment-actions">
+                <!-- 回复按钮 -->
+                <button class="btn-reply" @click="toggleReplyForm(comment?.comment_id)" v-if="comment?.comment_id">
+                  <span class="reply-icon">↩</span>
+                  回复
+                </button>
+                <!-- 删除按钮（只有作者可见） -->
+                <button 
+                  v-if="canDeleteComment(comment)" 
+                  class="btn-delete-small" 
+                  @click.stop="handleDeleteComment(comment.comment_id)"
+                  :disabled="deletingComments[comment.comment_id]"
+                >
+                  <span class="delete-icon">🗑️</span>
+                  {{ deletingComments[comment.comment_id] ? '删除中...' : '删除' }}
+                </button>
+              </div>
 
               <!-- 回复表单 -->
               <div v-if="getReplyFormStatus(comment?.comment_id)" class="reply-form">
@@ -160,11 +182,23 @@
                   </div>
                   <div class="reply-content">{{ reply?.content || '' }}</div>
                   
-                  <!-- 回复按钮 -->
-                  <button class="btn-reply small" @click="toggleReplyForm(reply?.comment_id)" v-if="reply?.comment_id">
-                    <span class="reply-icon">↩</span>
-                    回复
-                  </button>
+                  <div class="reply-actions">
+                    <!-- 回复按钮 -->
+                    <button class="btn-reply small" @click="toggleReplyForm(reply?.comment_id)" v-if="reply?.comment_id">
+                      <span class="reply-icon">↩</span>
+                      回复
+                    </button>
+                    <!-- 删除按钮（只有作者可见） -->
+                    <button 
+                      v-if="canDeleteComment(reply)" 
+                      class="btn-delete-small" 
+                      @click.stop="handleDeleteComment(reply.comment_id)"
+                      :disabled="deletingComments[reply.comment_id]"
+                    >
+                      <span class="delete-icon">🗑️</span>
+                      {{ deletingComments[reply.comment_id] ? '删除中...' : '删除' }}
+                    </button>
+                  </div>
 
                   <!-- 回复表单 -->
                   <div v-if="getReplyFormStatus(reply?.comment_id)" class="reply-form">
@@ -243,6 +277,8 @@ export default {
     const showImagePreview = ref(false);
     const currentImage = ref('');
     const imageList = ref([]);
+    const deletingContent = ref(false);
+    const deletingComments = reactive({});
 
     // 获取用户信息
     const getUserInfo = () => {
@@ -516,6 +552,101 @@ export default {
       return Boolean(replying[commentId]);
     };
 
+    // 判断是否可以删除帖子（只有作者可以删除）
+    const canDeleteContent = computed(() => {
+      const userInfo = getUserInfo();
+      if (!userInfo || !contentDetail.value) return false;
+      // 检查是否是帖子作者（通过author_user_id比较）
+      if (contentDetail.value.author_user_id && userInfo.uid) {
+        return contentDetail.value.author_user_id === userInfo.uid;
+      }
+      // 如果没有uid，则通过手机号判断（不够准确，但可以工作）
+      return userInfo.phone && contentDetail.value.author_name === userInfo.nickname;
+    });
+
+    // 判断是否可以删除评论（只有作者可以删除）
+    const canDeleteComment = (comment) => {
+      if (!comment || !comment.comment_id) return false;
+      const userInfo = getUserInfo();
+      if (!userInfo) return false;
+      // 检查是否是评论作者（通过author_user_id比较）
+      if (comment.author_user_id && userInfo.uid) {
+        return comment.author_user_id === userInfo.uid;
+      }
+      // 如果没有uid，则通过昵称判断（不够准确，但可以工作）
+      return comment.author_nickname === userInfo.nickname;
+    };
+
+    // 删除帖子
+    const handleDeleteContent = async () => {
+      if (!confirm('确定要删除这个帖子吗？删除后将无法恢复。')) {
+        return;
+      }
+
+      const userInfo = getUserInfo();
+      if (!userInfo || !userInfo.phone) {
+        alert('请先登录');
+        router.push('/login');
+        return;
+      }
+
+      deletingContent.value = true;
+      const contentId = route.params.id;
+
+      try {
+        logger.userAction('DELETE_CONTENT', { contentId });
+        await communityService.deleteContent(contentId, {
+          phone: userInfo.phone
+        });
+
+        logger.info('CONTENT_DETAIL', '帖子删除成功', { contentId });
+        alert('帖子删除成功');
+        router.push('/community');
+      } catch (error) {
+        logger.error('CONTENT_DETAIL', '删除帖子失败', { contentId }, error);
+        alert(error.message || '删除帖子失败，请稍后重试');
+      } finally {
+        deletingContent.value = false;
+      }
+    };
+
+    // 删除评论
+    const handleDeleteComment = async (commentId) => {
+      if (!commentId) return;
+      
+      if (!confirm('确定要删除这条评论吗？删除后将无法恢复。')) {
+        return;
+      }
+
+      const userInfo = getUserInfo();
+      if (!userInfo || !userInfo.phone) {
+        alert('请先登录');
+        router.push('/login');
+        return;
+      }
+
+      deletingComments[commentId] = true;
+      const contentId = route.params.id;
+
+      try {
+        logger.userAction('DELETE_COMMENT', { commentId, contentId });
+        await communityService.deleteComment(commentId, {
+          phone: userInfo.phone
+        });
+
+        logger.info('CONTENT_DETAIL', '评论删除成功', { commentId });
+        // 重新加载评论列表
+        await loadComments(contentId);
+        // 重新加载内容详情以更新评论数
+        await loadContentDetail();
+      } catch (error) {
+        logger.error('CONTENT_DETAIL', '删除评论失败', { commentId }, error);
+        alert(error.message || '删除评论失败，请稍后重试');
+      } finally {
+        deletingComments[commentId] = false;
+      }
+    };
+
     onMounted(() => {
       logger.lifecycle('ContentDetail', 'mounted');
       loadContentDetail();
@@ -550,7 +681,13 @@ export default {
       getFilteredReplies,
       getReplyFormStatus,
       getReplyContent,
-      getReplyingStatus
+      getReplyingStatus,
+      canDeleteContent,
+      canDeleteComment,
+      handleDeleteContent,
+      handleDeleteComment,
+      deletingContent,
+      deletingComments
     };
   }
 };
@@ -930,6 +1067,12 @@ export default {
   word-wrap: break-word;
 }
 
+.comment-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .btn-reply {
   display: flex;
   align-items: center;
@@ -957,6 +1100,68 @@ export default {
 .btn-reply.small {
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
+  margin-top: 0.5rem;
+}
+
+.btn-delete {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  color: #ef4444;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-delete:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.btn-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-delete-small {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  background: transparent;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  color: #ef4444;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 0.5rem;
+}
+
+.btn-delete-small:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.btn-delete-small:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.delete-icon {
+  font-size: 0.875rem;
+}
+
+.reply-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
   margin-top: 0.5rem;
 }
 

@@ -132,6 +132,16 @@
           >
             {{ type.label }}
           </button>
+          <!-- 我的帖子筛选按钮 -->
+          <button
+            class="filter-tab filter-tab-my"
+            :class="{ active: showMyPosts }"
+            @click="handleMyPostsToggle"
+            v-if="userInfo"
+          >
+            <span class="my-posts-icon">📝</span>
+            我的帖子
+          </button>
         </div>
         <div class="search-box">
           <input
@@ -311,6 +321,7 @@ export default {
     const currentType = ref('all');
     const currentSort = ref('newest');
     const searchKeyword = ref('');
+    const showMyPosts = ref(false);
     const showImagePreview = ref(false);
     const currentImage = ref('');
     const imageList = ref([]);
@@ -377,6 +388,10 @@ export default {
         if (currentSort.value) {
           params.sort = currentSort.value;
         }
+        // 如果开启了"我的帖子"筛选，添加作者ID参数
+        if (showMyPosts.value && userInfo.value && userInfo.value.uid) {
+          params.author_user_id = userInfo.value.uid;
+        }
 
         logger.info('COMMUNITY', '加载内容列表', params);
         const data = await communityService.getContentList(params);
@@ -411,6 +426,13 @@ export default {
     // 搜索处理
     const handleSearch = () => {
       logger.userAction('SEARCH', { keyword: searchKeyword.value });
+      loadContentList();
+    };
+
+    // 切换"我的帖子"筛选
+    const handleMyPostsToggle = () => {
+      showMyPosts.value = !showMyPosts.value;
+      logger.userAction('MY_POSTS_TOGGLE', { enabled: showMyPosts.value });
       loadContentList();
     };
 
@@ -838,6 +860,14 @@ export default {
       }
     });
 
+    // 监听用户信息变化，如果用户退出登录，关闭"我的帖子"筛选
+    watch(() => userInfo.value, (newUserInfo) => {
+      if (!newUserInfo && showMyPosts.value) {
+        showMyPosts.value = false;
+        loadContentList();
+      }
+    });
+
     onMounted(() => {
       logger.lifecycle('Community', 'mounted');
       userInfo.value = getUserInfo();
@@ -884,6 +914,8 @@ export default {
       handleTypeChange,
       handleSortChange,
       handleSearch,
+      handleMyPostsToggle,
+      showMyPosts,
       handleContentClick,
       handlePublishClick,
       handleAskAiClick,
@@ -907,7 +939,8 @@ export default {
       handleHotPostAdClick,
       getPostImages,
       getPostSummary,
-      getCurrentPostImageIndex
+      getCurrentPostImageIndex,
+      userInfo
     };
   }
 };
@@ -1073,6 +1106,16 @@ export default {
   background: linear-gradient(135deg, var(--primary), var(--primary-light));
   color: var(--white);
   border-color: var(--primary);
+}
+
+.filter-tab-my {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.my-posts-icon {
+  font-size: 1rem;
 }
 
 .search-box {

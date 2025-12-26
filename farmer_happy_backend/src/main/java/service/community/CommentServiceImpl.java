@@ -208,6 +208,29 @@ public class CommentServiceImpl implements CommentService {
         return databaseManager.findCommentById(commentId);
     }
     
+    @Override
+    public void deleteComment(String commentId, String phone) throws SQLException, SecurityException {
+        // 1. 验证用户是否存在
+        User user = authService.findUserByPhone(phone);
+        if (user == null) {
+            throw new SecurityException("用户认证失败，请检查手机号或重新登录");
+        }
+
+        // 2. 验证评论是否存在
+        Comment comment = findCommentById(commentId);
+        if (comment == null) {
+            throw new IllegalArgumentException("评论不存在或已被删除");
+        }
+
+        // 3. 验证权限：只有作者可以删除自己的评论
+        if (!comment.getAuthorUserId().equals(user.getUid())) {
+            throw new SecurityException("权限不足，只能删除自己发布的评论");
+        }
+
+        // 4. 删除评论（如果是父评论，其子评论会通过CASCADE自动删除）
+        databaseManager.deleteComment(commentId, user.getUid());
+    }
+
     /**
      * 从多重身份中选择主要角色用于显示
      * 优先级：expert > farmer > buyer > bank

@@ -87,9 +87,9 @@ public class ContentServiceImpl implements ContentService {
     }
 
     @Override
-    public ContentListResponseDTO getContentList(String contentType, String keyword, String sort) throws SQLException {
+    public ContentListResponseDTO getContentList(String contentType, String keyword, String sort, String authorUserId) throws SQLException {
         // 获取内容列表
-        List<Content> contents = databaseManager.findContents(contentType, keyword, sort);
+        List<Content> contents = databaseManager.findContents(contentType, keyword, sort, authorUserId);
         
         // 转换为DTO
         List<ContentListItemDTO> items = new ArrayList<>();
@@ -217,6 +217,29 @@ public class ContentServiceImpl implements ContentService {
     @Override
     public Content findContentById(String contentId) throws SQLException {
         return databaseManager.findContentById(contentId);
+    }
+
+    @Override
+    public void deleteContent(String contentId, String phone) throws SQLException, SecurityException {
+        // 1. 验证用户是否存在
+        User user = authService.findUserByPhone(phone);
+        if (user == null) {
+            throw new SecurityException("用户认证失败，请检查手机号或重新登录");
+        }
+
+        // 2. 验证帖子是否存在
+        Content content = findContentById(contentId);
+        if (content == null) {
+            throw new IllegalArgumentException("帖子不存在或已被删除");
+        }
+
+        // 3. 验证权限：只有作者可以删除自己的帖子
+        if (!content.getAuthorUserId().equals(user.getUid())) {
+            throw new SecurityException("权限不足，只能删除自己发布的帖子");
+        }
+
+        // 4. 删除帖子（评论会通过CASCADE自动删除）
+        databaseManager.deleteContent(contentId, user.getUid());
     }
 }
 

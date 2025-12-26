@@ -80,7 +80,7 @@ public class ContentController {
      * 获取内容列表
      * GET /api/v1/content/list
      */
-    public Map<String, Object> getContentList(String contentType, String keyword, String sort) {
+    public Map<String, Object> getContentList(String contentType, String keyword, String sort, String authorUserId) {
         System.out.println("ContentController.getContentList - 开始获取内容列表");
         Map<String, Object> response = new HashMap<>();
 
@@ -101,7 +101,7 @@ public class ContentController {
                 }
             }
 
-            ContentListResponseDTO result = contentService.getContentList(contentType, keyword, sort);
+            ContentListResponseDTO result = contentService.getContentList(contentType, keyword, sort, authorUserId);
             response.put("code", 200);
             response.put("message", "获取成功");
             response.put("data", result);
@@ -159,6 +159,69 @@ public class ContentController {
             e.printStackTrace();
         } catch (Exception e) {
             System.out.println("ContentController.getContentDetail - 未知错误: " + e.getMessage());
+            response.put("code", 500);
+            response.put("message", "服务器内部错误");
+            e.printStackTrace();
+        }
+
+        return response;
+    }
+
+    /**
+     * 删除内容（帖子）
+     * DELETE /api/v1/content/{content_id}
+     */
+    public Map<String, Object> deleteContent(String contentId, Map<String, Object> request) {
+        System.out.println("ContentController.deleteContent - 开始处理删除内容请求: " + contentId);
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            if (contentId == null || contentId.trim().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+                
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "content_id");
+                error.put("message", "无效的内容ID格式");
+                errors.add(error);
+                response.put("errors", errors);
+                return response;
+            }
+
+            String phone = (String) request.get("phone");
+            if (phone == null || phone.trim().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+                
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "phone");
+                error.put("message", "手机号不能为空");
+                errors.add(error);
+                response.put("errors", errors);
+                return response;
+            }
+
+            contentService.deleteContent(contentId, phone);
+            response.put("code", 200);
+            response.put("message", "删除成功");
+            System.out.println("ContentController.deleteContent - 删除内容成功");
+        } catch (IllegalArgumentException e) {
+            System.out.println("ContentController.deleteContent - 内容不存在: " + e.getMessage());
+            response.put("code", 404);
+            response.put("message", e.getMessage());
+        } catch (SecurityException e) {
+            System.out.println("ContentController.deleteContent - 权限不足: " + e.getMessage());
+            response.put("code", 403);
+            response.put("message", e.getMessage());
+        } catch (SQLException e) {
+            System.out.println("ContentController.deleteContent - 数据库错误: " + e.getMessage());
+            response.put("code", 500);
+            response.put("message", "服务器内部错误");
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("ContentController.deleteContent - 未知错误: " + e.getMessage());
             response.put("code", 500);
             response.put("message", "服务器内部错误");
             e.printStackTrace();

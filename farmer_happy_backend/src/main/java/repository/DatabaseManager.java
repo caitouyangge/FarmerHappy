@@ -1126,7 +1126,7 @@ public class DatabaseManager {
     /**
      * 查找内容列表（带过滤和排序）
      */
-    public List<Content> findContents(String contentType, String keyword, String sort) throws SQLException {
+    public List<Content> findContents(String contentType, String keyword, String sort, String authorUserId) throws SQLException {
         Connection conn = getConnection();
         List<Content> contents = new ArrayList<>();
         try {
@@ -1137,6 +1137,12 @@ public class DatabaseManager {
             if (contentType != null && !contentType.trim().isEmpty()) {
                 sql.append(" AND content_type = ?");
                 params.add(contentType);
+            }
+
+            // 添加作者ID过滤
+            if (authorUserId != null && !authorUserId.trim().isEmpty()) {
+                sql.append(" AND author_user_id = ?");
+                params.add(authorUserId);
             }
 
             // 添加关键词搜索
@@ -1331,6 +1337,102 @@ public class DatabaseManager {
             closeConnection();
         }
         return comments;
+    }
+
+    /**
+     * 删除内容（帖子）
+     * 注意：由于外键约束ON DELETE CASCADE，删除帖子会自动删除相关评论
+     */
+    public void deleteContent(String contentId, String authorUserId) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            // 先删除内容图片
+            String deleteImagesSql = "DELETE FROM content_images WHERE content_id = ?";
+            PreparedStatement deleteImagesStmt = conn.prepareStatement(deleteImagesSql);
+            deleteImagesStmt.setString(1, contentId);
+            deleteImagesStmt.executeUpdate();
+            deleteImagesStmt.close();
+            
+            // 删除内容（评论会通过CASCADE自动删除）
+            String deleteContentSql = "DELETE FROM contents WHERE content_id = ? AND author_user_id = ?";
+            PreparedStatement deleteContentStmt = conn.prepareStatement(deleteContentSql);
+            deleteContentStmt.setString(1, contentId);
+            deleteContentStmt.setString(2, authorUserId);
+            int rowsAffected = deleteContentStmt.executeUpdate();
+            deleteContentStmt.close();
+            
+            if (rowsAffected == 0) {
+                throw new SQLException("删除失败：帖子不存在或您没有权限删除此帖子");
+            }
+        } finally {
+            closeConnection();
+        }
+    }
+
+    /**
+     * 删除评论（包括一级评论和回复）
+     * 删除一级评论时，其下的所有回复也会被删除（通过CASCADE）
+     */
+    public void deleteComment(String commentId, String authorUserId) throws SQLException {
+        Connection conn = getConnection();
+        try {
+            // 先检查评论是否存在且属于该用户
+            String checkSql = "SELECT content_id, parent_comment_id FROM comments WHERE comment_id = ? AND author_user_id = ?";
+            PreparedStatement checkStmt = conn.prepareStatement(checkSql);
+            checkStmt.setString(1, commentId);
+            checkStmt.setString(2, authorUserId);
+            ResultSet rs = checkStmt.executeQuery();
+            
+            if (!rs.next()) {
+                rs.close();
+                checkStmt.close();
+                throw new SQLException("删除失败：评论不存在或您没有权限删除此评论");
+            }
+            
+            String contentId = rs.getString("content_id");
+            String parentCommentId = rs.getString("parent_comment_id");
+            rs.close();
+            checkStmt.close();
+            
+            // 如果是父评论（一级评论），需要先删除所有子评论（回复）
+            if (parentCommentId == null) {
+                String deleteRepliesSql = "DELETE FROM comments WHERE parent_comment_id = ?";
+                PreparedStatement deleteRepliesStmt = conn.prepareStatement(deleteRepliesSql);
+                deleteRepliesStmt.setString(1, commentId);
+                deleteRepliesStmt.executeUpdate();
+                deleteRepliesStmt.close();
+            }
+            
+            // 删除评论本身
+            String deleteCommentSql = "DELETE FROM comments WHERE comment_id = ?";
+            PreparedStatement deleteCommentStmt = conn.prepareStatement(deleteCommentSql);
+            deleteCommentStmt.setString(1, commentId);
+            deleteCommentStmt.executeUpdate();
+            deleteCommentStmt.close();
+            
+            // 更新帖子的评论数
+            // 需要计算删除的评论数（包括子评论）
+            String countSql = "SELECT COUNT(*) as count FROM comments WHERE content_id = ?";
+            PreparedStatement countStmt = conn.prepareStatement(countSql);
+            countStmt.setString(1, contentId);
+            ResultSet countRs = countStmt.executeQuery();
+            int newCommentCount = 0;
+            if (countRs.next()) {
+                newCommentCount = countRs.getInt("count");
+            }
+            countRs.close();
+            countStmt.close();
+            
+            // 更新评论数
+            String updateCountSql = "UPDATE contents SET comment_count = ? WHERE content_id = ?";
+            PreparedStatement updateCountStmt = conn.prepareStatement(updateCountSql);
+            updateCountStmt.setInt(1, newCommentCount);
+            updateCountStmt.setString(2, contentId);
+            updateCountStmt.executeUpdate();
+            updateCountStmt.close();
+        } finally {
+            closeConnection();
+        }
     }
 
     /**

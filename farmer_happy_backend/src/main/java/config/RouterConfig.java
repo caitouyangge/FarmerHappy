@@ -360,7 +360,8 @@ public class RouterConfig {
             String contentType = queryParams != null ? queryParams.get("content_type") : null;
             String keyword = queryParams != null ? queryParams.get("keyword") : null;
             String sort = queryParams != null ? queryParams.get("sort") : null;
-            return contentController.getContentList(contentType, keyword, sort);
+            String authorUserId = queryParams != null ? queryParams.get("author_user_id") : null;
+            return contentController.getContentList(contentType, keyword, sort, authorUserId);
         }
 
         // 处理获取内容详情请求 - /api/v1/content/{content_id}
@@ -371,6 +372,15 @@ public class RouterConfig {
             // 确保不是 /api/v1/content/list 或 /api/v1/content/publish
             if (!contentId.equals("list") && !contentId.equals("publish")) {
                 return contentController.getContentDetail(contentId);
+            }
+        }
+
+        // 处理删除内容请求 - DELETE /api/v1/content/{content_id}
+        if (contentDetailMatcher.matches() && "DELETE".equals(method)) {
+            String contentId = contentDetailMatcher.group(1);
+            // 确保不是 /api/v1/content/list 或 /api/v1/content/publish
+            if (!contentId.equals("list") && !contentId.equals("publish")) {
+                return contentController.deleteContent(contentId, parseDeleteRequest(requestBody));
             }
         }
 
@@ -397,6 +407,17 @@ public class RouterConfig {
         if (postReplyMatcher.matches() && "POST".equals(method)) {
             String commentId = postReplyMatcher.group(1);
             return commentController.postReply(commentId, parsePostReplyRequest(requestBody));
+        }
+
+        // 处理删除评论请求 - DELETE /api/v1/comment/{comment_id}
+        Pattern deleteCommentPattern = Pattern.compile("/api/v1/comment/([^/]+)");
+        Matcher deleteCommentMatcher = deleteCommentPattern.matcher(path);
+        if (deleteCommentMatcher.matches() && "DELETE".equals(method)) {
+            String commentId = deleteCommentMatcher.group(1);
+            // 确保不是 /api/v1/comment/{comment_id}/replies
+            if (!path.contains("/replies")) {
+                return commentController.deleteComment(commentId, parseDeleteRequest(requestBody));
+            }
         }
 
         // ============= 商品相关路由 =============
@@ -1015,6 +1036,14 @@ public class RouterConfig {
         request.setComment((String) requestBody.get("comment"));
         request.setPhone((String) requestBody.get("phone"));
         return request;
+    }
+
+    private Map<String, Object> parseDeleteRequest(Map<String, Object> requestBody) {
+        Map<String, Object> result = new HashMap<>();
+        if (requestBody != null) {
+            result.put("phone", requestBody.get("phone"));
+        }
+        return result;
     }
 
     private PostReplyRequestDTO parsePostReplyRequest(Map<String, Object> requestBody) {

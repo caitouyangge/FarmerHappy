@@ -30,5 +30,12 @@ public interface CommentService {
      * 根据ID查找评论
      */
     Comment findCommentById(String commentId) throws SQLException;
+    
+    /**
+     * 删除评论（包括一级评论和回复）
+     * @param commentId 评论ID
+     * @param phone 用户手机号（用于验证权限）
+     */
+    void deleteComment(String commentId, String phone) throws SQLException, SecurityException;
 }
 

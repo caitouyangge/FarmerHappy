@@ -168,6 +168,69 @@ public class CommentController {
     }
 
     /**
+     * 删除评论（包括一级评论和回复）
+     * DELETE /api/v1/comment/{comment_id}
+     */
+    public Map<String, Object> deleteComment(String commentId, Map<String, Object> request) {
+        System.out.println("CommentController.deleteComment - 开始处理删除评论请求: " + commentId);
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            if (commentId == null || commentId.trim().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+                
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "comment_id");
+                error.put("message", "无效的评论ID格式");
+                errors.add(error);
+                response.put("errors", errors);
+                return response;
+            }
+
+            String phone = (String) request.get("phone");
+            if (phone == null || phone.trim().isEmpty()) {
+                response.put("code", 400);
+                response.put("message", "参数验证失败");
+                
+                List<Map<String, String>> errors = new ArrayList<>();
+                Map<String, String> error = new HashMap<>();
+                error.put("field", "phone");
+                error.put("message", "手机号不能为空");
+                errors.add(error);
+                response.put("errors", errors);
+                return response;
+            }
+
+            commentService.deleteComment(commentId, phone);
+            response.put("code", 200);
+            response.put("message", "删除成功");
+            System.out.println("CommentController.deleteComment - 删除评论成功");
+        } catch (IllegalArgumentException e) {
+            System.out.println("CommentController.deleteComment - 评论不存在: " + e.getMessage());
+            response.put("code", 404);
+            response.put("message", e.getMessage());
+        } catch (SecurityException e) {
+            System.out.println("CommentController.deleteComment - 权限不足: " + e.getMessage());
+            response.put("code", 403);
+            response.put("message", e.getMessage());
+        } catch (SQLException e) {
+            System.out.println("CommentController.deleteComment - 数据库错误: " + e.getMessage());
+            response.put("code", 500);
+            response.put("message", "服务器内部错误");
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("CommentController.deleteComment - 未知错误: " + e.getMessage());
+            response.put("code", 500);
+            response.put("message", "服务器内部错误");
+            e.printStackTrace();
+        }
+
+        return response;
+    }
+
+    /**
      * 从错误消息中提取字段名
      */
     private String extractFieldName(String errorMessage) {
