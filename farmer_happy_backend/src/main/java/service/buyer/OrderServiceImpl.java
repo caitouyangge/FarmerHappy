@@ -578,11 +578,10 @@ public class OrderServiceImpl implements OrderService {
             errors.add(error);
         }
 
-        if (request.getBuyerAddress() == null || request.getBuyerAddress().length() < 5
-                || request.getBuyerAddress().length() > 200) {
+        if (request.getBuyerAddress() == null || request.getBuyerAddress().trim().isEmpty()) {
             Map<String, String> error = new HashMap<>();
             error.put("field", "buyer_address");
-            error.put("message", "收货地址长度必须在5-200个字符之间");
+            error.put("message", "收货地址不能为空");
             errors.add(error);
         }
 
@@ -629,11 +628,10 @@ public class OrderServiceImpl implements OrderService {
             errors.add(error);
         }
 
-        if (request.getBuyerAddress() != null
-                && (request.getBuyerAddress().length() < 5 || request.getBuyerAddress().length() > 200)) {
+        if (request.getBuyerAddress() != null && request.getBuyerAddress().trim().isEmpty()) {
             Map<String, String> error = new HashMap<>();
             error.put("field", "buyer_address");
-            error.put("message", "收货地址长度必须在5-200个字符之间");
+            error.put("message", "收货地址不能为空");
             errors.add(error);
         }
 

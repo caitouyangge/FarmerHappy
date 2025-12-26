@@ -666,6 +666,8 @@ public class application {
                         return toJson(map);
                     } else if (value instanceof AuthResponseDTO) {
                         return serializeAuthResponseDTO((AuthResponseDTO) value);
+                    } else if (value instanceof dto.auth.UserProfileResponseDTO) {
+                        return serializeUserProfileResponseDTO((dto.auth.UserProfileResponseDTO) value);
                     } else if (value instanceof ProductResponseDTO) {
                         return serializeProductResponseDTO((ProductResponseDTO) value);
                     } else if (value instanceof ProductStatusUpdateResponseDTO) {
@@ -1120,6 +1122,76 @@ public class application {
                     }
                     if (dto.getUserType() != null) {
                         json.append("\"userType\":\"").append(escapeJsonString(dto.getUserType())).append("\",");
+                    }
+                    if (json.length() > 1) {
+                        json.deleteCharAt(json.length() - 1); // 删除最后一个逗号
+                    }
+                    json.append("}");
+                    return json.toString();
+                }
+
+                // 添加序列化 UserProfileResponseDTO 对象的方法
+                private String serializeUserProfileResponseDTO(dto.auth.UserProfileResponseDTO dto) {
+                    StringBuilder json = new StringBuilder("{");
+                    if (dto.getUid() != null) {
+                        json.append("\"uid\":\"").append(escapeJsonString(dto.getUid())).append("\",");
+                    }
+                    if (dto.getPhone() != null) {
+                        json.append("\"phone\":\"").append(escapeJsonString(dto.getPhone())).append("\",");
+                    }
+                    if (dto.getNickname() != null) {
+                        json.append("\"nickname\":\"").append(escapeJsonString(dto.getNickname())).append("\",");
+                    }
+                    if (dto.getUserType() != null) {
+                        json.append("\"userType\":\"").append(escapeJsonString(dto.getUserType())).append("\",");
+                    }
+                    if (dto.getMoney() != null) {
+                        json.append("\"money\":").append(dto.getMoney()).append(",");
+                    }
+                    // 买家特有信息 - 始终包含 shippingAddress，即使为 null 也序列化为空字符串
+                    json.append("\"shippingAddress\":\"");
+                    if (dto.getShippingAddress() != null) {
+                        json.append(escapeJsonString(dto.getShippingAddress()));
+                    }
+                    json.append("\",");
+                    if (dto.getMemberLevel() != null) {
+                        json.append("\"memberLevel\":\"").append(escapeJsonString(dto.getMemberLevel())).append("\",");
+                    }
+                    // 农户特有信息
+                    if (dto.getFarmName() != null) {
+                        json.append("\"farmName\":\"").append(escapeJsonString(dto.getFarmName())).append("\",");
+                    }
+                    if (dto.getFarmAddress() != null) {
+                        json.append("\"farmAddress\":\"").append(escapeJsonString(dto.getFarmAddress())).append("\",");
+                    }
+                    if (dto.getFarmSize() != null) {
+                        json.append("\"farmSize\":").append(dto.getFarmSize()).append(",");
+                    }
+                    // 专家特有信息
+                    if (dto.getExpertName() != null) {
+                        json.append("\"expertName\":\"").append(escapeJsonString(dto.getExpertName())).append("\",");
+                    }
+                    if (dto.getExpertTitle() != null) {
+                        json.append("\"expertTitle\":\"").append(escapeJsonString(dto.getExpertTitle())).append("\",");
+                    }
+                    if (dto.getExpertInstitution() != null) {
+                        json.append("\"expertInstitution\":\"").append(escapeJsonString(dto.getExpertInstitution())).append("\",");
+                    }
+                    if (dto.getExpertise() != null) {
+                        json.append("\"expertise\":\"").append(escapeJsonString(dto.getExpertise())).append("\",");
+                    }
+                    // 银行特有信息
+                    if (dto.getBankName() != null) {
+                        json.append("\"bankName\":\"").append(escapeJsonString(dto.getBankName())).append("\",");
+                    }
+                    if (dto.getBranchName() != null) {
+                        json.append("\"branchName\":\"").append(escapeJsonString(dto.getBranchName())).append("\",");
+                    }
+                    if (dto.getContactPerson() != null) {
+                        json.append("\"contactPerson\":\"").append(escapeJsonString(dto.getContactPerson())).append("\",");
+                    }
+                    if (dto.getContactPhone() != null) {
+                        json.append("\"contactPhone\":\"").append(escapeJsonString(dto.getContactPhone())).append("\",");
                     }
                     if (json.length() > 1) {
                         json.deleteCharAt(json.length() - 1); // 删除最后一个逗号

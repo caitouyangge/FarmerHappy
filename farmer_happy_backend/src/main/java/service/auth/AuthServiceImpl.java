@@ -727,8 +727,13 @@ public class AuthServiceImpl implements AuthService {
         if ("buyer".equals(userType)) {
             Map<String, Object> buyerInfo = databaseManager.getBuyerInfoByPhone(phone);
             if (buyerInfo != null) {
-                profile.setShippingAddress((String) buyerInfo.get("shipping_address"));
+                String shippingAddr = (String) buyerInfo.get("shipping_address");
+                // 即使为 null，也设置（前端需要知道是否有值）
+                profile.setShippingAddress(shippingAddr != null ? shippingAddr : "");
                 profile.setMemberLevel((String) buyerInfo.get("member_level"));
+            } else {
+                // 如果 buyerInfo 为 null，设置空字符串
+                profile.setShippingAddress("");
             }
         } else if ("farmer".equals(userType)) {
             Map<String, Object> farmerInfo = databaseManager.getFarmerInfoByUid(user.getUid());

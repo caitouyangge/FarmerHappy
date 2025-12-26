@@ -103,8 +103,52 @@ export const authService = {
             if (authData) {
                 // 从响应中提取用户信息，排除密码
                 const { password, ...userInfo } = authData;
-                // 保存用户信息到本地存储
+                
+                // 先保存基础用户信息到本地存储
                 localStorage.setItem('user', JSON.stringify(userInfo));
+                
+                // 如果是买家，立即获取完整用户信息（包括收货地址）并更新
+                if (userInfo.userType === 'buyer') {
+                    // 立即获取，确保收货地址被保存
+                    try {
+                        // 直接调用 getUserProfile API
+                        const profileResponse = await axios.get(`${API_URL}/profile/detail`, {
+                            params: {
+                                phone: userInfo.phone,
+                                user_type: 'buyer'
+                            }
+                        });
+                        
+                        if (profileResponse.data.code === 200 && profileResponse.data.data) {
+                            const profile = profileResponse.data.data;
+                            // 更新localStorage中的用户信息
+                            const storedUser = localStorage.getItem('user');
+                            if (storedUser) {
+                                const userData = JSON.parse(storedUser);
+                                // 无论收货地址是否为空，都保存（可能是空字符串）
+                                if (profile.shippingAddress !== undefined) {
+                                    userData.shippingAddress = profile.shippingAddress || '';
+                                }
+                                if (profile.memberLevel) {
+                                    userData.memberLevel = profile.memberLevel;
+                                }
+                                localStorage.setItem('user', JSON.stringify(userData));
+                                logger.info('AUTH', '登录后更新买家详细信息成功', {
+                                    phone: credentials.phone,
+                                    hasShippingAddress: !!profile.shippingAddress,
+                                    shippingAddress: profile.shippingAddress
+                                });
+                            }
+                        }
+                    } catch (err) {
+                        logger.error('AUTH', '登录后获取买家详细信息失败', {
+                            phone: credentials.phone,
+                            errorMessage: err.message || err
+                        }, err);
+                        // 即使获取失败，也不影响登录流程
+                    }
+                }
+                
                 logger.info('AUTH', '用户登录成功，已保存用户信息', {
                     phone: credentials.phone,
                     userType: userInfo.userType
@@ -286,8 +330,15 @@ export const authService = {
                 throw new Error(response.data.message || '获取用户详细信息失败');
             }
             
-            logger.info('AUTH', '获取用户详细信息成功', { phone, userType });
-            return response.data.data;
+            const profileData = response.data.data;
+            logger.info('AUTH', '获取用户详细信息成功', { 
+                phone, 
+                userType,
+                hasShippingAddress: !!profileData?.shippingAddress,
+                shippingAddress: profileData?.shippingAddress,
+                profileData: JSON.stringify(profileData)
+            });
+            return profileData;
         } catch (error) {
             logger.apiError('GET', `${API_URL}/profile/detail`, error);
             logger.error('AUTH', '获取用户详细信息失败', {

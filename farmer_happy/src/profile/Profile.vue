@@ -178,11 +178,17 @@ export default {
           userInfo.value.nickname = profile.nickname || userInfo.value.nickname;
           userInfo.value.money = profile.money || userInfo.value.money;
           
-          // 如果是买家，获取收货地址
-          if (profile.userType === 'buyer' && profile.shippingAddress) {
-            shippingAddress.value = profile.shippingAddress;
-            userInfo.value.shippingAddress = profile.shippingAddress;
-            localStorage.setItem('user', JSON.stringify(userInfo.value));
+          // 如果是买家，获取收货地址（即使为空也要保存）
+          if (profile.userType === 'buyer') {
+            // 如果返回了收货地址（包括空字符串），使用返回的值
+            if (profile.shippingAddress !== undefined && profile.shippingAddress !== null) {
+              shippingAddress.value = profile.shippingAddress;
+              userInfo.value.shippingAddress = profile.shippingAddress;
+              localStorage.setItem('user', JSON.stringify(userInfo.value));
+            } else if (userInfo.value.shippingAddress) {
+              // 如果返回值为空但localStorage中有，使用localStorage中的值
+              shippingAddress.value = userInfo.value.shippingAddress;
+            }
           }
         }
       } catch (error) {
