@@ -55,44 +55,9 @@
           <span v-if="errors.user_type" class="form-error">{{ errors.user_type }}</span>
         </div>
 
-        <!-- 农户特定字段 -->
+        <!-- 农户特定字段（已隐藏，使用默认值） -->
         <template v-if="form.user_type === 'farmer'">
-          <div class="form-group">
-            <label class="form-label">农场名称</label>
-            <input
-              v-model="form.farm_name"
-              type="text"
-              class="form-input"
-              :class="{ 'error': errors.farm_name }"
-              placeholder="请输入农场名称"
-            />
-            <span v-if="errors.farm_name" class="form-error">{{ errors.farm_name }}</span>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">农场地址</label>
-            <input
-              v-model="form.farm_address"
-              type="text"
-              class="form-input"
-              :class="{ 'error': errors.farm_address }"
-              placeholder="请输入农场地址"
-            />
-            <span v-if="errors.farm_address" class="form-error">{{ errors.farm_address }}</span>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">农场面积（亩）</label>
-            <input
-              v-model.number="form.farm_size"
-              type="number"
-              step="0.01"
-              class="form-input"
-              :class="{ 'error': errors.farm_size }"
-              placeholder="请输入农场面积"
-            />
-            <span v-if="errors.farm_size" class="form-error">{{ errors.farm_size }}</span>
-          </div>
+          <!-- 农户额外信息已隐藏，使用默认值 -->
         </template>
 
         <!-- 买家特定字段 -->
@@ -110,31 +75,9 @@
           </div>
         </template>
 
-        <!-- 专家特定字段 -->
+        <!-- 专家特定字段（已隐藏，使用默认值） -->
         <template v-if="form.user_type === 'expert'">
-          <div class="form-group">
-            <label class="form-label">专业领域</label>
-            <input
-              v-model="form.expertise_field"
-              type="text"
-              class="form-input"
-              :class="{ 'error': errors.expertise_field }"
-              placeholder="请输入专业领域"
-            />
-            <span v-if="errors.expertise_field" class="form-error">{{ errors.expertise_field }}</span>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">工作经验（年）</label>
-            <input
-              v-model.number="form.work_experience"
-              type="number"
-              class="form-input"
-              :class="{ 'error': errors.work_experience }"
-              placeholder="请输入工作经验年限"
-            />
-            <span v-if="errors.work_experience" class="form-error">{{ errors.work_experience }}</span>
-          </div>
+          <!-- 专家额外信息已隐藏，使用默认值 -->
         </template>
 
         <!-- 银行特定字段 -->
@@ -145,10 +88,9 @@
               v-model="form.bank_name"
               type="text"
               class="form-input"
-              :class="{ 'error': errors.bank_name }"
-              placeholder="请输入银行名称"
+              readonly
+              style="background-color: #f5f5f5; cursor: not-allowed;"
             />
-            <span v-if="errors.bank_name" class="form-error">{{ errors.bank_name }}</span>
           </div>
 
           <div class="form-group">
@@ -157,10 +99,9 @@
               v-model="form.branch_name"
               type="text"
               class="form-input"
-              :class="{ 'error': errors.branch_name }"
-              placeholder="请输入分行名称"
+              readonly
+              style="background-color: #f5f5f5; cursor: not-allowed;"
             />
-            <span v-if="errors.branch_name" class="form-error">{{ errors.branch_name }}</span>
           </div>
         </template>
 
@@ -242,6 +183,35 @@ export default {
         from: oldType,
         to: newType
       });
+      // 当选择银行类型时，自动设置银行名称为"农乐银行"，分行名称为"农乐分行"
+      if (newType === 'bank') {
+        form.bank_name = '农乐银行';
+        form.branch_name = '农乐分行';
+      } else if (oldType === 'bank') {
+        // 切换出银行类型时，清空银行和分行名称
+        form.bank_name = '';
+        form.branch_name = '';
+      }
+      // 当选择农户类型时，自动设置默认值
+      if (newType === 'farmer') {
+        form.farm_name = '农乐农场';
+        form.farm_address = '默认地址';
+        form.farm_size = 10.0;
+      } else if (oldType === 'farmer') {
+        // 切换出农户类型时，清空农户字段
+        form.farm_name = '';
+        form.farm_address = '';
+        form.farm_size = null;
+      }
+      // 当选择技术专家类型时，自动设置默认值
+      if (newType === 'expert') {
+        form.expertise_field = '农业技术';
+        form.work_experience = 5;
+      } else if (oldType === 'expert') {
+        // 切换出技术专家类型时，清空专家字段
+        form.expertise_field = '';
+        form.work_experience = null;
+      }
     });
 
     const validateForm = () => {
@@ -287,11 +257,8 @@ export default {
       // 根据用户类型验证特定字段
       if (form.user_type === 'farmer') {
         logger.debug('REGISTER_COMPONENT', '验证农户特定字段');
-        // 农户特定字段验证
-        if (!form.farm_name) {
-          errors.farm_name = '请输入农场名称';
-          isValid = false;
-        } else if (form.farm_name.length > 100) {
+        // 农户特定字段使用默认值，只验证长度限制
+        if (form.farm_name && form.farm_name.length > 100) {
           errors.farm_name = '农场名称不能超过100个字符';
           isValid = false;
         }
@@ -318,11 +285,8 @@ export default {
 
       else if (form.user_type === 'expert') {
         logger.debug('REGISTER_COMPONENT', '验证专家特定字段');
-        // 专家特定字段验证
-        if (!form.expertise_field) {
-          errors.expertise_field = '请输入专业领域';
-          isValid = false;
-        } else if (form.expertise_field.length > 100) {
+        // 专家特定字段使用默认值，只验证长度限制
+        if (form.expertise_field && form.expertise_field.length > 100) {
           errors.expertise_field = '专业领域不能超过100个字符';
           isValid = false;
         }
@@ -336,10 +300,8 @@ export default {
       else if (form.user_type === 'bank') {
         logger.debug('REGISTER_COMPONENT', '验证银行特定字段');
         // 银行特定字段验证
-        if (!form.bank_name) {
-          errors.bank_name = '请输入银行名称';
-          isValid = false;
-        } else if (form.bank_name.length > 100) {
+        // 银行名称固定为"农乐银行"，不需要验证
+        if (form.bank_name && form.bank_name.length > 100) {
           errors.bank_name = '银行名称不能超过100个字符';
           isValid = false;
         }

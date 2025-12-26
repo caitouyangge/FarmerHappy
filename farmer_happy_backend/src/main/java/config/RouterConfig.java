@@ -727,8 +727,12 @@ public class RouterConfig {
                 bankRequest.setNickname((String) requestBody.get("nickname"));
                 bankRequest.setPhone((String) requestBody.get("phone"));
                 bankRequest.setUserType(userType);
-                bankRequest.setBankName((String) requestBody.get("bank_name"));
-                bankRequest.setBranchName((String) requestBody.get("branch_name"));
+                // 银行名称固定为默认值"农乐银行"
+                String bankName = (String) requestBody.get("bank_name");
+                bankRequest.setBankName(bankName != null && !bankName.isEmpty() ? bankName : "农乐银行");
+                // 分行名称固定为默认值"农乐分行"
+                String branchName = (String) requestBody.get("branch_name");
+                bankRequest.setBranchName(branchName != null && !branchName.isEmpty() ? branchName : "农乐分行");
                 return authController.register(bankRequest);
 
             default:
