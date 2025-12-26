@@ -801,8 +801,7 @@ export default {
             symbolSize: 6,
             lineStyle: {
               color: color,
-              width: 2.5,
-              type: 'dashed'
+              width: 2.5
             },
             itemStyle: {
               color: color
