@@ -177,38 +177,6 @@
         <h2 class="section-title">预测结果</h2>
         
         <div v-if="predictionResult" class="result-section">
-          <!-- 模型评估指标 -->
-          <div class="metrics-card">
-            <h3 class="metrics-title">模型评估指标</h3>
-            <div class="metrics-grid">
-              <div class="metric-item">
-                <div class="metric-label">R²决定系数</div>
-                <div class="metric-value">{{ predictionResult.model_metrics.r_squared.toFixed(4) }}</div>
-                <div class="metric-desc">越接近1越好</div>
-              </div>
-              <div class="metric-item">
-                <div class="metric-label">平均绝对误差(MAE)</div>
-                <div class="metric-value">{{ predictionResult.model_metrics.mae.toFixed(2) }}</div>
-                <div class="metric-desc">越小越好</div>
-              </div>
-              <div class="metric-item">
-                <div class="metric-label">均方根误差(RMSE)</div>
-                <div class="metric-value">{{ predictionResult.model_metrics.rmse.toFixed(2) }}</div>
-                <div class="metric-desc">越小越好</div>
-              </div>
-              <div v-if="predictionResult.model_metrics.mape !== undefined" class="metric-item">
-                <div class="metric-label">平均百分比误差(MAPE)</div>
-                <div class="metric-value">{{ (predictionResult.model_metrics.mape * 100).toFixed(2) }}%</div>
-                <div class="metric-desc">越小越好</div>
-              </div>
-              <div v-if="predictionResult.model_metrics.aic" class="metric-item">
-                <div class="metric-label">AIC信息准则</div>
-                <div class="metric-value">{{ predictionResult.model_metrics.aic.toFixed(2) }}</div>
-                <div class="metric-desc">越小越好</div>
-              </div>
-            </div>
-          </div>
-
           <!-- 趋势分析 -->
           <div class="trend-card">
             <h3 class="trend-title">价格趋势</h3>
@@ -252,12 +220,21 @@
             </h3>
             
             <div v-if="showCalculationDetails" class="calculation-content">
-              <div v-if="!predictionResult.calculation_details" class="calculation-info">
-                <p style="color: var(--gray-500);">详情正在加载中...</p>
+              <!-- 调试信息 -->
+              <div v-if="predictionResult" style="background: #f0f0f0; padding: 10px; margin-bottom: 10px; font-size: 0.8em;">
+                <p><strong>调试信息：</strong></p>
+                <p>calculationDetails存在: {{ !!predictionResult.calculationDetails }}</p>
+                <p>calculation_details存在: {{ !!predictionResult.calculation_details }}</p>
+                <p v-if="predictionResult.calculationDetails">calculationDetails keys: {{ Object.keys(predictionResult.calculationDetails || {}).join(', ') }}</p>
+                <p v-if="predictionResult.calculation_details">calculation_details keys: {{ Object.keys(predictionResult.calculation_details || {}).join(', ') }}</p>
+              </div>
+              
+              <div v-if="!predictionResult || (!predictionResult.calculation_details && !predictionResult.calculationDetails)" class="calculation-info">
+                <p style="color: var(--gray-500);">详情正在加载中或数据为空...</p>
               </div>
               
               <!-- AI预测详情 -->
-              <template v-else-if="modelType === 'ai' && predictionResult.calculation_details">
+              <template v-else-if="modelType === 'ai' && (predictionResult.calculation_details || predictionResult.calculationDetails)">
                 <div class="calculation-section">
                   <h4 class="section-subtitle">AI预测信息</h4>
                   <div class="calculation-info">
@@ -355,11 +332,102 @@
                 </div>
               </template>
               
-              <!-- ARIMA模型详细计算过程 -->
+              <!-- 非AI预测详细计算过程 -->
               <template v-else>
-                <!-- 数据预处理 -->
+                <!-- 使用计算详情的统一访问方式 -->
+                <template v-if="predictionResult?.calculation_details">
+                  <!-- 时间间隔信息 -->
+                  <div v-if="predictionResult.calculation_details?.time_interval" class="calculation-section">
+                  <h4 class="section-subtitle">1. 时间间隔检测</h4>
+                  <div class="calculation-info">
+                    <p><strong>检测到的时间间隔：</strong>{{ predictionResult.calculation_details.time_interval?.detected_interval_days }} 天</p>
+                    <p><strong>数据点数量：</strong>{{ predictionResult.calculation_details.time_interval?.data_points }}</p>
+                    <p><strong>时间跨度：</strong>{{ predictionResult.calculation_details.time_interval?.time_span_days }} 天</p>
+                  </div>
+                </div>
+
+                <!-- 统计特征 -->
+                <div v-if="predictionResult.calculation_details?.statistical_features" class="calculation-section">
+                  <h4 class="section-subtitle">2. 统计特征分析</h4>
+                  <div class="calculation-info">
+                    <div class="formula-box">
+                      <p style="font-size: var(--font-lg); margin-bottom: var(--spacing-3);"><strong>📊 价格序列统计特征</strong></p>
+                      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--spacing-2);">
+                        <p><strong>均值：</strong>¥{{ predictionResult.calculation_details.statistical_features?.mean }}</p>
+                        <p><strong>中位数：</strong>¥{{ predictionResult.calculation_details.statistical_features?.median }}</p>
+                        <p><strong>标准差：</strong>¥{{ predictionResult.calculation_details.statistical_features?.std_dev }}</p>
+                        <p><strong>方差：</strong>{{ predictionResult.calculation_details.statistical_features?.variance }}</p>
+                        <p><strong>变异系数：</strong>{{ predictionResult.calculation_details.statistical_features?.coefficient_of_variation }}</p>
+                        <p><strong>最小值：</strong>¥{{ predictionResult.calculation_details.statistical_features?.min_price }}</p>
+                        <p><strong>最大值：</strong>¥{{ predictionResult.calculation_details.statistical_features?.max_price }}</p>
+                        <p><strong>第一四分位数(Q25)：</strong>¥{{ predictionResult.calculation_details.statistical_features?.q25 }}</p>
+                        <p><strong>第三四分位数(Q75)：</strong>¥{{ predictionResult.calculation_details.statistical_features?.q75 }}</p>
+                        <p><strong>偏度：</strong>{{ predictionResult.calculation_details.statistical_features?.skewness }}</p>
+                        <p><strong>峰度：</strong>{{ predictionResult.calculation_details.statistical_features?.kurtosis }}</p>
+                        <p><strong>趋势斜率：</strong>{{ predictionResult.calculation_details.statistical_features?.trend_slope }}</p>
+                        <p><strong>趋势方向：</strong>{{ predictionResult.calculation_details.statistical_features?.trend_direction }}</p>
+                        <p><strong>一阶自相关：</strong>{{ predictionResult.calculation_details.statistical_features?.autocorrelation_lag1 }}</p>
+                        <p><strong>二阶自相关：</strong>{{ predictionResult.calculation_details.statistical_features?.autocorrelation_lag2 }}</p>
+                        <p><strong>近期均值：</strong>¥{{ predictionResult.calculation_details.statistical_features?.recent_mean }}</p>
+                        <p><strong>近期标准差：</strong>¥{{ predictionResult.calculation_details.statistical_features?.recent_std_dev }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 差分序列统计信息 -->
+                <div v-if="predictionResult.calculation_details?.difference_statistics" class="calculation-section">
+                  <h4 class="section-subtitle">3. 差分序列统计信息</h4>
+                  <div class="calculation-info">
+                    <div class="formula-box">
+                      <p style="font-size: var(--font-lg); margin-bottom: var(--spacing-3);"><strong>📈 一阶差分序列分析</strong></p>
+                      <p><strong>差分序列数量：</strong>{{ predictionResult.calculation_details.difference_statistics?.differences_count }}</p>
+                      <p><strong>差分均值：</strong>{{ predictionResult.calculation_details.difference_statistics?.diff_mean }}</p>
+                      <p><strong>差分方差：</strong>{{ predictionResult.calculation_details.difference_statistics?.diff_variance }}</p>
+                      <p><strong>差分标准差：</strong>{{ predictionResult.calculation_details.difference_statistics?.diff_std_dev }}</p>
+                      <p><strong>差分一阶自相关：</strong>{{ predictionResult.calculation_details.difference_statistics?.diff_autocorr_lag1 }}</p>
+                      <p><strong>差分二阶自相关：</strong>{{ predictionResult.calculation_details.difference_statistics?.diff_autocorr_lag2 }}</p>
+                      <p><strong>最后价格：</strong>¥{{ predictionResult.calculation_details.difference_statistics?.last_price }}</p>
+                      <p><strong>前一个差分值(prevDiff1)：</strong>{{ predictionResult.calculation_details.difference_statistics?.prev_diff1 }}</p>
+                      <p><strong>前两个差分值(prevDiff2)：</strong>{{ predictionResult.calculation_details.difference_statistics?.prev_diff2 }}</p>
+                      <p><strong>趋势斜率：</strong>{{ predictionResult.calculation_details.difference_statistics?.trend_slope }}</p>
+                      <p><strong>时间间隔：</strong>{{ predictionResult.calculation_details.difference_statistics?.time_interval_days }} 天</p>
+                      
+                      <div v-if="predictionResult.calculation_details.difference_statistics?.diff_mean_formula" style="margin-top: var(--spacing-3); padding-top: var(--spacing-3); border-top: 1px solid #ddd;">
+                        <p style="font-weight: bold; margin-bottom: var(--spacing-2);">计算公式：</p>
+                        <p style="font-family: monospace; font-size: 0.9em;">{{ predictionResult.calculation_details.difference_statistics.diff_mean_formula }}</p>
+                        <p style="font-family: monospace; font-size: 0.9em;">{{ predictionResult.calculation_details.difference_statistics.diff_variance_formula }}</p>
+                        <p style="font-family: monospace; font-size: 0.9em;">{{ predictionResult.calculation_details.difference_statistics.diff_std_dev_formula }}</p>
+                        <p style="font-family: monospace; font-size: 0.9em;">{{ predictionResult.calculation_details.difference_statistics.diff_autocorr_lag1_formula }}</p>
+                        <p style="font-family: monospace; font-size: 0.9em;">{{ predictionResult.calculation_details.difference_statistics.diff_autocorr_lag2_formula }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 预测方法信息 -->
+                <div v-if="predictionResult.calculation_details?.prediction_method" class="calculation-section">
+                  <h4 class="section-subtitle">4. 预测方法</h4>
+                  <div class="calculation-info">
+                    <div class="formula-box">
+                      <p><strong>方法名称：</strong>{{ predictionResult.calculation_details.prediction_method?.method_name }}</p>
+                      <p><strong>方法描述：</strong>{{ predictionResult.calculation_details.prediction_method?.description }}</p>
+                      <p><strong>方差保持策略：</strong>{{ predictionResult.calculation_details.prediction_method?.variance_preservation }}</p>
+                      <div v-if="predictionResult.calculation_details.prediction_method?.components" style="margin-top: var(--spacing-2);">
+                        <p><strong>方法组件：</strong></p>
+                        <ul style="margin-left: var(--spacing-4);">
+                          <li v-for="(component, index) in predictionResult.calculation_details.prediction_method.components" :key="index">
+                            {{ component }}
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 数据预处理（ARIMA模型） -->
                 <div v-if="predictionResult.calculation_details.preprocessing" class="calculation-section">
-                  <h4 class="section-subtitle">1. 数据预处理</h4>
+                  <h4 class="section-subtitle">数据预处理</h4>
                   <div class="calculation-info">
                     <p><strong>原始数据点数量：</strong>{{ predictionResult.calculation_details.preprocessing.original_count }}</p>
                     <p><strong>清洗后数据点数量：</strong>{{ predictionResult.calculation_details.preprocessing.cleaned_count }}</p>
@@ -383,7 +451,7 @@
 
                 <!-- 模型选择（回测） -->
                 <div v-if="predictionResult.calculation_details.model_selection" class="calculation-section">
-                  <h4 class="section-subtitle">2. 模型选择（留出集回测）</h4>
+                  <h4 class="section-subtitle">模型选择（留出集回测）</h4>
                   <div class="calculation-info">
                     <p><strong>最终采用模型：</strong>{{ predictionResult.calculation_details.model_selection.model_name }}</p>
                     <p><strong>选择方法：</strong>{{ predictionResult.calculation_details.model_selection.selection_method }}</p>
@@ -411,30 +479,15 @@
                       </p>
                       <p><strong>回测留出集大小：</strong>{{ predictionResult.calculation_details.model_selection.holdout_size }}</p>
                     </div>
-                    <div v-if="predictionResult.calculation_details.model_selection.holdout_metrics" class="formula-box">
-                      <p><strong>回测指标（选中模型）：</strong></p>
-                      <p>MAE = {{ predictionResult.calculation_details.model_selection.holdout_metrics.mae }}</p>
-                      <p>RMSE = {{ predictionResult.calculation_details.model_selection.holdout_metrics.rmse }}</p>
-                      <p>MAPE = {{ (predictionResult.calculation_details.model_selection.holdout_metrics.mape * 100).toFixed(2) }}%</p>
-                      <p>R² = {{ predictionResult.calculation_details.model_selection.holdout_metrics.r_squared }}</p>
-                    </div>
-                    <div v-if="predictionResult.calculation_details.model_selection.baseline_metrics" class="formula-box">
-                      <p><strong>基线指标（Naive持平外推）：</strong></p>
-                      <p>MAE = {{ predictionResult.calculation_details.model_selection.baseline_metrics.mae }}</p>
-                      <p>RMSE = {{ predictionResult.calculation_details.model_selection.baseline_metrics.rmse }}</p>
-                      <p>MAPE = {{ (predictionResult.calculation_details.model_selection.baseline_metrics.mape * 100).toFixed(2) }}%</p>
-                      <p>R² = {{ predictionResult.calculation_details.model_selection.baseline_metrics.r_squared }}</p>
-                    </div>
                   </div>
                 </div>
 
-                <!-- 预测过程 -->
-                <div v-if="predictionResult.calculation_details.prediction_steps" class="calculation-section">
-                  <h4 class="section-subtitle">3. 预测计算过程</h4>
+                <!-- 详细预测过程 -->
+                <div v-if="predictionResult.calculation_details?.prediction_steps && predictionResult.calculation_details.prediction_steps.length > 0" class="calculation-section">
+                  <h4 class="section-subtitle">5. 详细预测计算过程</h4>
                   <div class="calculation-info">
                     <p class="formula-intro">
-                      <strong>说明：</strong>系统展示每一步预测的日期、公式提示与预测结果。若采用ARIMA模型，会根据选定的参数(p, d, q)进行预测；
-                      若采用Naive，则为"持平外推"。
+                      <strong>说明：</strong>展示每一步预测的详细计算过程，包括差分预测方法、公式、随机扰动、价格计算和约束调整等信息。
                     </p>
                     <div class="table-controls">
                       <button
@@ -444,22 +497,52 @@
                         {{ showAllPredictionSteps ? '收起' : '展开全部' }}（共{{ predictionResult.calculation_details.prediction_steps.length }}条）
                       </button>
                     </div>
-                    <div class="calculation-table-wrapper">
-                      <table class="calculation-table">
+                    <div class="calculation-table-wrapper" style="overflow-x: auto;">
+                      <table class="calculation-table" style="font-size: 0.85em; min-width: 1200px;">
                         <thead>
                           <tr>
-                            <th>日期</th>
-                            <th>步数</th>
-                            <th>计算公式</th>
-                            <th>预测价格</th>
+                            <th style="width: 60px;">步数</th>
+                            <th style="width: 120px;">日期</th>
+                            <th style="width: 100px;">基础价格</th>
+                            <th style="width: 150px;">预测方法</th>
+                            <th style="width: 300px;">差分预测公式</th>
+                            <th style="width: 100px;">随机扰动</th>
+                            <th style="width: 300px;">价格计算公式</th>
+                            <th style="width: 150px;">约束调整</th>
+                            <th style="width: 100px;">最终价格</th>
                           </tr>
                         </thead>
                         <tbody>
                           <tr v-for="(step, index) in (showAllPredictionSteps ? predictionResult.calculation_details.prediction_steps : predictionResult.calculation_details.prediction_steps.slice(0, 20))" :key="index">
-                            <td>{{ step.date }}</td>
                             <td>{{ step.step }}</td>
-                            <td class="formula-cell">{{ step.formula }}</td>
-                            <td><strong>¥{{ step.predicted_price }}</strong></td>
+                            <td>{{ step.date }}</td>
+                            <td>¥{{ step.base_price }}</td>
+                            <td style="font-size: 0.8em;">{{ step.diff_prediction_method || '趋势外推' }}</td>
+                            <td class="formula-cell" style="font-size: 0.75em;">
+                              <div v-if="step.diff_prediction_formula" style="white-space: normal; word-break: break-word; line-height: 1.4;">
+                                {{ step.diff_prediction_formula }}
+                              </div>
+                              <div v-else style="color: var(--gray-500);">-</div>
+                            </td>
+                            <td style="font-size: 0.8em;">
+                              <div v-if="step.random_shock !== undefined">
+                                {{ step.random_shock > 0 ? '+' : '' }}{{ typeof step.random_shock === 'number' ? step.random_shock.toFixed(4) : step.random_shock }}
+                              </div>
+                              <div v-else style="color: var(--gray-500);">-</div>
+                            </td>
+                            <td class="formula-cell" style="font-size: 0.75em;">
+                              <div v-if="step.price_calculation_formula" style="white-space: normal; word-break: break-word; line-height: 1.4;">
+                                {{ step.price_calculation_formula }}
+                              </div>
+                              <div v-else style="color: var(--gray-500);">-</div>
+                            </td>
+                            <td style="font-size: 0.8em;">
+                              <div v-if="step.constraint_applied" style="color: #ff9800; white-space: normal; word-break: break-word;">
+                                {{ step.constraint_info || '已调整' }}
+                              </div>
+                              <div v-else style="color: var(--gray-500);">无</div>
+                            </td>
+                            <td><strong>¥{{ step.final_predicted_price || step.predicted_price }}</strong></td>
                           </tr>
                         </tbody>
                       </table>
@@ -469,6 +552,7 @@
                     </div>
                   </div>
                 </div>
+                </template>
               </template>
             </div>
           </div>
@@ -623,11 +707,24 @@ export default {
           predictionDays.value,
           modelType.value
         );
+        
+        // 兼容两种命名方式：统一使用 calculation_details
+        if (result.calculationDetails && !result.calculation_details) {
+          result.calculation_details = result.calculationDetails;
+        }
+        
         predictionResult.value = result;
         
         // 调试：输出计算结果
         console.log('预测结果:', result);
         console.log('计算详情:', result.calculation_details);
+        if (result.calculation_details) {
+          console.log('计算详情 keys:', Object.keys(result.calculation_details));
+          console.log('时间间隔:', result.calculation_details.time_interval);
+          console.log('统计特征:', result.calculation_details.statistical_features);
+          console.log('差分统计:', result.calculation_details.difference_statistics);
+          console.log('预测步骤:', result.calculation_details.prediction_steps);
+        }
         
         step.value = 3;
         

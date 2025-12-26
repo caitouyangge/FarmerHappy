@@ -362,27 +362,69 @@ public class PricePredictionService {
     }
 
     /**
-     * 基于统计特征的预测 - 保持方差不变，不过度平滑
+     * 预测结果包装类，包含预测值和详细计算过程
      */
-    private List<Double> predictWithStatistics(List<Double> prices, StatisticalFeatures features, int predictionDays, int timeIntervalDays) {
-        List<Double> forecast = new ArrayList<>();
+    private static class PredictionResult {
+        List<Double> forecast;
+        List<Map<String, Object>> detailedSteps;
+        Map<String, Object> diffStatistics;
+        
+        PredictionResult() {
+            this.forecast = new ArrayList<>();
+            this.detailedSteps = new ArrayList<>();
+            this.diffStatistics = new HashMap<>();
+        }
+    }
+    
+    /**
+     * 基于统计特征的预测 - 保持方差不变，不过度平滑
+     * 返回包含详细计算过程的预测结果
+     */
+    private PredictionResult predictWithStatisticsDetailed(List<Double> prices, StatisticalFeatures features, int predictionDays, int timeIntervalDays) {
+        PredictionResult result = new PredictionResult();
+        List<Double> forecast = result.forecast;
         int n = prices.size();
+        
         if (n < 2) {
             // 数据不足，返回最后一个值
             double lastPrice = prices.isEmpty() ? 0.0 : prices.get(n - 1);
             for (int i = 0; i < predictionDays; i++) {
                 forecast.add(lastPrice);
+                Map<String, Object> step = new HashMap<>();
+                step.put("step", i + 1);
+                step.put("method", "数据不足，使用最后价格");
+                step.put("base_price", round2(lastPrice));
+                step.put("predicted_price", round2(lastPrice));
+                step.put("predicted_diff", 0.0);
+                step.put("random_shock", 0.0);
+                result.detailedSteps.add(step);
             }
-            return forecast;
+            return result;
         }
         
-        // 计算价格差分序列（一阶差分），用于保持方差特征
+        // ========== 第一步：计算价格差分序列（一阶差分） ==========
         List<Double> differences = new ArrayList<>();
+        List<String> diffFormulas = new ArrayList<>();
         for (int i = 1; i < n; i++) {
-            differences.add(prices.get(i) - prices.get(i - 1));
+            double diff = prices.get(i) - prices.get(i - 1);
+            differences.add(diff);
+            diffFormulas.add(String.format("diff[%d] = price[%d] - price[%d] = %.2f - %.2f = %.2f", 
+                i, i, i-1, prices.get(i), prices.get(i-1), diff));
         }
         
-        // 计算差分序列的统计特征
+        // 记录差分序列数据
+        List<Map<String, Object>> diffDataList = new ArrayList<>();
+        for (int i = 0; i < differences.size(); i++) {
+            Map<String, Object> diffItem = new HashMap<>();
+            diffItem.put("index", i + 1);
+            diffItem.put("formula", diffFormulas.get(i));
+            diffItem.put("value", round4(differences.get(i)));
+            diffDataList.add(diffItem);
+        }
+        result.diffStatistics.put("differences_count", differences.size());
+        result.diffStatistics.put("differences_data", diffDataList);
+        
+        // ========== 第二步：计算差分序列的统计特征 ==========
         double diffMean = differences.stream().mapToDouble(Double::doubleValue).average().orElse(0);
         double diffVariance = 0.0;
         for (double diff : differences) {
@@ -391,37 +433,72 @@ public class PricePredictionService {
         diffVariance /= differences.size();
         double diffStdDev = Math.sqrt(diffVariance);
         
+        // 记录差分统计特征
+        result.diffStatistics.put("diff_mean", round4(diffMean));
+        result.diffStatistics.put("diff_variance", round4(diffVariance));
+        result.diffStatistics.put("diff_std_dev", round4(diffStdDev));
+        result.diffStatistics.put("diff_mean_formula", String.format("diffMean = (Σdiff[i]) / n = %.4f", diffMean));
+        result.diffStatistics.put("diff_variance_formula", String.format("diffVariance = Σ(diff[i] - diffMean)² / n = %.4f", diffVariance));
+        result.diffStatistics.put("diff_std_dev_formula", String.format("diffStdDev = √diffVariance = %.4f", diffStdDev));
+        
         // 如果方差为0，使用原始数据的标准差
         if (diffStdDev < 1e-12) {
             diffStdDev = features.stdDev * 0.1; // 使用原始标准差的10%作为最小波动
+            result.diffStatistics.put("diff_std_dev_adjusted", round4(diffStdDev));
+            result.diffStatistics.put("diff_std_dev_adjust_reason", "方差为0，使用原始标准差的10%作为最小波动");
         }
         
-        // 计算差分序列的自相关（用于预测差分）
+        // ========== 第三步：计算差分序列的自相关 ==========
         double diffAutocorr1 = calculateAutocorrelation(differences, 1);
         double diffAutocorr2 = calculateAutocorrelation(differences, 2);
         
-        // 使用自回归模型预测差分序列，然后累加得到价格预测
-        // 这样可以保持方差特征
+        result.diffStatistics.put("diff_autocorr_lag1", round4(diffAutocorr1));
+        result.diffStatistics.put("diff_autocorr_lag2", round4(diffAutocorr2));
+        result.diffStatistics.put("diff_autocorr_lag1_formula", String.format("自相关系数(滞后1) = %.4f", diffAutocorr1));
+        result.diffStatistics.put("diff_autocorr_lag2_formula", String.format("自相关系数(滞后2) = %.4f", diffAutocorr2));
+        
+        // ========== 第四步：初始化预测参数 ==========
         double lastPrice = prices.get(n - 1);
         double prevDiff1 = differences.isEmpty() ? 0.0 : differences.get(differences.size() - 1);
         double prevDiff2 = differences.size() > 1 ? differences.get(differences.size() - 2) : 0.0;
         
-        // 预测每个未来点
+        result.diffStatistics.put("last_price", round2(lastPrice));
+        result.diffStatistics.put("prev_diff1", round4(prevDiff1));
+        result.diffStatistics.put("prev_diff2", round4(prevDiff2));
+        result.diffStatistics.put("trend_slope", round4(features.trendSlope));
+        result.diffStatistics.put("time_interval_days", timeIntervalDays);
+        
+        // ========== 第五步：预测每个未来点 ==========
         for (int h = 1; h <= predictionDays; h++) {
+            Map<String, Object> stepDetail = new HashMap<>();
+            stepDetail.put("step", h);
+            stepDetail.put("base_price", forecast.isEmpty() ? round2(lastPrice) : round2(forecast.get(forecast.size() - 1)));
+            
             // 1. 预测差分值（使用自回归模型）
             double predictedDiff;
+            String diffPredictionMethod = "";
+            String diffPredictionFormula = "";
             
             if (h == 1) {
                 // 第一步：使用最近的两个差分值和自相关系数
                 if (Math.abs(diffAutocorr1) > 0.1) {
                     predictedDiff = diffMean + diffAutocorr1 * (prevDiff1 - diffMean);
+                    diffPredictionMethod = "一阶自回归模型（AR(1)）";
+                    diffPredictionFormula = String.format("predictedDiff = diffMean + diffAutocorr1 × (prevDiff1 - diffMean) = %.4f + %.4f × (%.4f - %.4f) = %.4f",
+                        diffMean, diffAutocorr1, prevDiff1, diffMean, predictedDiff);
                 } else {
                     // 自相关很弱，使用趋势斜率
                     predictedDiff = features.trendSlope * timeIntervalDays;
+                    diffPredictionMethod = "趋势外推（自相关很弱）";
+                    diffPredictionFormula = String.format("predictedDiff = trendSlope × timeIntervalDays = %.4f × %d = %.4f",
+                        features.trendSlope, timeIntervalDays, predictedDiff);
                 }
             } else if (h == 2 && Math.abs(diffAutocorr2) > 0.1) {
                 // 第二步：可以使用二阶自相关
                 predictedDiff = diffMean + diffAutocorr2 * (prevDiff2 - diffMean);
+                diffPredictionMethod = "二阶自回归模型（AR(2)）";
+                diffPredictionFormula = String.format("predictedDiff = diffMean + diffAutocorr2 × (prevDiff2 - diffMean) = %.4f + %.4f × (%.4f - %.4f) = %.4f",
+                    diffMean, diffAutocorr2, prevDiff2, diffMean, predictedDiff);
             } else {
                 // 后续步骤：使用一阶自相关，但逐渐向均值回归
                 double arWeight = Math.max(0.0, diffAutocorr1 - (h - 1) * 0.1);
@@ -429,32 +506,56 @@ public class PricePredictionService {
                     // 使用前一步的差分（从预测序列计算）
                     double lastForecastDiff = forecast.get(forecast.size() - 1) - (forecast.size() > 1 ? forecast.get(forecast.size() - 2) : lastPrice);
                     predictedDiff = diffMean + arWeight * (lastForecastDiff - diffMean);
+                    diffPredictionMethod = String.format("衰减自回归模型（AR权重=%.4f）", arWeight);
+                    diffPredictionFormula = String.format("predictedDiff = diffMean + arWeight × (lastForecastDiff - diffMean) = %.4f + %.4f × (%.4f - %.4f) = %.4f",
+                        diffMean, arWeight, lastForecastDiff, diffMean, predictedDiff);
                 } else {
                     // 自相关很弱，使用趋势斜率
                     predictedDiff = features.trendSlope * timeIntervalDays;
+                    diffPredictionMethod = "趋势外推（自相关衰减）";
+                    diffPredictionFormula = String.format("predictedDiff = trendSlope × timeIntervalDays = %.4f × %d = %.4f",
+                        features.trendSlope, timeIntervalDays, predictedDiff);
                 }
             }
             
+            stepDetail.put("diff_prediction_method", diffPredictionMethod);
+            stepDetail.put("diff_prediction_formula", diffPredictionFormula);
+            stepDetail.put("predicted_diff_before_shock", round4(predictedDiff));
+            
             // 2. 添加随机扰动，保持方差不变（不衰减）
-            // 使用历史差分的标准差，保持波动性
-            // 扰动的大小应该与历史差分的标准差一致，以保持方差
             double randomShock = generateRandomShock(diffStdDev);
-            predictedDiff += randomShock;
+            double predictedDiffAfterShock = predictedDiff + randomShock;
+            
+            stepDetail.put("random_shock", round4(randomShock));
+            stepDetail.put("random_shock_formula", String.format("randomShock = N(0, diffStdDev²) = N(0, %.4f²) = %.4f", diffStdDev, randomShock));
+            stepDetail.put("predicted_diff_after_shock", round4(predictedDiffAfterShock));
+            stepDetail.put("predicted_diff_after_shock_formula", String.format("predictedDiff = %.4f + %.4f = %.4f", 
+                predictedDiff, randomShock, predictedDiffAfterShock));
+            
+            predictedDiff = predictedDiffAfterShock;
             
             // 3. 计算预测价格（累加差分）
-            // 直接累加，不进行额外的平滑或调整，以保持方差特征
             double prediction;
+            String priceCalculationFormula = "";
             if (forecast.isEmpty()) {
                 prediction = lastPrice + predictedDiff;
+                priceCalculationFormula = String.format("prediction = lastPrice + predictedDiff = %.2f + %.4f = %.2f",
+                    lastPrice, predictedDiff, prediction);
             } else {
-                prediction = forecast.get(forecast.size() - 1) + predictedDiff;
+                double prevPrediction = forecast.get(forecast.size() - 1);
+                prediction = prevPrediction + predictedDiff;
+                priceCalculationFormula = String.format("prediction = prevPrediction + predictedDiff = %.2f + %.4f = %.2f",
+                    prevPrediction, predictedDiff, prediction);
             }
             
+            stepDetail.put("price_calculation_formula", priceCalculationFormula);
+            stepDetail.put("predicted_price_before_constraint", round2(prediction));
+            
             // 4. 约束预测值在历史范围内（最高和最低），保持方差特征
-            // 如果超出范围，调整差分值使其在范围内，但保持波动性
+            boolean adjusted = false;
+            String constraintInfo = "";
             if (prediction > features.maxPrice) {
                 // 超出最大值，调整差分值使其在最大值范围内
-                // 计算当前值到最大值的距离，调整差分值
                 double currentBase = forecast.isEmpty() ? lastPrice : forecast.get(forecast.size() - 1);
                 double maxAllowedDiff = features.maxPrice - currentBase;
                 // 如果预测的差分值会导致超出最大值，则限制差分值
@@ -462,11 +563,18 @@ public class PricePredictionService {
                     // 将差分值调整到允许范围内，但保持一定的波动性
                     // 使用历史差分标准差的30%作为最小波动
                     double minVolatility = diffStdDev * 0.3;
+                    double oldPredictedDiff = predictedDiff;
                     predictedDiff = Math.max(maxAllowedDiff - minVolatility, maxAllowedDiff * 0.7);
                     prediction = currentBase + predictedDiff;
+                    adjusted = true;
+                    constraintInfo = String.format("超出最大值限制：maxPrice=%.2f, 调整差分值从%.4f到%.4f, 调整后价格=%.2f",
+                        features.maxPrice, oldPredictedDiff, predictedDiff, prediction);
                 }
                 // 最终确保不超过最大值
                 prediction = Math.min(prediction, features.maxPrice);
+                if (prediction == features.maxPrice) {
+                    constraintInfo = String.format("价格限制在最大值：%.2f", features.maxPrice);
+                }
             } else if (prediction < features.minPrice) {
                 // 低于最小值，调整差分值使其在最小值范围内
                 double currentBase = forecast.isEmpty() ? lastPrice : forecast.get(forecast.size() - 1);
@@ -475,19 +583,37 @@ public class PricePredictionService {
                 if (predictedDiff < minAllowedDiff) {
                     // 将差分值调整到允许范围内，但保持一定的波动性
                     double minVolatility = diffStdDev * 0.3;
+                    double oldPredictedDiff = predictedDiff;
                     predictedDiff = Math.min(minAllowedDiff + minVolatility, minAllowedDiff * 0.7);
                     prediction = currentBase + predictedDiff;
+                    adjusted = true;
+                    constraintInfo = String.format("低于最小值限制：minPrice=%.2f, 调整差分值从%.4f到%.4f, 调整后价格=%.2f",
+                        features.minPrice, oldPredictedDiff, predictedDiff, prediction);
                 }
                 // 最终确保不低于最小值
                 prediction = Math.max(prediction, features.minPrice);
+                if (prediction == features.minPrice) {
+                    constraintInfo = String.format("价格限制在最小值：%.2f", features.minPrice);
+                }
             }
+            
+            stepDetail.put("constraint_applied", adjusted || prediction == features.maxPrice || prediction == features.minPrice);
+            stepDetail.put("constraint_info", constraintInfo.isEmpty() ? "无约束调整" : constraintInfo);
+            stepDetail.put("min_price", round2(features.minPrice));
+            stepDetail.put("max_price", round2(features.maxPrice));
             
             // 5. 如果价格为负，使用最小值
             if (prediction < 0) {
                 prediction = Math.max(0.0, features.minPrice);
+                stepDetail.put("negative_price_adjusted", true);
+                stepDetail.put("negative_price_info", String.format("价格为负，调整为：%.2f", prediction));
+            } else {
+                stepDetail.put("negative_price_adjusted", false);
             }
             
             forecast.add(prediction);
+            stepDetail.put("final_predicted_price", round2(prediction));
+            result.detailedSteps.add(stepDetail);
             
             // 更新用于自回归的差分值
             if (h == 1) {
@@ -499,7 +625,15 @@ public class PricePredictionService {
             }
         }
         
-        return forecast;
+        return result;
+    }
+    
+    /**
+     * 基于统计特征的预测 - 保持方差不变，不过度平滑（简化版本，保持向后兼容）
+     */
+    private List<Double> predictWithStatistics(List<Double> prices, StatisticalFeatures features, int predictionDays, int timeIntervalDays) {
+        PredictionResult result = predictWithStatisticsDetailed(prices, features, predictionDays, timeIntervalDays);
+        return result.forecast;
     }
     
     /**
@@ -644,8 +778,9 @@ public class PricePredictionService {
         // ========= 计算统计特征 =========
         StatisticalFeatures features = calculateStatisticalFeatures(prices, timestamps, timeIntervalDays);
         
-        // ========= 基于统计特征的预测 =========
-        List<Double> forecast = predictWithStatistics(prices, features, predictionDays, timeIntervalDays);
+        // ========= 基于统计特征的预测（详细版本） =========
+        PredictionResult predictionResult = predictWithStatisticsDetailed(prices, features, predictionDays, timeIntervalDays);
+        List<Double> forecast = predictionResult.forecast;
 
         // 预测未来数据（按检测到的时间间隔递增）
         // 确保第一天从历史数据最后一天的下一个时间间隔开始，不重叠
@@ -708,7 +843,7 @@ public class PricePredictionService {
 
         // 预测方法详情
         Map<String, Object> predictionMethod = new HashMap<>();
-        predictionMethod.put("method_name", "统计学特征预测模型（保持方差不变）");
+        predictionMethod.put("method_name", "统计学特征预测模型");
         predictionMethod.put("description", "基于差分序列的自回归模型进行预测，严格保持历史数据的方差特征，不过度平滑");
         predictionMethod.put("components", Arrays.asList(
             "差分序列分析（一阶差分保持方差特征）",
@@ -719,18 +854,28 @@ public class PricePredictionService {
         predictionMethod.put("variance_preservation", "预测序列的方差与历史序列的方差保持一致，不进行平滑处理");
         calculationDetails.put("prediction_method", predictionMethod);
 
-        // 预测过程详情
+        // ========= 差分序列统计信息 =========
+        calculationDetails.put("difference_statistics", predictionResult.diffStatistics);
+        
+        // ========= 详细预测过程 =========
+        // 将详细步骤与日期关联
         List<Map<String, Object>> predictionDetails = new ArrayList<>();
         cal.setTime(lastDate);
         // 先加上第一个时间间隔，确保第一天不重叠
         cal.add(Calendar.DAY_OF_MONTH, timeIntervalDays);
         for (int i = 0; i < predictionDays; i++) {
-            double predictedPrice = (i < forecast.size()) ? forecast.get(i) : features.mean;
             Map<String, Object> detail = new HashMap<>();
-            detail.put("step", i + 1);
+            if (i < predictionResult.detailedSteps.size()) {
+                // 使用详细计算步骤
+                Map<String, Object> stepDetail = predictionResult.detailedSteps.get(i);
+                detail.putAll(stepDetail);
+            } else {
+                // 如果步骤不足，使用简化信息
+                double predictedPrice = (i < forecast.size()) ? forecast.get(i) : features.mean;
+                detail.put("step", i + 1);
+                detail.put("predicted_price", Math.round(predictedPrice * 100.0) / 100.0);
+            }
             detail.put("date", sdf.format(cal.getTime()));
-            detail.put("predicted_price", Math.round(predictedPrice * 100.0) / 100.0);
-            detail.put("formula", "差分序列自回归预测：保持方差不变，价格范围限制在历史最高和最低之间");
             predictionDetails.add(detail);
             // 为下一次循环加上时间间隔
             if (i < predictionDays - 1) {
@@ -738,6 +883,19 @@ public class PricePredictionService {
             }
         }
         calculationDetails.put("prediction_steps", predictionDetails);
+        
+        // ========= 历史价格数据（用于参考） =========
+        List<Map<String, Object>> historicalPriceData = new ArrayList<>();
+        for (int i = 0; i < prices.size(); i++) {
+            Map<String, Object> priceItem = new HashMap<>();
+            priceItem.put("index", i + 1);
+            priceItem.put("price", round2(prices.get(i)));
+            if (i < sortedPoints.size()) {
+                priceItem.put("date", sdf.format(sortedPoints.get(i).getDate()));
+            }
+            historicalPriceData.add(priceItem);
+        }
+        calculationDetails.put("historical_price_data", historicalPriceData);
 
         // 计算模型指标（使用留一法交叉验证）
         Map<String, Double> metricsMap = calculateModelMetrics(prices, features, timeIntervalDays);
