@@ -155,13 +155,13 @@
     </main>
 
     <!-- 图片预览模态框 -->
-    <div v-if="showImagePreview" class="image-modal" @click="showImagePreview = false">
+    <div v-if="showImagePreview" class="image-modal">
       <img :src="previewImage" alt="预览" class="preview-image" @click.stop />
       <button class="close-preview" @click="showImagePreview = false">×</button>
     </div>
 
     <!-- 退款对话框 -->
-    <div v-if="showRefundDialog" class="dialog-overlay" @click="showRefundDialog = false">
+    <div v-if="showRefundDialog" class="dialog-overlay">
       <div class="dialog-content" @click.stop>
         <h3 class="dialog-title">申请退款</h3>
         <div class="dialog-body">

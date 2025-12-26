@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-overlay" @click.self="handleClose">
+  <div class="modal-overlay">
     <div class="modal-container">
       <div class="modal-header">
         <h2 class="modal-title">申请联合贷款</h2>
@@ -103,7 +103,7 @@
           </div>
 
           <!-- 联合贷款协议弹窗 -->
-          <div v-if="showAgreementModal" class="agreement-modal-overlay" @click="showAgreementModal = false">
+          <div v-if="showAgreementModal" class="agreement-modal-overlay">
             <div class="agreement-modal" @click.stop>
               <div class="agreement-header">
                 <h3>联合贷款协议</h3>

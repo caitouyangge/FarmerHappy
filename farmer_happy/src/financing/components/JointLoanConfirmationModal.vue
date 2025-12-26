@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-overlay" @click.self="handleClose">
+  <div class="modal-overlay">
     <div class="modal-container large">
       <div class="modal-header">
         <h2 class="modal-title">待确认的联合贷款申请</h2>

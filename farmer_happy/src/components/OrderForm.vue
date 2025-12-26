@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-overlay" @click="handleOverlayClick">
+  <div class="modal-overlay">
     <div class="modal-container" @click.stop>
       <div class="modal-header">
         <h2 class="modal-title">创建订单</h2>
@@ -328,13 +328,6 @@ export default {
       emit('close');
     };
 
-    // 点击遮罩层关闭
-    const handleOverlayClick = (event) => {
-      if (event.target === event.currentTarget) {
-        handleClose();
-      }
-    };
-
     // 提交订单
     const handleSubmit = async () => {
       if (!isFormValid.value) {
@@ -424,7 +417,6 @@ export default {
       decreaseQuantity,
       validateQuantity,
       handleClose,
-      handleOverlayClick,
       handleSubmit
     };
   }

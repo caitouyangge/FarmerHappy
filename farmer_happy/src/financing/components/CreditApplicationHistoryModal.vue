@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-overlay" @click.self="handleClose">
+  <div class="modal-overlay">
     <div class="modal-container">
       <div class="modal-header">
         <h2 class="modal-title">申请额度记录</h2>
@@ -112,7 +112,7 @@
   </div>
 
   <!-- 图片预览模态框 -->
-  <div v-if="previewImageUrl" class="image-preview-overlay" @click="closePreview">
+  <div v-if="previewImageUrl" class="image-preview-overlay">
     <div class="image-preview-container" @click.stop>
       <img :src="previewImageUrl" alt="预览图片" />
       <button class="preview-close" @click="closePreview">×</button>

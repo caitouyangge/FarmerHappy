@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-overlay" @click="handleOverlayClick">
+  <div class="modal-overlay">
     <div class="modal-container" @click.stop>
       <div class="modal-header">
         <h2 class="modal-title">产品详情</h2>
@@ -331,13 +331,6 @@ export default {
       emit('close');
     };
 
-    // 点击遮罩层关闭
-    const handleOverlayClick = (event) => {
-      if (event.target === event.currentTarget) {
-        handleClose();
-      }
-    };
-
     // 编辑产品
     const handleEdit = () => {
       logger.userAction('PRODUCT_DETAIL_EDIT', { productId: props.productId });
@@ -428,7 +421,6 @@ export default {
       loadProductDetail,
       formatDate,
       handleClose,
-      handleOverlayClick,
       handleEdit,
       handleDelete,
       handleOnShelf,

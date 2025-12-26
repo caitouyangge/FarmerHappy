@@ -200,7 +200,7 @@
     </div>
 
     <!-- 图片预览模态框 -->
-    <div v-if="showImagePreview" class="image-preview-modal" @click="closeImagePreview">
+    <div v-if="showImagePreview" class="image-preview-modal">
       <img :src="currentImage" :alt="'预览图片'" class="preview-image" @click.stop />
       <button class="close-preview" @click="closeImagePreview">×</button>
     </div>

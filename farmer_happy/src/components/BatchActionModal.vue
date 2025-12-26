@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-overlay" @click="handleOverlayClick">
+  <div class="modal-overlay">
     <div class="modal-container" @click.stop>
       <div class="modal-header">
         <h2 class="modal-title">批量操作</h2>
@@ -114,13 +114,6 @@ export default {
       emit('close');
     };
 
-    // 点击遮罩层关闭
-    const handleOverlayClick = (event) => {
-      if (event.target === event.currentTarget) {
-        handleClose();
-      }
-    };
-
     // 确认操作
     const handleConfirm = () => {
       if (!selectedAction.value) {
@@ -138,7 +131,6 @@ export default {
     return {
       selectedAction,
       handleClose,
-      handleOverlayClick,
       handleConfirm
     };
   }

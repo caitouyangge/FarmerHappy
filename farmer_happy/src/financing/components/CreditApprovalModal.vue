@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-overlay" @click.self="handleClose">
+  <div class="modal-overlay">
     <div class="modal-container">
       <div class="modal-header">
         <h2 class="modal-title">审批信贷额度申请</h2>
@@ -81,7 +81,7 @@
         </div>
 
         <!-- 审批表单弹窗 -->
-        <div v-if="showApprovalForm" class="approval-form-overlay" @click.self="closeApprovalForm">
+        <div v-if="showApprovalForm" class="approval-form-overlay">
           <div class="approval-form-container">
             <div class="approval-form-header">
               <h3>{{ approvalAction === 'approve' ? '批准申请' : '拒绝申请' }}</h3>
